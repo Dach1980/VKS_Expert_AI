@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Environment variables
+.env
+
+# VS Code local settings
+.vscode/
+
+# Local AI models
+models/
+
+# Vector databases
+knowledge/vector_db/
+
+# Temporary files
+tmp/
+temp/
+
+# Generated reports
+reports/generated/
+
+# Test/output files
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
