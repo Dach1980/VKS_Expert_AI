@@ -30,3 +30,5 @@ reports/generated/
 # OS
 .DS_Store
 Thumbs.db
+
+config/settings.local.json

@@ -1,0 +1,23 @@
+﻿{
+  "registry_version": "1.0",
+  "documents": [
+    {
+      "id": "SP_30.13330",
+      "number": "СП 30.13330.2020",
+      "title": "Внутренний водопровод и канализация зданий",
+      "document_type": "СП",
+      "versions": [
+        {
+          "id": "SP_30.13330_2020_base",
+          "type": "base",
+          "file": "knowledge/regulations/SP_30.13330/СП_30.13330_базовая_версия.pdf",
+          "status": "current",
+          "effective_from": "2021-07-01",
+          "effective_to": null,
+          "parsed_file": "knowledge/parsed/SP_30.13330.2020.json",
+          "structured_file": "knowledge/structured/SP_30.13330.2020.json"
+        }
+      ]
+    }
+  ]
+}
