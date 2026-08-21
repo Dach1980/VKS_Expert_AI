@@ -32,3 +32,6 @@ reports/generated/
 Thumbs.db
 
 config/settings.local.json
+
+knowledge/diagnostics/
+knowledge/parsed/
