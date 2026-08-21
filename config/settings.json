@@ -1,0 +1,8 @@
+{
+    "lm_studio": {
+        "base_url": "http://localhost:1234/v1",
+        "model": "qwen3.5-9b",
+        "temperature": 0.2,
+        "max_tokens": 2048
+    }
+}
