@@ -1,7 +1,5 @@
 """
-VKS Expert AI — geometry utilities.
-
-Работа с PDF bbox и геометрией элементов.
+Geometry helpers.
 """
 
 from __future__ import annotations
@@ -13,10 +11,8 @@ def safe_float(
     value: Any,
     default: float = 0.0,
 ) -> float:
-
     try:
         return float(value)
-
     except (TypeError, ValueError):
         return default
 
@@ -24,7 +20,6 @@ def safe_float(
 def bbox_area(
     bbox: Optional[List[float]],
 ) -> float:
-
     if not bbox or len(bbox) < 4:
         return 0.0
 
@@ -33,19 +28,15 @@ def bbox_area(
         bbox[:4],
     )
 
-    return max(
-        0.0,
-        x1 - x0,
-    ) * max(
-        0.0,
-        y1 - y0,
+    return (
+        max(0.0, x1 - x0)
+        * max(0.0, y1 - y0)
     )
 
 
 def bbox_width(
     bbox: Optional[List[float]],
 ) -> float:
-
     if not bbox or len(bbox) < 4:
         return 0.0
 
@@ -59,7 +50,6 @@ def bbox_width(
 def bbox_height(
     bbox: Optional[List[float]],
 ) -> float:
-
     if not bbox or len(bbox) < 4:
         return 0.0
 
@@ -73,7 +63,6 @@ def bbox_height(
 def bbox_center(
     bbox: Optional[List[float]],
 ) -> Tuple[float, float]:
-
     if not bbox or len(bbox) < 4:
         return 0.0, 0.0
 
@@ -91,7 +80,6 @@ def bbox_center(
 def bbox_union(
     bboxes: List[List[float]],
 ) -> Optional[List[float]]:
-
     valid = [
         bbox
         for bbox in bboxes
@@ -133,7 +121,6 @@ def horizontal_gap(
     bbox_a: List[float],
     bbox_b: List[float],
 ) -> float:
-
     ax0, _, ax1, _ = bbox_a
     bx0, _, bx1, _ = bbox_b
 
@@ -150,7 +137,6 @@ def vertical_gap(
     bbox_a: List[float],
     bbox_b: List[float],
 ) -> float:
-
     _, ay0, _, ay1 = bbox_a
     _, by0, _, by1 = bbox_b
 
@@ -167,7 +153,6 @@ def horizontal_region(
     bbox: List[float],
     page_width: float,
 ) -> str:
-
     if not bbox or page_width <= 0:
         return "unknown"
 
@@ -182,3 +167,57 @@ def horizontal_region(
         return "center"
 
     return "right"
+
+
+def detect_page_geometry(
+    page: dict,
+    elements: list[dict],
+) -> dict:
+    page_width = safe_float(
+        page.get("width")
+    )
+
+    page_height = safe_float(
+        page.get("height")
+    )
+
+    if page_width <= 0:
+        page_width = max(
+            (
+                safe_float(
+                    element.get("bbox")[2]
+                )
+                for element in elements
+                if element.get("bbox")
+                and len(
+                    element.get("bbox")
+                ) >= 4
+            ),
+            default=0.0,
+        )
+
+    if page_height <= 0:
+        page_height = max(
+            (
+                safe_float(
+                    element.get("bbox")[3]
+                )
+                for element in elements
+                if element.get("bbox")
+                and len(
+                    element.get("bbox")
+                ) >= 4
+            ),
+            default=0.0,
+        )
+
+    return {
+        "width": round(
+            page_width,
+            3,
+        ),
+        "height": round(
+            page_height,
+            3,
+        ),
+    }

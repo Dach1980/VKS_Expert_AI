@@ -1,5 +1,5 @@
 """
-VKS Expert AI — semantic result validation.
+Semantic result validation.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from .elements import get_parser_index
 def validate_page_result(
     page_result: Dict[str, Any],
 ) -> List[str]:
-
     errors = []
 
     elements = page_result.get(
@@ -45,37 +44,41 @@ def validate_page_result(
         for element in elements
     }
 
-    for element in elements:
+    # ---------------------------------------------------------------
+    # Elements
+    # ---------------------------------------------------------------
 
+    for element in elements:
         index = get_parser_index(element)
 
         if not isinstance(index, int):
-
             errors.append(
                 "element without valid parser_index"
             )
 
-    for candidate in candidates:
+    # ---------------------------------------------------------------
+    # Candidates
+    # ---------------------------------------------------------------
 
-        index = candidate.get(
-            "parser_index"
-        )
+    for candidate in candidates:
+        index = candidate.get("parser_index")
 
         if index not in element_indices:
-
             errors.append(
-                "formula candidate points to unknown "
-                "parser_index"
+                "formula candidate points to "
+                "unknown parser_index"
             )
+
+    # ---------------------------------------------------------------
+    # Groups
+    # ---------------------------------------------------------------
 
     group_ids = set()
 
     for group in groups:
-
         group_id = group.get("group_id")
 
         if group_id in group_ids:
-
             errors.append(
                 f"duplicate group_id {group_id}"
             )
@@ -86,13 +89,15 @@ def validate_page_result(
             "parser_indices",
             [],
         ):
-
             if index not in element_indices:
-
                 errors.append(
-                    "formula group contains unknown "
-                    "parser_index"
+                    "formula group contains "
+                    "unknown parser_index"
                 )
+
+    # ---------------------------------------------------------------
+    # Formulas
+    # ---------------------------------------------------------------
 
     valid_group_ids = {
         group.get("group_id")
@@ -100,21 +105,21 @@ def validate_page_result(
     }
 
     for formula in formulas:
-
         group_id = formula.get("group_id")
 
         if group_id not in valid_group_ids:
-
             errors.append(
                 "formula points to unknown group"
             )
 
-    for relation in relations:
+    # ---------------------------------------------------------------
+    # Relations
+    # ---------------------------------------------------------------
 
+    for relation in relations:
         group_id = relation.get("group_id")
 
         if group_id not in valid_group_ids:
-
             errors.append(
                 "relation points to unknown group"
             )

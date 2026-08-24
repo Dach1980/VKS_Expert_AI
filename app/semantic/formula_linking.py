@@ -1,10 +1,10 @@
 """
-VKS Expert AI — formula ↔ number linking.
+Formula ↔ formula number linking.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from .config import (
     FORMULA_NUMBER_MAX_X_DISTANCE,
@@ -22,7 +22,6 @@ def score_formula_number_link(
     formula: Dict[str, Any],
     number: Dict[str, Any],
 ) -> float:
-
     formula_bbox = formula.get("bbox")
 
     if not formula_bbox:
@@ -47,7 +46,6 @@ def score_formula_number_link(
     )
 
     fcx, fcy = bbox_center(formula_bbox)
-
     ncx, ncy = bbox_center(number_bbox)
 
     score = 0.0
@@ -56,48 +54,36 @@ def score_formula_number_link(
 
     if dy <= 8:
         score += 60
-
     elif dy <= 18:
         score += 45
-
     elif dy <= 30:
         score += 30
-
     elif dy <= FORMULA_NUMBER_Y_TOLERANCE:
         score += 10
-
     else:
         return 0.0
 
     if nx0 >= fx1:
-
         gap = nx0 - fx1
 
         if gap <= 20:
             score += 45
-
         elif gap <= 60:
             score += 35
-
         elif gap <= 120:
             score += 25
-
         elif gap <= FORMULA_NUMBER_MAX_X_DISTANCE:
             score += 15
-
         else:
             return 0.0
 
     elif nx1 >= fx1:
-
         score += 20
 
     elif nx0 >= fx0:
-
         score += 10
 
     else:
-
         return 0.0
 
     if dy <= 10:
@@ -105,11 +91,10 @@ def score_formula_number_link(
 
     if nx0 > 450:
         score += 20
-
     elif nx0 > 350:
         score += 10
 
-    number_confidence = float(
+    number_confidence = safe_float(
         number.get(
             "confidence",
             0,
@@ -128,20 +113,16 @@ def link_formula_numbers(
     List[Dict[str, Any]],
     List[Dict[str, Any]],
 ]:
-
     formula_records = []
-
     relations = []
 
-    used_numbers = set()
+    used_numbers: Set[int] = set()
 
     for group in groups:
-
         best_number = None
         best_score = 0.0
 
         for number_index, number in enumerate(numbers):
-
             if number_index in used_numbers:
                 continue
 
@@ -151,9 +132,7 @@ def link_formula_numbers(
             )
 
             if score > best_score:
-
                 best_score = score
-
                 best_number = (
                     number_index,
                     number,
@@ -168,9 +147,9 @@ def link_formula_numbers(
 
         if (
             best_number is not None
-            and best_score >= FORMULA_NUMBER_MIN_LINK_SCORE
+            and best_score
+            >= FORMULA_NUMBER_MIN_LINK_SCORE
         ):
-
             number_index, number = best_number
 
             used_numbers.add(number_index)
@@ -199,46 +178,51 @@ def link_formula_numbers(
                 {
                     "group_id": group["group_id"],
                     "number": number_value,
-                    "number_parser_index": number_parser_index,
-                    "number_source_index": number_source_index,
+                    "number_parser_index": (
+                        number_parser_index
+                    ),
+                    "number_source_index": (
+                        number_source_index
+                    ),
                     "number_xref": number_xref,
-                    "score": round(best_score, 3),
+                    "score": round(
+                        best_score,
+                        3,
+                    ),
                 }
             )
 
         formula_records.append(
             {
                 "group_id": group["group_id"],
-
                 "formula_ids": group["formula_ids"],
-
-                "parser_indices": group["parser_indices"],
-
-                "source_indices": group["source_indices"],
-
+                "parser_indices": group[
+                    "parser_indices"
+                ],
+                "source_indices": group[
+                    "source_indices"
+                ],
                 "xrefs": group["xrefs"],
-
                 "bbox": group["bbox"],
-
                 "members": group["members"],
-
                 "composite": group["composite"],
-
                 "confidence": group["confidence"],
-
                 "number": number_value,
-
-                "number_parser_index": number_parser_index,
-
-                "number_source_index": number_source_index,
-
+                "number_parser_index": (
+                    number_parser_index
+                ),
+                "number_source_index": (
+                    number_source_index
+                ),
                 "number_xref": number_xref,
-
                 "number_bbox": number_bbox,
-
-                "number_estimated_bbox": number_estimated_bbox,
-
-                "link_score": round(best_score, 3),
+                "number_estimated_bbox": (
+                    number_estimated_bbox
+                ),
+                "link_score": round(
+                    best_score,
+                    3,
+                ),
             }
         )
 

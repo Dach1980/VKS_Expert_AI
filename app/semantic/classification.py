@@ -1,5 +1,8 @@
 """
-VKS Expert AI — image classification.
+Image semantic classification.
+
+Важно:
+    Здесь не выполняется OCR и не распознаётся содержание изображения.
 """
 
 from __future__ import annotations
@@ -25,13 +28,10 @@ from .geometry import (
 def classify_image(
     element: Dict[str, Any],
 ) -> Tuple[str, str, float]:
-
     bbox = element.get("bbox")
 
     area = bbox_area(bbox)
-
     width = bbox_width(bbox)
-
     height = bbox_height(bbox)
 
     if area <= 0:
@@ -41,14 +41,15 @@ def classify_image(
             0.0,
         )
 
+    # ---------------------------------------------------------------
+    # Large images
+    # ---------------------------------------------------------------
+
     if area >= DIAGRAM_MIN_AREA:
-
         if height > 0:
-
             aspect_ratio = width / height
 
             if aspect_ratio >= 8.0:
-
                 return (
                     "diagram_candidate",
                     "large_extreme_aspect_ratio",
@@ -61,14 +62,16 @@ def classify_image(
             0.70,
         )
 
-    if area <= SYMBOL_MAX_AREA:
+    # ---------------------------------------------------------------
+    # Small images
+    # ---------------------------------------------------------------
 
+    if area <= SYMBOL_MAX_AREA:
         if (
             width <= SMALL_MATH_MAX_WIDTH
             and height <= SMALL_MATH_MAX_HEIGHT
             and area >= FORMULA_FRAGMENT_MIN_AREA
         ):
-
             return (
                 "formula_fragment",
                 "small_math_geometry",
@@ -81,14 +84,15 @@ def classify_image(
             0.80,
         )
 
+    # ---------------------------------------------------------------
+    # Medium images
+    # ---------------------------------------------------------------
+
     if area >= FORMULA_CANDIDATE_MIN_AREA:
-
         if height > 0:
-
             aspect_ratio = width / height
 
             if aspect_ratio >= 8.0:
-
                 return (
                     "diagram_candidate",
                     "medium_extreme_aspect_ratio",

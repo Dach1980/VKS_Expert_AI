@@ -1,215 +1,369 @@
 """
-VKS Expert AI — semantic parsing pipeline.
+VKS Expert AI — Semantic Parser Pipeline v0.8.1.
+
+Pipeline отвечает только за последовательность операций.
+Алгоритмы анализа находятся в специализированных модулях.
+
+v0.8.1
+------
+
+Изменения относительно v0.8:
+
+    • добавлен этап page-relative geometry;
+    • для элементов рассчитывается horizontal_region;
+    • используется уже определённая page_geometry["width"];
+    • логика formula ↔ number не изменена;
+    • elements.py остаётся независимым от других semantic-модулей.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from .classification import classify_image
-from .context import enrich_formula_context
-from .elements import (
-    get_text,
-    is_image_element,
-    is_text_element,
-    normalize_page_elements,
-    normalize_text,
-    element_identity,
+from .candidates import (
+    detect_formula_candidates,
 )
 
-from .formula_linking import link_formula_numbers
-from .formula_numbers import extract_formula_number
-from .formula_numbers import detect_formula_numbers
+from .classification import (
+    classify_image,
+)
 
-from .candidates import detect_formula_candidates
-from .grouping import build_formula_groups
+from .context import (
+    enrich_formula_context,
+)
+
+from .contextual_classification import (
+    refine_formula_candidates,
+)
+
+from .elements import (
+    normalize_page_elements,
+    enrich_element,
+)
+
+from .formula_linking import (
+    link_formula_numbers,
+)
+
+from .formula_numbers import (
+    detect_formula_numbers,
+)
 
 from .geometry import (
-    bbox_area,
-    bbox_center,
-    bbox_height,
-    bbox_width,
+    detect_page_geometry,
     horizontal_region,
-    safe_float,
 )
 
-from .source import get_pages
+from .grouping import (
+    build_formula_groups,
+)
+
+from .validation import (
+    validate_page_result,
+)
 
 
-def detect_page_geometry(
-    page: Dict[str, Any],
+# ============================================================================
+# ELEMENT CLASSIFICATION
+# ============================================================================
+
+
+def classify_page_elements(
     elements: List[Dict[str, Any]],
-) -> Dict[str, float]:
+) -> List[Dict[str, Any]]:
+    """
+    Выполняет semantic-классификацию элементов страницы.
 
-    page_width = safe_float(
-        page.get("width")
-    )
+    В текущей версии классифицируются только image-элементы.
 
-    page_height = safe_float(
-        page.get("height")
-    )
+    Для каждого изображения добавляются:
 
-    if page_width <= 0:
+        semantic_role
+        classification_reason
+        classification_confidence
 
-        page_width = max(
+    Текстовые элементы не классифицируются.
+    """
+
+    classified: List[Dict[str, Any]] = []
+
+    for element in elements:
+
+        enriched = dict(element)
+
+        element_type = enriched.get(
+            "element_type",
+            enriched.get("type"),
+        )
+
+        # ------------------------------------------------------------------
+        # IMAGE
+        # ------------------------------------------------------------------
+
+        if element_type == "image":
+
             (
-                safe_float(
-                    element.get("bbox")[2]
-                )
-                for element in elements
-                if element.get("bbox")
-                and len(element.get("bbox")) >= 4
-            ),
-            default=0.0,
+                role,
+                reason,
+                confidence,
+            ) = classify_image(
+                enriched
+            )
+
+            enriched["semantic_role"] = role
+
+            enriched[
+                "classification_reason"
+            ] = reason
+
+            enriched[
+                "classification_confidence"
+            ] = round(
+                float(confidence),
+                3,
+            )
+
+        # ------------------------------------------------------------------
+        # NON-IMAGE
+        # ------------------------------------------------------------------
+
+        else:
+
+            enriched.setdefault(
+                "semantic_role",
+                None,
+            )
+
+            enriched.setdefault(
+                "classification_reason",
+                None,
+            )
+
+            enriched.setdefault(
+                "classification_confidence",
+                None,
+            )
+
+        classified.append(
+            enriched
         )
 
-    if page_height <= 0:
+    return classified
 
-        page_height = max(
-            (
-                safe_float(
-                    element.get("bbox")[3]
-                )
-                for element in elements
-                if element.get("bbox")
-                and len(element.get("bbox")) >= 4
-            ),
-            default=0.0,
+
+# ============================================================================
+# PAGE-RELATIVE GEOMETRY
+# ============================================================================
+
+
+def enrich_page_relative_geometry(
+    elements: List[Dict[str, Any]],
+    page_width: float,
+) -> List[Dict[str, Any]]:
+    """
+    Добавляет геометрические характеристики,
+    зависящие от ширины страницы.
+
+    В частности:
+
+        horizontal_region
+
+    Возможные значения:
+
+        left
+        center
+        right
+        unknown
+
+    Важно:
+
+        Эта функция не изменяет исходные элементы.
+        Создаются копии словарей.
+
+    Геометрия элемента рассчитывается относительно
+    ширины страницы, а не относительно других элементов.
+
+    Логика horizontal_region находится в geometry.py.
+    """
+
+    enriched_elements: List[
+        Dict[str, Any]
+    ] = []
+
+    for element in elements:
+
+        enriched = dict(
+            element
         )
 
-    return {
-        "width": round(page_width, 3),
-        "height": round(page_height, 3),
-    }
-
-
-def enrich_element(
-    element: Dict[str, Any],
-    page_geometry: Dict[str, float],
-) -> Dict[str, Any]:
-
-    result = dict(element)
-
-    bbox = element.get("bbox")
-
-    result["identity"] = element_identity(
-        element
-    )
-
-    if is_image_element(element):
-
-        area = bbox_area(bbox)
-
-        width = bbox_width(bbox)
-
-        height = bbox_height(bbox)
-
-        center = bbox_center(bbox)
-
-        result["geometry"] = {
-            "width": round(width, 3),
-
-            "height": round(height, 3),
-
-            "area": round(area, 3),
-
-            "center": [
-                round(center[0], 3),
-                round(center[1], 3),
-            ],
-
-            "horizontal_region":
-                horizontal_region(
-                    bbox,
-                    page_geometry["width"],
-                ),
-        }
-
-        (
-            role,
-            reason,
-            confidence,
-        ) = classify_image(element)
-
-        result["semantic_role"] = role
-
-        result["classification_reason"] = reason
-
-        result["classification_confidence"] = confidence
-
-    elif is_text_element(element):
-
-        text = normalize_text(
-            get_text(element)
+        bbox = enriched.get(
+            "bbox"
         )
 
-        result["text_normalized"] = text
+        if (
+            isinstance(
+                bbox,
+                (list, tuple),
+            )
+            and len(bbox) >= 4
+            and page_width > 0
+        ):
 
-        number = extract_formula_number(text)
-
-        if number is not None:
-
-            result["semantic_role"] = (
-                "formula_number"
+            enriched[
+                "horizontal_region"
+            ] = horizontal_region(
+                list(bbox[:4]),
+                page_width,
             )
 
         else:
 
-            result["semantic_role"] = "text"
+            enriched[
+                "horizontal_region"
+            ] = "unknown"
 
-    return result
+        enriched_elements.append(
+            enriched
+        )
+
+    return enriched_elements
+
+
+# ============================================================================
+# PAGE PROCESSING
+# ============================================================================
 
 
 def process_page(
     page: Dict[str, Any],
     page_number: int,
 ) -> Dict[str, Any]:
+    """
+    Полностью обрабатывает одну страницу.
+
+    Порядок:
+
+        1. normalization
+        2. page geometry
+        3. element enrichment
+        4. image classification
+        5. formula number detection
+        6. contextual formula classification
+        7. page-relative geometry
+        8. formula candidate detection
+        9. formula grouping
+        10. formula-number linking
+        11. formula context enrichment
+    """
 
     raw_elements = page.get(
         "elements",
         [],
     )
 
+    # ------------------------------------------------------------------
+    # 1. NORMALIZATION
+    # ------------------------------------------------------------------
+
     elements = normalize_page_elements(
         raw_elements
     )
+
+    # ------------------------------------------------------------------
+    # 2. PAGE GEOMETRY
+    # ------------------------------------------------------------------
 
     page_geometry = detect_page_geometry(
         page,
         elements,
     )
 
+    # ------------------------------------------------------------------
+    # 3. ELEMENT ENRICHMENT
+    # ------------------------------------------------------------------
+
     enriched_elements = [
         enrich_element(
             element,
-            page_geometry,
         )
         for element in elements
     ]
 
+    # ------------------------------------------------------------------
+    # 4. IMAGE CLASSIFICATION
+    # ------------------------------------------------------------------
+
+    classified_elements = classify_page_elements(
+        enriched_elements
+    )
+
+    # ------------------------------------------------------------------
+    # 5. FORMULA NUMBERS
+    # ------------------------------------------------------------------
+
+    numbers = detect_formula_numbers(
+        classified_elements
+    )
+
+    # ------------------------------------------------------------------
+    # 6. CONTEXTUAL FORMULA CLASSIFICATION
+    # ------------------------------------------------------------------
+
+    classified_elements = refine_formula_candidates(
+        classified_elements,
+        numbers,
+    )
+
+    # ------------------------------------------------------------------
+    # 7. PAGE-RELATIVE GEOMETRY
+    # ------------------------------------------------------------------
+
+    classified_elements = (
+        enrich_page_relative_geometry(
+            classified_elements,
+            page_geometry.get(
+                "width",
+                0.0,
+            ),
+        )
+    )
+
+    # ------------------------------------------------------------------
+    # 8. FORMULA CANDIDATES
+    # ------------------------------------------------------------------
+
     candidates = detect_formula_candidates(
-        enriched_elements,
+        classified_elements,
         page_number,
     )
+
+    # ------------------------------------------------------------------
+    # 9. FORMULA GROUPS
+    # ------------------------------------------------------------------
 
     groups = build_formula_groups(
         candidates
     )
 
-    numbers = detect_formula_numbers(
-        enriched_elements
+    # ------------------------------------------------------------------
+    # 10. LINK FORMULAS ↔ NUMBERS
+    # ------------------------------------------------------------------
+
+    (
+        formula_records,
+        relations,
+    ) = link_formula_numbers(
+        groups,
+        numbers,
     )
 
-    formula_records, relations = (
-        link_formula_numbers(
-            groups,
-            numbers,
-        )
-    )
+    # ------------------------------------------------------------------
+    # 11. FORMULA CONTEXT
+    # ------------------------------------------------------------------
 
     enrich_formula_context(
         formula_records,
-        enriched_elements,
+        classified_elements,
     )
 
     return {
@@ -218,10 +372,10 @@ def process_page(
         "page_geometry": page_geometry,
 
         "elements_count": len(
-            enriched_elements
+            classified_elements
         ),
 
-        "elements": enriched_elements,
+        "elements": classified_elements,
 
         "formula_candidates": candidates,
 
@@ -233,3 +387,71 @@ def process_page(
 
         "formula_relations": relations,
     }
+
+
+# ============================================================================
+# DOCUMENT PROCESSING
+# ============================================================================
+
+
+def process_document_pages(
+    pages: List[Dict[str, Any]],
+) -> tuple[
+    List[Dict[str, Any]],
+    List[str],
+]:
+    """
+    Обрабатывает весь документ постранично.
+
+    Возвращает:
+
+        semantic_pages
+        validation_errors
+    """
+
+    semantic_pages: List[
+        Dict[str, Any]
+    ] = []
+
+    validation_errors: List[str] = []
+
+    for page_position, page in enumerate(
+        pages
+    ):
+
+        page_number = page.get(
+            "page_number",
+            page_position + 1,
+        )
+
+        print(
+            f"Обработка страницы "
+            f"{page_number}..."
+        )
+
+        page_result = process_page(
+            page,
+            page_number,
+        )
+
+        semantic_pages.append(
+            page_result
+        )
+
+        page_errors = (
+            validate_page_result(
+                page_result
+            )
+        )
+
+        for error in page_errors:
+
+            validation_errors.append(
+                f"page={page_number}: "
+                f"{error}"
+            )
+
+    return (
+        semantic_pages,
+        validation_errors,
+    )

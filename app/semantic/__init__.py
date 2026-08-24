@@ -1,5 +1,9 @@
 """
-VKS Expert AI — semantic PDF parser package.
+VKS Expert AI — Semantic PDF Parser.
+
+Semantic analysis layer for PDF documents.
 """
 
-VERSION = "0.7"
+__version__ = "0.8"
+
+PARSER_NAME = "VKS Expert AI Semantic PDF Parser"

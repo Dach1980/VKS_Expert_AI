@@ -1,39 +1,147 @@
 """
-VKS Expert AI — command line interface.
+Command-line interface for Semantic PDF Parser v0.8.
 """
 
 from __future__ import annotations
 
-import json
+import argparse
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from .config import (
-    DEBUG_PAGE,
     DEFAULT_OUTPUT,
     DEFAULT_SOURCE,
+    DEBUG_PAGE,
+    PARSER_NAME,
     VERSION,
 )
 
 from .debug import debug_page
-from .pipeline import process_page
-from .source import get_pages
-from .statistics import build_statistics
-from .validation import validate_page_result
+
+from .pipeline import (
+    process_document_pages,
+)
+
+from .source import (
+    get_pages,
+    load_json,
+    save_json,
+)
+
+from .statistics import (
+    build_statistics,
+)
+
+
+def create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vks-semantic",
+        description=(
+            "VKS Expert AI Semantic PDF Parser"
+        ),
+    )
+
+    subparsers = parser.add_subparsers(
+        dest="command"
+    )
+
+    parse_parser = subparsers.add_parser(
+        "parse",
+        help="Parse elements.json",
+    )
+
+    parse_parser.add_argument(
+        "source",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_SOURCE,
+        help="Source elements.json",
+    )
+
+    parse_parser.add_argument(
+        "output",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help="Output semantic.json",
+    )
+
+    parse_parser.add_argument(
+        "--debug-page",
+        type=int,
+        default=DEBUG_PAGE,
+        help="Page for debug output",
+    )
+
+    return parser
+
+
+def print_statistics(
+    statistics: dict,
+) -> None:
+    print()
+    print("СТАТИСТИКА")
+    print("-" * 80)
+
+    labels = [
+        ("Страниц", "pages"),
+        ("Элементов", "elements"),
+        ("Изображений", "images"),
+        ("Символов", "symbols"),
+        (
+            "Фрагментов формул",
+            "formula_fragments",
+        ),
+        (
+            "Кандидатов схем",
+            "diagram_candidates",
+        ),
+        (
+            "Кандидатов формул",
+            "formula_candidates",
+        ),
+        (
+            "Групп формул",
+            "formula_groups",
+        ),
+        (
+            "Составных групп",
+            "composite_groups",
+        ),
+        (
+            "Номеров формул",
+            "formula_numbers",
+        ),
+        (
+            "Связанных формул",
+            "formula_relations",
+        ),
+        (
+            "Формул без номера",
+            "formulas_without_number",
+        ),
+        (
+            "Ошибок валидации",
+            "validation_errors",
+        ),
+    ]
+
+    for label, key in labels:
+        print(
+            f"{label + ':':<30}"
+            f"{statistics[key]:>10}"
+        )
 
 
 def parse_document(
     source_path: Path,
     output_path: Path,
+    debug_page_number: Optional[int] = None,
 ) -> None:
-
     print("=" * 80)
-
     print(
-        f"VKS Expert AI — "
-        f"Semantic PDF Parser v{VERSION}"
+        f"{PARSER_NAME} v{VERSION}"
     )
-
     print("=" * 80)
     print()
 
@@ -42,17 +150,13 @@ def parse_document(
     )
 
     print()
-
     print(
         "Загрузка elements.json..."
     )
 
-    with source_path.open(
-        "r",
-        encoding="utf-8",
-    ) as file:
-
-        source = json.load(file)
+    source = load_json(
+        source_path
+    )
 
     pages = get_pages(source)
 
@@ -61,51 +165,16 @@ def parse_document(
     )
 
     print()
-
     print(
         "Семантический анализ..."
     )
 
-    semantic_pages = []
-
-    validation_errors = []
-
-    debug_result = None
-
-    for page_position, page in enumerate(pages):
-
-        page_number = page.get(
-            "page_number",
-            page_position + 1,
-        )
-
-        print(
-            f"Обработка страницы "
-            f"{page_number}..."
-        )
-
-        page_result = process_page(
-            page,
-            page_number,
-        )
-
-        semantic_pages.append(
-            page_result
-        )
-
-        page_errors = validate_page_result(
-            page_result
-        )
-
-        for error in page_errors:
-
-            validation_errors.append(
-                f"page={page_number}: {error}"
-            )
-
-        if page_number == DEBUG_PAGE:
-
-            debug_result = page_result
+    (
+        semantic_pages,
+        validation_errors,
+    ) = process_document_pages(
+        pages
+    )
 
     statistics = build_statistics(
         semantic_pages,
@@ -114,55 +183,50 @@ def parse_document(
 
     result = {
         "parser": {
-            "name":
-                "VKS Expert AI "
-                "Semantic PDF Parser",
-
-            "version":
-                VERSION,
+            "name": PARSER_NAME,
+            "version": VERSION,
         },
 
-        "source":
-            str(source_path),
+        "source": str(
+            source_path
+        ),
 
-        "statistics":
-            statistics,
+        "statistics": statistics,
 
-        "pages":
-            semantic_pages,
+        "pages": semantic_pages,
 
         "validation": {
-            "valid":
-                len(validation_errors) == 0,
-
-            "errors":
-                validation_errors,
+            "valid": (
+                len(validation_errors) == 0
+            ),
+            "errors": validation_errors,
         },
     }
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    save_json(
+        result,
+        output_path,
     )
 
-    with output_path.open(
-        "w",
-        encoding="utf-8",
-    ) as file:
+    # ---------------------------------------------------------------
+    # Debug
+    # ---------------------------------------------------------------
 
-        json.dump(
-            result,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
+    if debug_page_number is not None:
+        for page_result in semantic_pages:
+            if (
+                page_result["page_number"]
+                == debug_page_number
+            ):
+                debug_page(
+                    debug_page_number,
+                    page_result,
+                )
+                break
 
-    if debug_result is not None:
-
-        debug_page(
-            DEBUG_PAGE,
-            debug_result,
-        )
+    # ---------------------------------------------------------------
+    # Final output
+    # ---------------------------------------------------------------
 
     print()
     print("=" * 80)
@@ -170,45 +234,16 @@ def parse_document(
     print("=" * 80)
     print()
 
-    print(
-        "Результат:"
-    )
-
+    print("Результат:")
     print(output_path)
 
-    print()
-
-    print("СТАТИСТИКА")
-
-    print("-" * 80)
-
-    labels = [
-        ("Страниц", "pages"),
-        ("Элементов", "elements"),
-        ("Изображений", "images"),
-        ("Символов", "symbols"),
-        ("Фрагментов формул", "formula_fragments"),
-        ("Кандидатов схем", "diagram_candidates"),
-        ("Кандидатов формул", "formula_candidates"),
-        ("Групп формул", "formula_groups"),
-        ("Составных групп", "composite_groups"),
-        ("Номеров формул", "formula_numbers"),
-        ("Связанных формул", "formula_relations"),
-        ("Формул без номера", "formulas_without_number"),
-        ("Ошибок валидации", "validation_errors"),
-    ]
-
-    for label, key in labels:
-
-        print(
-            f"{label + ':':<30}"
-            f"{statistics[key]:>10}"
-        )
+    print_statistics(
+        statistics
+    )
 
     print()
 
     if validation_errors:
-
         print(
             "ПЕРВЫЕ ОШИБКИ ВАЛИДАЦИИ"
         )
@@ -216,62 +251,56 @@ def parse_document(
         print("-" * 80)
 
         for error in validation_errors[:20]:
-
             print(
                 f"  {error}"
             )
 
         if len(validation_errors) > 20:
-
             print(
                 f"... и ещё "
                 f"{len(validation_errors) - 20}"
             )
 
     else:
-
         print(
             "Валидация: OK"
         )
 
 
-def main() -> None:
+def main(
+    argv: Optional[list[str]] = None,
+) -> None:
+    parser = create_parser()
 
-    import sys
+    args = parser.parse_args(argv)
 
-    if len(sys.argv) >= 2:
+    if args.command is None:
+        args.command = "parse"
+        args.source = DEFAULT_SOURCE
+        args.output = DEFAULT_OUTPUT
+        args.debug_page = DEBUG_PAGE
 
-        source_path = Path(
-            sys.argv[1]
-        )
+    source_path = Path(
+        args.source
+    )
 
-    else:
-
-        source_path = DEFAULT_SOURCE
-
-    if len(sys.argv) >= 3:
-
-        output_path = Path(
-            sys.argv[2]
-        )
-
-    else:
-
-        output_path = DEFAULT_OUTPUT
+    output_path = Path(
+        args.output
+    )
 
     if not source_path.exists():
-
-        print("ОШИБКА:")
-
-        print(
+        parser.error(
             f"Файл не найден:\n"
             f"{source_path}"
         )
 
-        sys.exit(1)
-
     parse_document(
         source_path,
         output_path,
+        args.debug_page,
     )
+
+
+if __name__ == "__main__":
+    main()
     

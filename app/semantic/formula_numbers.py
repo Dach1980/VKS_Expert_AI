@@ -1,5 +1,16 @@
 """
 VKS Expert AI — formula number detection.
+
+v0.8
+----
+
+Поиск номеров формул вида:
+
+    (1)
+    (12)
+    (123)
+
+в текстовых элементах PDF.
 """
 
 from __future__ import annotations
@@ -19,52 +30,104 @@ from .elements import (
 from .geometry import safe_float
 
 
+# ============================================================================
+# REGEX
+# ============================================================================
+
+
 FORMULA_NUMBER_RE = re.compile(
     r"(?<!\d)\(\s*(\d{1,4})\s*\)(?!\d)"
 )
 
 
+# ============================================================================
+# NUMBER EXTRACTION
+# ============================================================================
+
+
 def extract_formula_number(
     text: str,
 ) -> Optional[int]:
+    """
+    Извлекает номер формулы из текста.
+
+    Примеры:
+
+        "(1)"            -> 1
+        ", (12)"         -> 12
+        "формула (123)"  -> 123
+        "текст"          -> None
+    """
 
     if not text:
         return None
 
-    match = FORMULA_NUMBER_RE.search(text)
+    match = FORMULA_NUMBER_RE.search(
+        text
+    )
 
     if not match:
         return None
 
     try:
-        return int(match.group(1))
-
+        return int(
+            match.group(1)
+        )
     except ValueError:
         return None
+
+
+# ============================================================================
+# BBOX ESTIMATION
+# ============================================================================
 
 
 def estimate_number_bbox(
     text_bbox: List[float],
     text: str,
 ) -> Optional[List[float]]:
+    """
+    Приблизительно определяет bbox номера формулы
+    внутри bbox текстового элемента.
+    """
 
     if not text_bbox:
         return None
 
-    match = FORMULA_NUMBER_RE.search(text)
+    match = FORMULA_NUMBER_RE.search(
+        text
+    )
 
     if not match:
         return None
 
-    x0, y0, x1, y1 = map(
-        safe_float,
-        text_bbox[:4],
-    )
+    if len(text_bbox) < 4:
+        return None
+
+    try:
+
+        x0, y0, x1, y1 = map(
+            safe_float,
+            text_bbox[:4],
+        )
+
+    except Exception:
+        return None
 
     if x1 <= x0:
         return None
 
-    suffix = text[match.end():].strip()
+    # ------------------------------------------------------------------
+    # Номер находится в самом конце строки.
+    #
+    # Это типичная ситуация для нормативных документов:
+    #
+    #       ... формула ...                 (1)
+    # ------------------------------------------------------------------
+
+    suffix = text[
+        match.end():
+    ].strip()
 
     if not suffix:
 
@@ -87,6 +150,11 @@ def estimate_number_bbox(
             round(y1, 3),
         ]
 
+    # ------------------------------------------------------------------
+    # Если после номера есть текст,
+    # используем пропорцию длины строки.
+    # ------------------------------------------------------------------
+
     full_text = text or ""
 
     text_length = max(
@@ -94,8 +162,15 @@ def estimate_number_bbox(
         1,
     )
 
-    start_ratio = match.start() / text_length
-    end_ratio = match.end() / text_length
+    start_ratio = (
+        match.start()
+        / text_length
+    )
+
+    end_ratio = (
+        match.end()
+        / text_length
+    )
 
     estimated_x0 = (
         x0
@@ -143,11 +218,19 @@ def estimate_number_bbox(
     ]
 
 
+# ============================================================================
+# DETECTION
+# ============================================================================
+
+
 def detect_formula_numbers(
     elements: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
+    """
+    Находит номера формул среди элементов страницы.
+    """
 
-    numbers = []
+    numbers: List[Dict[str, Any]] = []
 
     for element in elements:
 
@@ -156,39 +239,76 @@ def detect_formula_numbers(
 
         text = get_text(element)
 
-        number = extract_formula_number(text)
+        number = extract_formula_number(
+            text
+        )
 
         if number is None:
             continue
 
-        parser_index = get_parser_index(element)
+        # --------------------------------------------------------------
+        # Идентификаторы
+        # --------------------------------------------------------------
+
+        parser_index = get_parser_index(
+            element
+        )
 
         if parser_index is None:
             continue
 
-        source_index = get_source_index(element)
-
-        xref = get_element_xref(element)
-
-        bbox = element.get("bbox")
-
-        estimated_bbox = estimate_number_bbox(
-            bbox,
-            text,
+        source_index = get_source_index(
+            element
         )
 
-        normalized = normalize_text(text)
+        xref = get_element_xref(
+            element
+        )
 
-        match = FORMULA_NUMBER_RE.search(text)
+        # --------------------------------------------------------------
+        # Geometry
+        # --------------------------------------------------------------
+
+        bbox = element.get(
+            "bbox"
+        )
+
+        estimated_bbox = (
+            estimate_number_bbox(
+                bbox,
+                text,
+            )
+            if isinstance(
+                bbox,
+                list,
+            )
+            else None
+        )
+
+        # --------------------------------------------------------------
+        # Text analysis
+        # --------------------------------------------------------------
+
+        normalized = normalize_text(
+            text
+        )
+
+        match = FORMULA_NUMBER_RE.search(
+            text
+        )
 
         if match:
 
             prefix = normalize_text(
-                text[:match.start()]
+                text[
+                    :match.start()
+                ]
             )
 
             suffix = normalize_text(
-                text[match.end():]
+                text[
+                    match.end():
+                ]
             )
 
         else:
@@ -196,50 +316,74 @@ def detect_formula_numbers(
             prefix = ""
             suffix = ""
 
+        # --------------------------------------------------------------
+        # Confidence
+        # --------------------------------------------------------------
+
         confidence = 0.0
 
+        # Номер находится в конце строки.
         if not suffix:
             confidence += 50.0
 
+        # Перед номером стоит запятая.
         if prefix.endswith(","):
             confidence += 20.0
 
+        # Очень короткий текстовый элемент.
         if len(normalized) <= 12:
             confidence += 20.0
 
+        # Элемент практически полностью состоит
+        # из номера формулы.
         if re.fullmatch(
             r"[,\s]*\(\s*\d{1,4}\s*\)",
             normalized,
         ):
             confidence += 30.0
 
+        confidence = min(
+            confidence,
+            100.0,
+        )
+
+        # --------------------------------------------------------------
+        # Result
+        # --------------------------------------------------------------
+
         numbers.append(
             {
                 "number": number,
 
-                "number_parser_index": parser_index,
+                "number_parser_index":
+                    parser_index,
 
-                "number_source_index": source_index,
+                "number_source_index":
+                    source_index,
 
-                "number_xref": xref,
+                "number_xref":
+                    xref,
 
-                "number_container_bbox": bbox,
+                "number_container_bbox":
+                    bbox,
 
-                "number_estimated_bbox": estimated_bbox,
+                "number_estimated_bbox":
+                    estimated_bbox,
 
-                "text": text,
+                "text":
+                    text,
 
-                "prefix": prefix,
+                "prefix":
+                    prefix,
 
-                "suffix": suffix,
+                "suffix":
+                    suffix,
 
-                "confidence": round(
-                    min(
+                "confidence":
+                    round(
                         confidence,
-                        100.0,
+                        3,
                     ),
-                    3,
-                ),
             }
         )
 

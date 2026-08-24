@@ -1,5 +1,5 @@
 """
-VKS Expert AI — formula textual context.
+Context extraction around formulas.
 """
 
 from __future__ import annotations
@@ -18,9 +18,7 @@ def find_previous_text_element(
     elements: List[Dict[str, Any]],
     parser_index: int,
 ) -> Optional[Dict[str, Any]]:
-
     for element in reversed(elements):
-
         index = get_parser_index(element)
 
         if index is None:
@@ -30,7 +28,6 @@ def find_previous_text_element(
             continue
 
         if is_text_element(element):
-
             text = normalize_text(
                 get_text(element)
             )
@@ -45,9 +42,7 @@ def find_next_text_element(
     elements: List[Dict[str, Any]],
     parser_index: int,
 ) -> Optional[Dict[str, Any]]:
-
     for element in elements:
-
         index = get_parser_index(element)
 
         if index is None:
@@ -57,7 +52,6 @@ def find_next_text_element(
             continue
 
         if is_text_element(element):
-
             text = normalize_text(
                 get_text(element)
             )
@@ -72,9 +66,7 @@ def enrich_formula_context(
     formula_records: List[Dict[str, Any]],
     elements: List[Dict[str, Any]],
 ) -> None:
-
     for formula in formula_records:
-
         indices = formula.get(
             "parser_indices",
             [],

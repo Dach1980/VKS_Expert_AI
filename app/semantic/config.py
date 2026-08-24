@@ -1,42 +1,32 @@
 """
-VKS Expert AI — Semantic Parser configuration.
-
-Все пороги алгоритмов находятся здесь, чтобы экспериментальная
-настройка не требовала изменения логики parser-модулей.
+Configuration for VKS Expert AI Semantic PDF Parser.
 """
 
 from pathlib import Path
 
 
-# =====================================================================
-# VERSION
-# =====================================================================
+VERSION = "0.8"
 
-VERSION = "0.7"
+PARSER_NAME = "VKS Expert AI Semantic PDF Parser"
 
 
-# =====================================================================
-# DEFAULT PATHS
-# =====================================================================
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 DEFAULT_SOURCE = (
-    Path(r"D:\Projects\VKS_Expert_AI")
+    PROJECT_ROOT
     / "knowledge"
     / "parsed"
     / "SP_30.13330.2020.elements.json"
 )
 
 DEFAULT_OUTPUT = (
-    Path(r"D:\Projects\VKS_Expert_AI")
+    PROJECT_ROOT
     / "knowledge"
     / "parsed"
     / "SP_30.13330.2020.semantic.json"
 )
 
-
-# =====================================================================
-# DEBUG
-# =====================================================================
 
 DEBUG_PAGE = 12
 
@@ -63,9 +53,7 @@ SMALL_MATH_MAX_HEIGHT = 80.0
 # =====================================================================
 
 FORMULA_GROUP_MAX_X_GAP = 45.0
-
 FORMULA_GROUP_MAX_Y_GAP = 18.0
-
 FORMULA_GROUP_CENTER_Y_TOLERANCE = 24.0
 
 FORMULA_GROUP_HEIGHT_RATIO = 3.5
@@ -76,7 +64,6 @@ FORMULA_GROUP_HEIGHT_RATIO = 3.5
 # =====================================================================
 
 FORMULA_NUMBER_Y_TOLERANCE = 45.0
-
 FORMULA_NUMBER_MAX_X_DISTANCE = 220.0
 
 FORMULA_NUMBER_MIN_LINK_SCORE = 50.0
