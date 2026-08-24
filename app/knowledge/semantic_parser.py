@@ -1,42 +1,51 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
 ======================================================================
-VKS Expert AI — Semantic PDF Parser v0.5.1
+VKS Expert AI — Semantic PDF Parser v0.6
 ======================================================================
 
 Назначение:
     Построение семантического слоя PDF-документа поверх elements.json.
 
-Основные задачи:
-    1. Нормализация элементов страниц.
-    2. Стабильная идентификация элементов через element_index.
-    3. Поиск кандидатов математических формул.
-    4. Группировка составных формул.
-    5. Поиск номеров формул вида (1), (2), ...
-    6. Связывание формулы с её номером.
-    7. Формирование semantic.json.
-    8. Подробный debug выбранной страницы.
+v0.6:
 
-Главное исправление v0.5.1:
-    В v0.5 часть элементов имела element_index=None.
-    Это приводило к тому, что все None попадали в один ключ
-    group_by_element[None] и последняя группа затирала предыдущие.
+    1. Нормализация элементов.
+    2. Разделение:
+           source_index
+           parser_index
+           xref
+    3. Геометрический анализ изображений.
+    4. Классификация изображений:
+           symbol
+           formula_fragment
+           formula_candidate
+           diagram_candidate
+           unknown
+    5. Группировка математических фрагментов.
+    6. Поиск номеров формул.
+    7. Связывание номера с группой формулы.
+    8. Confidence score.
+    9. Расширенная валидация.
+   10. Подробный debug выбранной страницы.
 
-    v0.5.1 гарантирует:
-        element_index = позиция элемента внутри страницы
+ВАЖНЫЙ ПРИНЦИП:
 
-    Xref сохраняется отдельно:
-        xref = PDF object reference
+    Этот parser НЕ распознаёт содержание изображения.
 
+    Он определяет только структурную и геометрическую роль
+    элемента.
+
+    Распознавание самой математической формулы будет отдельным
+    следующим этапом.
 ======================================================================
 """
 
 from __future__ import annotations
 
 import json
-import math
 import re
 import sys
 from pathlib import Path
@@ -47,7 +56,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # CONFIG
 # =====================================================================
 
-VERSION = "0.5.1"
+VERSION = "0.6"
 
 DEFAULT_SOURCE = (
     r"D:\Projects\VKS_Expert_AI"
@@ -61,43 +70,45 @@ DEFAULT_OUTPUT = (
     r"\SP_30.13330.2020.semantic.json"
 )
 
-# Страница для детального debug.
 DEBUG_PAGE = 12
 
-# Минимальные размеры изображения-кандидата.
-MIN_FORMULA_IMAGE_AREA = 180.0
-MEDIUM_FORMULA_IMAGE_AREA = 400.0
-LARGE_FORMULA_IMAGE_AREA = 700.0
 
-# Максимальный размер элемента, который ещё может быть математическим
-# символом/фрагментом формулы.
+# ---------------------------------------------------------------------
+# Image classification
+# ---------------------------------------------------------------------
+
+SYMBOL_MAX_AREA = 1200.0
+
+FORMULA_FRAGMENT_MIN_AREA = 180.0
+FORMULA_FRAGMENT_MAX_AREA = 5000.0
+
+FORMULA_CANDIDATE_MIN_AREA = 500.0
+
+DIAGRAM_MIN_AREA = 5000.0
+
 SMALL_MATH_MAX_WIDTH = 120.0
 SMALL_MATH_MAX_HEIGHT = 80.0
 
-# Максимальный вертикальный разрыв между элементами одной формулы.
-FORMULA_GROUP_MAX_Y_GAP = 14.0
 
-# Максимальный горизонтальный разрыв между соседними математическими
-# изображениями в одной строке.
+# ---------------------------------------------------------------------
+# Formula grouping
+# ---------------------------------------------------------------------
+
 FORMULA_GROUP_MAX_X_GAP = 45.0
+FORMULA_GROUP_MAX_Y_GAP = 18.0
+FORMULA_GROUP_CENTER_Y_TOLERANCE = 24.0
 
-# Максимальное отношение высот элементов внутри одной группы.
 FORMULA_GROUP_HEIGHT_RATIO = 3.5
 
-# Максимальная вертикальная разница центров элементов группы.
-FORMULA_GROUP_CENTER_Y_TOLERANCE = 28.0
 
-# Номер формулы обычно находится ближе к правому краю страницы.
-FORMULA_NUMBER_RIGHT_MARGIN_RATIO = 0.35
+# ---------------------------------------------------------------------
+# Formula number
+# ---------------------------------------------------------------------
 
-# Допустимый вертикальный диапазон номера относительно формулы.
 FORMULA_NUMBER_Y_TOLERANCE = 45.0
+FORMULA_NUMBER_MAX_X_DISTANCE = 220.0
 
-# Допустимый горизонтальный диапазон номера.
-FORMULA_NUMBER_MAX_X_DISTANCE = 180.0
-
-# Минимальный score для автоматической связи.
-FORMULA_NUMBER_MIN_LINK_SCORE = 45.0
+FORMULA_NUMBER_MIN_LINK_SCORE = 50.0
 
 
 # =====================================================================
@@ -121,42 +132,64 @@ BULLET_RE = re.compile(
 # BASIC HELPERS
 # =====================================================================
 
-def safe_float(value: Any, default: float = 0.0) -> float:
+def safe_float(
+    value: Any,
+    default: float = 0.0,
+) -> float:
+
     try:
         return float(value)
+
     except (TypeError, ValueError):
         return default
 
 
-def bbox_area(bbox: Optional[List[float]]) -> float:
+def bbox_area(
+    bbox: Optional[List[float]],
+) -> float:
+
     if not bbox or len(bbox) < 4:
         return 0.0
 
-    x0, y0, x1, y1 = map(safe_float, bbox[:4])
-
-    width = max(0.0, x1 - x0)
-    height = max(0.0, y1 - y0)
-
-    return width * height
-
-
-def bbox_width(bbox: Optional[List[float]]) -> float:
-    if not bbox or len(bbox) < 4:
-        return 0.0
+    x0, y0, x1, y1 = map(
+        safe_float,
+        bbox[:4],
+    )
 
     return max(
         0.0,
-        safe_float(bbox[2]) - safe_float(bbox[0])
+        x1 - x0,
+    ) * max(
+        0.0,
+        y1 - y0,
     )
 
 
-def bbox_height(bbox: Optional[List[float]]) -> float:
+def bbox_width(
+    bbox: Optional[List[float]],
+) -> float:
+
     if not bbox or len(bbox) < 4:
         return 0.0
 
     return max(
         0.0,
-        safe_float(bbox[3]) - safe_float(bbox[1])
+        safe_float(bbox[2])
+        - safe_float(bbox[0]),
+    )
+
+
+def bbox_height(
+    bbox: Optional[List[float]],
+) -> float:
+
+    if not bbox or len(bbox) < 4:
+        return 0.0
+
+    return max(
+        0.0,
+        safe_float(bbox[3])
+        - safe_float(bbox[1]),
     )
 
 
@@ -183,18 +216,33 @@ def bbox_union(
 ) -> Optional[List[float]]:
 
     valid = [
-        b
-        for b in bboxes
-        if b and len(b) >= 4
+        bbox
+        for bbox in bboxes
+        if bbox and len(bbox) >= 4
     ]
 
     if not valid:
         return None
 
-    x0 = min(safe_float(b[0]) for b in valid)
-    y0 = min(safe_float(b[1]) for b in valid)
-    x1 = max(safe_float(b[2]) for b in valid)
-    y1 = max(safe_float(b[3]) for b in valid)
+    x0 = min(
+        safe_float(b[0])
+        for b in valid
+    )
+
+    y0 = min(
+        safe_float(b[1])
+        for b in valid
+    )
+
+    x1 = max(
+        safe_float(b[2])
+        for b in valid
+    )
+
+    y1 = max(
+        safe_float(b[3])
+        for b in valid
+    )
 
     return [
         round(x0, 3),
@@ -239,80 +287,30 @@ def vertical_gap(
 
 
 # =====================================================================
-# ELEMENT NORMALIZATION
-# =====================================================================
-
-def normalize_page_elements(
-    elements: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    """
-    Гарантирует наличие стабильного element_index.
-
-    ВАЖНО:
-
-    elements.json может не содержать index вообще.
-
-    Поэтому Semantic Parser использует позицию элемента
-    внутри массива страницы как внутренний идентификатор.
-
-    Например:
-
-        position 0 -> index 0
-        position 1 -> index 1
-        ...
-        position 30 -> index 30
-
-    Если исходный index существует и является int,
-    он сохраняется.
-
-    Но для надёжности мы также записываем:
-
-        parser_index
-
-    который всегда равен физической позиции элемента.
-    """
-
-    normalized = []
-
-    for position, original in enumerate(elements):
-
-        if not isinstance(original, dict):
-            continue
-
-        element = dict(original)
-
-        original_index = element.get("index")
-
-        if isinstance(original_index, int):
-            element["index"] = original_index
-        else:
-            element["index"] = position
-
-        # Независимый внутренний идентификатор parser.
-        element["parser_index"] = position
-
-        normalized.append(element)
-
-    return normalized
-
-
-# =====================================================================
 # ELEMENT IDENTITY
 # =====================================================================
 
-def get_element_index(
-    element: Optional[Dict[str, Any]],
+def get_source_index(
+    element: Dict[str, Any],
 ) -> Optional[int]:
 
-    if not isinstance(element, dict):
-        return None
-
-    value = element.get("index")
+    value = element.get(
+        "source_index"
+    )
 
     if isinstance(value, int):
         return value
 
-    value = element.get("parser_index")
+    return None
+
+
+def get_parser_index(
+    element: Dict[str, Any],
+) -> Optional[int]:
+
+    value = element.get(
+        "parser_index"
+    )
 
     if isinstance(value, int):
         return value
@@ -321,20 +319,21 @@ def get_element_index(
 
 
 def get_element_xref(
-    element: Optional[Dict[str, Any]],
+    element: Dict[str, Any],
 ) -> Optional[int]:
 
-    if not isinstance(element, dict):
-        return None
-
-    value = element.get("xref")
+    value = element.get(
+        "xref"
+    )
 
     if isinstance(value, int):
         return value
 
     try:
+
         if value is not None:
             return int(value)
+
     except (TypeError, ValueError):
         pass
 
@@ -346,9 +345,82 @@ def element_identity(
 ) -> Dict[str, Any]:
 
     return {
-        "element_index": get_element_index(element),
-        "xref": get_element_xref(element),
+        "parser_index": get_parser_index(
+            element
+        ),
+
+        "source_index": get_source_index(
+            element
+        ),
+
+        "xref": get_element_xref(
+            element
+        ),
     }
+
+
+# =====================================================================
+# ELEMENT NORMALIZATION
+# =====================================================================
+
+def normalize_page_elements(
+    elements: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+
+    normalized = []
+
+    for position, original in enumerate(
+        elements
+    ):
+
+        if not isinstance(
+            original,
+            dict,
+        ):
+            continue
+
+        element = dict(
+            original
+        )
+
+        # -------------------------------------------------------------
+        # Сохраняем исходный index.
+        # -------------------------------------------------------------
+
+        original_index = element.get(
+            "index"
+        )
+
+        if isinstance(
+            original_index,
+            int,
+        ):
+
+            element[
+                "source_index"
+            ] = original_index
+
+        else:
+
+            element[
+                "source_index"
+            ] = None
+
+        # -------------------------------------------------------------
+        # Главный внутренний идентификатор.
+        #
+        # ВСЕГДА физическая позиция элемента.
+        # -------------------------------------------------------------
+
+        element[
+            "parser_index"
+        ] = position
+
+        normalized.append(
+            element
+        )
+
+    return normalized
 
 
 # =====================================================================
@@ -359,14 +431,18 @@ def is_text_element(
     element: Dict[str, Any],
 ) -> bool:
 
-    return element.get("type") == "text"
+    return element.get(
+        "type"
+    ) == "text"
 
 
 def is_image_element(
     element: Dict[str, Any],
 ) -> bool:
 
-    return element.get("type") == "image"
+    return element.get(
+        "type"
+    ) == "image"
 
 
 # =====================================================================
@@ -377,98 +453,421 @@ def get_text(
     element: Dict[str, Any],
 ) -> str:
 
-    value = element.get("text")
+    value = element.get(
+        "text"
+    )
 
     if value is None:
-        value = element.get("content")
+
+        value = element.get(
+            "content"
+        )
 
     if value is None:
         return ""
 
-    return str(value)
+    return str(
+        value
+    )
 
 
-def normalize_text(text: str) -> str:
+def normalize_text(
+    text: str,
+) -> str:
 
     return re.sub(
         r"\s+",
         " ",
-        text.replace("\n", " "),
+        text.replace(
+            "\n",
+            " ",
+        ),
     ).strip()
 
 
 # =====================================================================
-# FORMULA CANDIDATE DETECTION
+# PAGE GEOMETRY
 # =====================================================================
 
-def is_math_like_image(
+def detect_page_geometry(
+    page: Dict[str, Any],
+    elements: List[Dict[str, Any]],
+) -> Dict[str, float]:
+
+    page_width = safe_float(
+        page.get(
+            "width"
+        )
+    )
+
+    page_height = safe_float(
+        page.get(
+            "height"
+        )
+    )
+
+    # Если размер страницы не указан,
+    # вычисляем его по bbox элементов.
+
+    if page_width <= 0:
+
+        page_width = max(
+            (
+                safe_float(
+                    element.get(
+                        "bbox"
+                    )[2]
+                )
+                for element in elements
+                if element.get(
+                    "bbox"
+                )
+                and len(
+                    element.get(
+                        "bbox"
+                    )
+                ) >= 4
+            ),
+            default=0.0,
+        )
+
+    if page_height <= 0:
+
+        page_height = max(
+            (
+                safe_float(
+                    element.get(
+                        "bbox"
+                    )[3]
+                )
+                for element in elements
+                if element.get(
+                    "bbox"
+                )
+                and len(
+                    element.get(
+                        "bbox"
+                    )
+                ) >= 4
+            ),
+            default=0.0,
+        )
+
+    return {
+        "width": round(
+            page_width,
+            3,
+        ),
+
+        "height": round(
+            page_height,
+            3,
+        ),
+    }
+
+
+def horizontal_region(
+    bbox: List[float],
+    page_width: float,
+) -> str:
+
+    if not bbox or page_width <= 0:
+        return "unknown"
+
+    center_x = bbox_center(
+        bbox
+    )[0]
+
+    ratio = center_x / page_width
+
+    if ratio < 0.33:
+        return "left"
+
+    if ratio < 0.67:
+        return "center"
+
+    return "right"
+
+
+# =====================================================================
+# IMAGE CLASSIFICATION
+# =====================================================================
+
+def classify_image(
     element: Dict[str, Any],
-) -> bool:
+) -> Tuple[str, str, float]:
 
-    if not is_image_element(element):
-        return False
+    bbox = element.get(
+        "bbox"
+    )
 
-    bbox = element.get("bbox")
+    area = bbox_area(
+        bbox
+    )
 
-    area = bbox_area(bbox)
-    width = bbox_width(bbox)
-    height = bbox_height(bbox)
+    width = bbox_width(
+        bbox
+    )
+
+    height = bbox_height(
+        bbox
+    )
 
     if area <= 0:
-        return False
+        return (
+            "unknown",
+            "invalid_geometry",
+            0.0,
+        )
 
-    # Большие изображения считаем сильными кандидатами.
-    if area >= LARGE_FORMULA_IMAGE_AREA:
-        return True
+    # -------------------------------------------------------------
+    # 1. Очень крупные изображения.
+    #
+    # Проверяем ПЕРВЫМИ, иначе они попадут в formula_candidate.
+    # -------------------------------------------------------------
 
-    # Средние математические изображения.
-    if area >= MEDIUM_FORMULA_IMAGE_AREA:
-        return True
+    if area >= DIAGRAM_MIN_AREA:
 
-    # Маленькие элементы могут быть отдельными математическими
-    # символами. Здесь используем более строгий фильтр.
-    if (
-        area >= MIN_FORMULA_IMAGE_AREA
-        and width <= SMALL_MATH_MAX_WIDTH
-        and height <= SMALL_MATH_MAX_HEIGHT
-    ):
-        return True
+        if height > 0:
 
-    return False
+            aspect_ratio = (
+                width / height
+            )
 
+            if aspect_ratio >= 8.0:
 
-def formula_detection_reason(
+                return (
+                    "diagram_candidate",
+                    "large_extreme_aspect_ratio",
+                    0.75,
+                )
+
+        return (
+            "diagram_candidate",
+            "large_image",
+            0.70,
+        )
+
+    # -------------------------------------------------------------
+    # 2. Очень маленькие изображения.
+    #
+    # По умолчанию считаем их символами.
+    # -------------------------------------------------------------
+
+    if area <= SYMBOL_MAX_AREA:
+
+        # ---------------------------------------------------------
+        # Маленький объект может быть математическим фрагментом,
+        # если его геометрия похожа на математический символ.
+        #
+        # Пока не переводим все маленькие изображения
+        # автоматически в formula_fragment.
+        # ---------------------------------------------------------
+
+        if (
+            width <= SMALL_MATH_MAX_WIDTH
+            and height <= SMALL_MATH_MAX_HEIGHT
+            and area >= FORMULA_FRAGMENT_MIN_AREA
+        ):
+
+            return (
+                "formula_fragment",
+                "small_math_geometry",
+                0.75,
+            )
+
+        return (
+            "symbol",
+            "small_image",
+            0.80,
+        )
+
+    # -------------------------------------------------------------
+    # 3. Средние изображения.
+    # -------------------------------------------------------------
+
+    if area >= FORMULA_CANDIDATE_MIN_AREA:
+
+        if height > 0:
+
+            aspect_ratio = (
+                width / height
+            )
+
+            if aspect_ratio >= 8.0:
+
+                return (
+                    "diagram_candidate",
+                    "medium_extreme_aspect_ratio",
+                    0.55,
+                )
+
+        return (
+            "formula_candidate",
+            "medium_math_geometry",
+            0.65,
+        )
+
+    # -------------------------------------------------------------
+    # 4. Всё остальное.
+    # -------------------------------------------------------------
+
+    return (
+        "unknown",
+        "unclassified",
+        0.20,
+    )
+
+# =====================================================================
+# ELEMENT ENRICHMENT
+# =====================================================================
+
+def enrich_element(
     element: Dict[str, Any],
-) -> Optional[str]:
+    page_geometry: Dict[str, float],
+) -> Dict[str, Any]:
 
-    if not is_image_element(element):
-        return None
+    result = dict(
+        element
+    )
 
-    bbox = element.get("bbox")
+    bbox = element.get(
+        "bbox"
+    )
 
-    area = bbox_area(bbox)
-    width = bbox_width(bbox)
-    height = bbox_height(bbox)
+    result[
+        "identity"
+    ] = element_identity(
+        element
+    )
 
-    if area >= LARGE_FORMULA_IMAGE_AREA:
-        return "large_image"
-
-    if area >= MEDIUM_FORMULA_IMAGE_AREA:
-        return "medium_math_image"
-
-    if (
-        area >= MIN_FORMULA_IMAGE_AREA
-        and width <= SMALL_MATH_MAX_WIDTH
-        and height <= SMALL_MATH_MAX_HEIGHT
+    if is_image_element(
+        element
     ):
-        return "small_math_image"
 
-    return None
+        area = bbox_area(
+            bbox
+        )
+
+        width = bbox_width(
+            bbox
+        )
+
+        height = bbox_height(
+            bbox
+        )
+
+        result[
+            "geometry"
+        ] = {
+            "width": round(
+                width,
+                3,
+            ),
+
+            "height": round(
+                height,
+                3,
+            ),
+
+            "area": round(
+                area,
+                3,
+            ),
+
+            "center": [
+                round(
+                    bbox_center(
+                        bbox
+                    )[0],
+                    3,
+                ),
+
+                round(
+                    bbox_center(
+                        bbox
+                    )[1],
+                    3,
+                ),
+            ],
+
+            "horizontal_region":
+                horizontal_region(
+                    bbox,
+                    page_geometry[
+                        "width"
+                    ],
+                ),
+        }
+
+        (
+            role,
+            reason,
+            confidence,
+        ) = classify_image(
+            element
+        )
+
+        result[
+            "semantic_role"
+        ] = role
+
+        result[
+            "classification_reason"
+        ] = reason
+
+        result[
+            "classification_confidence"
+        ] = confidence
+
+    elif is_text_element(
+        element
+    ):
+
+        text = normalize_text(
+            get_text(
+                element
+            )
+        )
+
+        result[
+            "text_normalized"
+        ] = text
+
+        number = extract_formula_number(
+            text
+        )
+
+        if number is not None:
+
+            result[
+                "semantic_role"
+            ] = "formula_number"
+
+        else:
+
+            result[
+                "semantic_role"
+            ] = "text"
+
+    return result
 
 
 # =====================================================================
 # FORMULA CANDIDATES
 # =====================================================================
+
+def is_formula_candidate(
+    element: Dict[str, Any],
+) -> bool:
+
+    return element.get(
+        "semantic_role"
+    ) in {
+        "formula_fragment",
+        "formula_candidate",
+    }
+
 
 def detect_formula_candidates(
     elements: List[Dict[str, Any]],
@@ -479,51 +878,102 @@ def detect_formula_candidates(
 
     for element in elements:
 
-        if not is_math_like_image(element):
+        if not is_formula_candidate(
+            element
+        ):
             continue
 
-        index = get_element_index(element)
-        xref = get_element_xref(element)
-
-        # Критическая защита:
-        # formula без идентификатора элемента не создаём.
-        if index is None:
-            continue
-
-        reason = formula_detection_reason(
+        parser_index = get_parser_index(
             element
         )
 
-        bbox = element.get("bbox")
+        if parser_index is None:
+            continue
 
-        formula_id = (
-            f"SP30.13330_p"
-            f"{page_number}"
-            f"_e{index}"
-            f"_x{xref if xref is not None else 'none'}"
+        xref = get_element_xref(
+            element
         )
 
-        candidate = {
-            "formula_id": formula_id,
-            "element_index": index,
-            "xref": xref,
-            "bbox": bbox,
-            "detection_reason": reason,
-            "area": round(
-                bbox_area(bbox),
-                3,
-            ),
-            "width": round(
-                bbox_width(bbox),
-                3,
-            ),
-            "height": round(
-                bbox_height(bbox),
-                3,
-            ),
-        }
+        bbox = element.get(
+            "bbox"
+        )
 
-        candidates.append(candidate)
+        geometry = element.get(
+            "geometry",
+            {},
+        )
+
+        role = element.get(
+            "semantic_role"
+        )
+
+        confidence = safe_float(
+            element.get(
+                "classification_confidence"
+            )
+        )
+
+        formula_id = (
+            f"SP30.13330"
+            f"_p{page_number}"
+            f"_e{parser_index}"
+            f"_x"
+            f"{xref if xref is not None else 'none'}"
+        )
+
+        candidates.append(
+            {
+                "formula_id": formula_id,
+
+                "parser_index":
+                    parser_index,
+
+                "source_index":
+                    get_source_index(
+                        element
+                    ),
+
+                "xref": xref,
+
+                "bbox": bbox,
+
+                "role": role,
+
+                "detection_reason":
+                    element.get(
+                        "classification_reason"
+                    ),
+
+                "confidence":
+                    round(
+                        confidence,
+                        3,
+                    ),
+
+                "area":
+                    geometry.get(
+                        "area",
+                        0,
+                    ),
+
+                "width":
+                    geometry.get(
+                        "width",
+                        0,
+                    ),
+
+                "height":
+                    geometry.get(
+                        "height",
+                        0,
+                    ),
+
+                "horizontal_region":
+                    geometry.get(
+                        "horizontal_region"
+                    ),
+            }
+        )
 
     return candidates
 
@@ -537,16 +987,29 @@ def can_join_formula_group(
     b: Dict[str, Any],
 ) -> bool:
 
-    bbox_a = a.get("bbox")
-    bbox_b = b.get("bbox")
+    bbox_a = a.get(
+        "bbox"
+    )
+
+    bbox_b = b.get(
+        "bbox"
+    )
 
     if not bbox_a or not bbox_b:
         return False
 
-    ay = bbox_center(bbox_a)[1]
-    by = bbox_center(bbox_b)[1]
+    ay = bbox_center(
+        bbox_a
+    )[1]
 
-    if abs(ay - by) > FORMULA_GROUP_CENTER_Y_TOLERANCE:
+    by = bbox_center(
+        bbox_b
+    )[1]
+
+    if abs(
+        ay - by
+    ) > FORMULA_GROUP_CENTER_Y_TOLERANCE:
+
         return False
 
     vgap = vertical_gap(
@@ -566,12 +1029,16 @@ def can_join_formula_group(
         return False
 
     ha = max(
-        bbox_height(bbox_a),
+        bbox_height(
+            bbox_a
+        ),
         1.0,
     )
 
     hb = max(
-        bbox_height(bbox_b),
+        bbox_height(
+            bbox_b
+        ),
         1.0,
     )
 
@@ -601,31 +1068,55 @@ def build_formula_groups(
         ),
     )
 
-    groups: List[List[Dict[str, Any]]] = []
+    groups: List[
+        List[Dict[str, Any]]
+    ] = []
 
     for candidate in ordered:
 
-        placed = False
+        best_group = None
+        best_distance = None
 
         for group in groups:
 
-            # Проверяем кандидата с последним элементом группы.
             last = group[-1]
 
-            if can_join_formula_group(
+            if not can_join_formula_group(
                 last,
                 candidate,
             ):
-                group.append(candidate)
-                placed = True
-                break
+                continue
 
-        if not placed:
-            groups.append([candidate])
+            gap = horizontal_gap(
+                last["bbox"],
+                candidate["bbox"],
+            )
+
+            if (
+                best_distance is None
+                or gap < best_distance
+            ):
+
+                best_group = group
+                best_distance = gap
+
+        if best_group is not None:
+
+            best_group.append(
+                candidate
+            )
+
+        else:
+
+            groups.append(
+                [candidate]
+            )
 
     result = []
 
-    for group_id, members in enumerate(groups):
+    for group_id, members in enumerate(
+        groups
+    ):
 
         members = sorted(
             members,
@@ -635,36 +1126,73 @@ def build_formula_groups(
             ),
         )
 
-        element_indices = [
-            item["element_index"]
-            for item in members
-            if item.get("element_index") is not None
-        ]
-
-        xrefs = [
-            item["xref"]
-            for item in members
-            if item.get("xref") is not None
-        ]
-
         bboxes = [
             item["bbox"]
             for item in members
-            if item.get("bbox")
+            if item.get(
+                "bbox"
+            )
         ]
 
         result.append(
             {
-                "group_id": group_id,
-                "members": len(members),
-                "composite": len(members) > 1,
-                "element_indices": element_indices,
-                "xrefs": xrefs,
-                "bbox": bbox_union(bboxes),
-                "formula_ids": [
-                    item["formula_id"]
+                "group_id":
+                    group_id,
+
+                "members":
+                    len(members),
+
+                "composite":
+                    len(members) > 1,
+
+                "parser_indices": [
+                    item[
+                        "parser_index"
+                    ]
                     for item in members
                 ],
+
+                "source_indices": [
+                    item[
+                        "source_index"
+                    ]
+                    for item in members
+                    if item.get(
+                        "source_index"
+                    ) is not None
+                ],
+
+                "xrefs": [
+                    item["xref"]
+                    for item in members
+                    if item.get(
+                        "xref"
+                    ) is not None
+                ],
+
+                "bbox":
+                    bbox_union(
+                        bboxes
+                    ),
+
+                "formula_ids": [
+                    item[
+                        "formula_id"
+                    ]
+                    for item in members
+                ],
+
+                "confidence":
+                    round(
+                        min(
+                            item.get(
+                                "confidence",
+                                0.0,
+                            )
+                            for item in members
+                        ),
+                        3,
+                    ),
             }
         )
 
@@ -672,7 +1200,7 @@ def build_formula_groups(
 
 
 # =====================================================================
-# FORMULA NUMBER DETECTION
+# FORMULA NUMBERS
 # =====================================================================
 
 def extract_formula_number(
@@ -682,32 +1210,57 @@ def extract_formula_number(
     if not text:
         return None
 
-    match = FORMULA_NUMBER_RE.search(text)
+    match = FORMULA_NUMBER_RE.search(
+        text
+    )
 
     if not match:
         return None
 
     try:
-        return int(match.group(1))
-    except ValueError:
-        return None
 
+        return int(
+            match.group(1)
+        )
+
+    except ValueError:
+
+        return None
 
 def estimate_number_bbox(
     text_bbox: List[float],
     text: str,
 ) -> Optional[List[float]]:
     """
-    Поскольку PDF text element может занимать всю строку,
-    пытаемся оценить bbox непосредственно для "(N)".
+    Оценивает bbox непосредственно номера формулы.
 
-    В большинстве документов номер находится справа.
+    Основной принцип:
+
+    Если "(N)" находится в конце текстового элемента,
+    считаем, что номер расположен у правого края
+    текстового bbox.
+
+    Например:
+
+        text = ", (2)"
+
+    и bbox:
+
+        [70, 648, 560, 688]
+
+    превращается примерно в:
+
+        [525, 648, 560, 688]
+
+    вместо пропорционального bbox всей строки.
     """
 
     if not text_bbox:
         return None
 
-    match = FORMULA_NUMBER_RE.search(text)
+    match = FORMULA_NUMBER_RE.search(
+        text
+    )
 
     if not match:
         return None
@@ -717,42 +1270,109 @@ def estimate_number_bbox(
         text_bbox[:4],
     )
 
-    full_text = text or ""
+    if x1 <= x0:
+        return None
 
-    start = match.start()
-    end = match.end()
+    # ---------------------------------------------------------------
+    # Номер находится в конце строки.
+    #
+    # Это наиболее типичный случай для PDF:
+    #
+    #     ..., (1)
+    #
+    # ---------------------------------------------------------------
+
+    suffix = text[
+        match.end():
+    ].strip()
+
+    if not suffix:
+
+        # Реальная ширина номера в PDF обычно находится
+        # в диапазоне примерно 20–40 pt.
+        #
+        # Берём консервативную ширину.
+        number_width = min(
+            38.0,
+            x1 - x0,
+        )
+
+        estimated_x1 = x1
+
+        estimated_x0 = max(
+            x0,
+            x1 - number_width,
+        )
+
+        return [
+            round(estimated_x0, 3),
+            round(y0, 3),
+            round(estimated_x1, 3),
+            round(y1, 3),
+        ]
+
+    # ---------------------------------------------------------------
+    # Если после "(N)" ещё есть текст,
+    # используем пропорциональную оценку.
+    # ---------------------------------------------------------------
+
+    full_text = text or ""
 
     text_length = max(
         len(full_text),
         1,
     )
 
-    # Пропорциональная оценка горизонтальной позиции.
-    start_ratio = start / text_length
-    end_ratio = end / text_length
-
-    estimated_x0 = x0 + (
-        (x1 - x0) * start_ratio
+    start_ratio = (
+        match.start()
+        / text_length
     )
 
-    estimated_x1 = x0 + (
-        (x1 - x0) * end_ratio
+    end_ratio = (
+        match.end()
+        / text_length
     )
 
-    # Иногда proportional estimation получается слишком широкой.
-    # Номер обычно занимает небольшую область.
-    estimated_width = estimated_x1 - estimated_x0
+    estimated_x0 = (
+        x0
+        + (x1 - x0)
+        * start_ratio
+    )
 
-    if estimated_width <= 0:
-        estimated_width = min(
-            35.0,
-            x1 - x0,
+    estimated_x1 = (
+        x0
+        + (x1 - x0)
+        * end_ratio
+    )
+
+    # ---------------------------------------------------------------
+    # Защита от слишком широкого bbox.
+    # ---------------------------------------------------------------
+
+    max_number_width = min(
+        45.0,
+        x1 - x0,
+    )
+
+    if (
+        estimated_x1
+        - estimated_x0
+        > max_number_width
+    ):
+
+        estimated_x1 = min(
+            x1,
+            estimated_x0
+            + max_number_width,
         )
 
+    if estimated_x1 <= estimated_x0:
+
         estimated_x1 = x1
+
         estimated_x0 = max(
             x0,
-            x1 - estimated_width,
+            x1 - max_number_width,
         )
 
     return [
@@ -783,43 +1403,159 @@ def detect_formula_numbers(
         if number is None:
             continue
 
-        index = get_element_index(element)
+        # -----------------------------------------------------------
+        # Идентификаторы элемента
+        # -----------------------------------------------------------
 
-        if index is None:
+        parser_index = get_parser_index(
+            element
+        )
+
+        if parser_index is None:
             continue
 
-        bbox = element.get("bbox")
-
-        estimated_bbox = estimate_number_bbox(
-            bbox,
-            text,
+        source_index = get_source_index(
+            element
         )
+
+        xref = get_element_xref(
+            element
+        )
+
+        # -----------------------------------------------------------
+        # Геометрия
+        # -----------------------------------------------------------
+
+        bbox = element.get(
+            "bbox"
+        )
+
+        estimated_bbox = (
+            estimate_number_bbox(
+                bbox,
+                text,
+            )
+        )
+
+        # -----------------------------------------------------------
+        # Нормализованный текст
+        # -----------------------------------------------------------
+
+        normalized = normalize_text(
+            text
+        )
+
+        # -----------------------------------------------------------
+        # Позиция номера внутри текстового элемента
+        # -----------------------------------------------------------
+
+        match = FORMULA_NUMBER_RE.search(
+            text
+        )
+
+        if match:
+
+            prefix = normalize_text(
+                text[:match.start()]
+            )
+
+            suffix = normalize_text(
+                text[match.end():]
+            )
+
+        else:
+
+            prefix = ""
+            suffix = ""
+
+        # -----------------------------------------------------------
+        # Confidence кандидата
+        # -----------------------------------------------------------
+
+        confidence = 0.0
+
+        # Номер находится в конце строки.
+        if not suffix:
+            confidence += 50.0
+
+        # Перед номером обычно стоит запятая.
+        if prefix.endswith(","):
+            confidence += 20.0
+
+        # Очень короткий контейнер — хороший кандидат.
+        if len(normalized) <= 12:
+            confidence += 20.0
+
+        # Текст только из номера/запятой.
+        if re.fullmatch(
+            r"[,\s]*\(\s*\d{1,4}\s*\)",
+            normalized,
+        ):
+            confidence += 30.0
+
+        # -----------------------------------------------------------
+        # Результат
+        # -----------------------------------------------------------
 
         numbers.append(
             {
                 "number": number,
 
-                "number_element_index": index,
+                # ---------------------------------------------------
+                # Идентификаторы исходного элемента
+                # ---------------------------------------------------
 
-                "number_xref": get_element_xref(
-                    element
-                ),
+                "number_parser_index":
+                    parser_index,
 
-                # Весь text element.
-                "number_container_bbox": bbox,
+                "number_source_index":
+                    source_index,
 
-                # Оценочный bbox именно "(N)".
-                "number_estimated_bbox": estimated_bbox,
+                "number_xref":
+                    xref,
 
-                "text": text,
+                # ---------------------------------------------------
+                # Геометрия
+                # ---------------------------------------------------
+
+                "number_container_bbox":
+                    bbox,
+
+                "number_estimated_bbox":
+                    estimated_bbox,
+
+                # ---------------------------------------------------
+                # Текст
+                # ---------------------------------------------------
+
+                "text":
+                    text,
+
+                "prefix":
+                    prefix,
+
+                "suffix":
+                    suffix,
+
+                # ---------------------------------------------------
+                # Confidence
+                # ---------------------------------------------------
+
+                "confidence":
+                    round(
+                        min(
+                            confidence,
+                            100.0,
+                        ),
+                        3,
+                    ),
             }
         )
 
     return numbers
 
-
 # =====================================================================
-# FORMULA NUMBER LINKING
+# NUMBER LINKING
 # =====================================================================
 
 def score_formula_number_link(
@@ -827,7 +1563,9 @@ def score_formula_number_link(
     number: Dict[str, Any],
 ) -> float:
 
-    formula_bbox = formula.get("bbox")
+    formula_bbox = formula.get(
+        "bbox"
+    )
 
     if not formula_bbox:
         return 0.0
@@ -864,11 +1602,13 @@ def score_formula_number_link(
 
     score = 0.0
 
-    # ---------------------------------------------------------------
-    # 1. Вертикальное расположение
-    # ---------------------------------------------------------------
+    # ===============================================================
+    # 1. Вертикальное совпадение
+    # ===============================================================
 
-    dy = abs(fcy - ncy)
+    dy = abs(
+        fcy - ncy
+    )
 
     if dy <= 8:
         score += 60
@@ -885,11 +1625,12 @@ def score_formula_number_link(
     else:
         return 0.0
 
-    # ---------------------------------------------------------------
-    # 2. Номер должен находиться справа от формулы
-    # ---------------------------------------------------------------
+    # ===============================================================
+    # 2. Номер справа от формулы
+    # ===============================================================
 
     if nx0 >= fx1:
+
         gap = nx0 - fx1
 
         if gap <= 20:
@@ -899,37 +1640,74 @@ def score_formula_number_link(
             score += 35
 
         elif gap <= 120:
-            score += 20
+            score += 25
 
         elif gap <= FORMULA_NUMBER_MAX_X_DISTANCE:
-            score += 10
+            score += 15
 
-    elif nx1 >= fx0:
-        # Частичное горизонтальное пересечение.
-        score += 15
+        else:
+            # Слишком далеко.
+            return 0.0
 
-    # ---------------------------------------------------------------
-    # 3. Чем ближе центры по вертикали, тем лучше
-    # ---------------------------------------------------------------
+    elif nx1 >= fx1:
+
+        # Небольшое горизонтальное пересечение.
+        score += 20
+
+    elif nx0 >= fx0:
+
+        # Номер оказался внутри горизонтального диапазона
+        # формулы. Такое возможно для нестандартной верстки.
+        score += 10
+
+    else:
+
+        # Номер полностью левее формулы.
+        return 0.0
+
+    # ===============================================================
+    # 3. Очень хорошее вертикальное выравнивание
+    # ===============================================================
 
     if dy <= 10:
         score += 20
 
-    # ---------------------------------------------------------------
-    # 4. Номер должен быть относительно правым
-    # ---------------------------------------------------------------
+    # ===============================================================
+    # 4. Номер должен находиться справа на странице
+    # ===============================================================
 
+    page_right = max(
+        fx1,
+        nx1,
+    )
+
+    # Сохраняем старое правило,
+    # но не привязываемся жёстко к конкретному формату страницы.
     if nx0 > 450:
         score += 20
 
     elif nx0 > 350:
         score += 10
 
+    # ===============================================================
+    # 5. Confidence самого кандидата
+    # ===============================================================
+
+    number_confidence = safe_float(
+        number.get(
+            "confidence",
+            0,
+        )
+    )
+
+    score += (
+        number_confidence
+        * 0.15
+    )
+
     return score
 
-
 def link_formula_numbers(
-    candidates: List[Dict[str, Any]],
     groups: List[Dict[str, Any]],
     numbers: List[Dict[str, Any]],
 ) -> Tuple[
@@ -937,77 +1715,17 @@ def link_formula_numbers(
     List[Dict[str, Any]],
 ]:
 
-    if not candidates:
-        return [], []
-
-    # ---------------------------------------------------------------
-    # Индекс candidate по element_index.
-    # ---------------------------------------------------------------
-
-    formula_by_element: Dict[int, Dict[str, Any]] = {}
-
-    for candidate in candidates:
-
-        index = candidate.get(
-            "element_index"
-        )
-
-        if not isinstance(index, int):
-            continue
-
-        formula_by_element[index] = candidate
-
-    # ---------------------------------------------------------------
-    # Индекс групп по element_index.
-    #
-    # КРИТИЧЕСКАЯ ЗАЩИТА:
-    # None сюда НИКОГДА не добавляем.
-    # ---------------------------------------------------------------
-
-    group_by_element: Dict[int, Dict[str, Any]] = {}
-
-    for group in groups:
-
-        for element_index in group.get(
-            "element_indices",
-            [],
-        ):
-
-            if not isinstance(
-                element_index,
-                int,
-            ):
-                continue
-
-            group_by_element[
-                element_index
-            ] = group
-
     formula_records = []
 
     relations = []
 
     used_numbers = set()
 
-    # ---------------------------------------------------------------
-    # Обрабатываем каждую формулу.
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------
+    # Работаем именно с группами.
+    # -------------------------------------------------------------
 
-    for candidate in candidates:
-
-        element_index = candidate.get(
-            "element_index"
-        )
-
-        if not isinstance(
-            element_index,
-            int,
-        ):
-            continue
-
-        group = group_by_element.get(
-            element_index
-        )
+    for group in groups:
 
         best_number = None
         best_score = 0.0
@@ -1020,21 +1738,25 @@ def link_formula_numbers(
                 continue
 
             score = score_formula_number_link(
-                candidate,
+                group,
                 number,
             )
 
             if score > best_score:
+
                 best_score = score
+
                 best_number = (
                     number_index,
                     number,
                 )
 
         number_value = None
-        number_element_index = None
+        number_parser_index = None
+        number_source_index = None
         number_bbox = None
         number_estimated_bbox = None
+        number_xref = None
 
         if (
             best_number is not None
@@ -1054,9 +1776,15 @@ def link_formula_numbers(
                 "number"
             ]
 
-            number_element_index = (
+            number_parser_index = (
                 number[
-                    "number_element_index"
+                    "number_parser_index"
+                ]
+            )
+
+            number_source_index = (
+                number[
+                    "number_source_index"
                 ]
             )
 
@@ -1070,89 +1798,111 @@ def link_formula_numbers(
                 ]
             )
 
+            number_xref = number[
+                "number_xref"
+            ]
+
             relations.append(
                 {
-                    "formula_id": candidate[
-                        "formula_id"
-                    ],
-
-                    "element_index": (
-                        element_index
-                    ),
-
-                    "xref": candidate.get(
-                        "xref"
-                    ),
-
-                    "group_id": (
-                        group.get(
+                    "group_id":
+                        group[
                             "group_id"
-                        )
-                        if group
-                        else None
-                    ),
+                        ],
 
-                    "number": number_value,
+                    "number":
+                        number_value,
 
-                    "number_element_index": (
-                        number_element_index
-                    ),
+                    "number_parser_index":
+                        number_parser_index,
 
-                    "number_xref": number.get(
-                        "number_xref"
-                    ),
+                    "number_source_index":
+                        number_source_index,
 
-                    "score": round(
-                        best_score,
-                        3,
-                    ),
+                    "number_xref":
+                        number_xref,
+
+                    "score":
+                        round(
+                            best_score,
+                            3,
+                        ),
                 }
             )
 
+        # ---------------------------------------------------------
+        # Record для каждой группы.
+        # ---------------------------------------------------------
+
         formula_records.append(
             {
-                **candidate,
-
-                "group_id": (
-                    group.get(
+                "group_id":
+                    group[
                         "group_id"
-                    )
-                    if group
-                    else None
-                ),
+                    ],
 
-                "group_members": (
-                    group.get(
+                "formula_ids":
+                    group[
+                        "formula_ids"
+                    ],
+
+                "parser_indices":
+                    group[
+                        "parser_indices"
+                    ],
+
+                "source_indices":
+                    group[
+                        "source_indices"
+                    ],
+
+                "xrefs":
+                    group[
+                        "xrefs"
+                    ],
+
+                "bbox":
+                    group[
+                        "bbox"
+                    ],
+
+                "members":
+                    group[
                         "members"
-                    )
-                    if group
-                    else 1
-                ),
+                    ],
 
-                "composite": (
-                    group.get(
+                "composite":
+                    group[
                         "composite"
-                    )
-                    if group
-                    else False
-                ),
+                    ],
 
-                "number": number_value,
+                "confidence":
+                    group[
+                        "confidence"
+                    ],
 
-                "number_element_index": (
-                    number_element_index
-                ),
+                "number":
+                    number_value,
 
-                "number_bbox": number_bbox,
+                "number_parser_index":
+                    number_parser_index,
 
-                "number_estimated_bbox": (
-                    number_estimated_bbox
-                ),
+                "number_source_index":
+                    number_source_index,
 
-                "link_score": round(
-                    best_score,
-                    3,
-                ),
+                "number_xref":
+                    number_xref,
+
+                "number_bbox":
+                    number_bbox,
+
+                "number_estimated_bbox":
+                    number_estimated_bbox,
+
+                "link_score":
+                    round(
+                        best_score,
+                        3,
+                    ),
             }
         )
 
@@ -1168,31 +1918,31 @@ def link_formula_numbers(
 
 def find_previous_text_element(
     elements: List[Dict[str, Any]],
-    element_index: int,
+    parser_index: int,
 ) -> Optional[Dict[str, Any]]:
 
-    for position in range(
-        len(elements) - 1,
-        -1,
-        -1,
+    for element in reversed(
+        elements
     ):
 
-        element = elements[position]
-
-        index = get_element_index(
+        index = get_parser_index(
             element
         )
 
         if index is None:
             continue
 
-        if index >= element_index:
+        if index >= parser_index:
             continue
 
-        if is_text_element(element):
+        if is_text_element(
+            element
+        ):
 
             text = normalize_text(
-                get_text(element)
+                get_text(
+                    element
+                )
             )
 
             if text:
@@ -1203,25 +1953,29 @@ def find_previous_text_element(
 
 def find_next_text_element(
     elements: List[Dict[str, Any]],
-    element_index: int,
+    parser_index: int,
 ) -> Optional[Dict[str, Any]]:
 
     for element in elements:
 
-        index = get_element_index(
+        index = get_parser_index(
             element
         )
 
         if index is None:
             continue
 
-        if index <= element_index:
+        if index <= parser_index:
             continue
 
-        if is_text_element(element):
+        if is_text_element(
+            element
+        ):
 
             text = normalize_text(
-                get_text(element)
+                get_text(
+                    element
+                )
             )
 
             if text:
@@ -1237,74 +1991,79 @@ def enrich_formula_context(
 
     for formula in formula_records:
 
-        index = formula.get(
-            "element_index"
+        indices = formula.get(
+            "parser_indices",
+            [],
         )
 
-        if not isinstance(index, int):
+        if not indices:
             continue
+
+        first_index = min(
+            indices
+        )
+
+        last_index = max(
+            indices
+        )
 
         previous = (
             find_previous_text_element(
                 elements,
-                index,
+                first_index,
             )
         )
 
         following = (
             find_next_text_element(
                 elements,
-                index,
+                last_index,
             )
         )
 
-        if previous:
-
-            formula[
-                "previous_text"
-            ] = normalize_text(
-                get_text(previous)
+        formula[
+            "previous_text"
+        ] = (
+            normalize_text(
+                get_text(
+                    previous
+                )
             )
+            if previous
+            else None
+        )
 
-            formula[
-                "previous_text_element_index"
-            ] = get_element_index(
+        formula[
+            "previous_text_parser_index"
+        ] = (
+            get_parser_index(
                 previous
             )
+            if previous
+            else None
+        )
 
-        else:
-
-            formula[
-                "previous_text"
-            ] = None
-
-            formula[
-                "previous_text_element_index"
-            ] = None
-
-        if following:
-
-            formula[
-                "next_text"
-            ] = normalize_text(
-                get_text(following)
+        formula[
+            "next_text"
+        ] = (
+            normalize_text(
+                get_text(
+                    following
+                )
             )
+            if following
+            else None
+        )
 
-            formula[
-                "next_text_element_index"
-            ] = get_element_index(
+        formula[
+            "next_text_parser_index"
+        ] = (
+            get_parser_index(
                 following
             )
-
-        else:
-
-            formula[
-                "next_text"
-            ] = None
-
-            formula[
-                "next_text_element_index"
-            ] = None
+            if following
+            else None
+        )
 
 
 # =====================================================================
@@ -1325,11 +2084,22 @@ def process_page(
         raw_elements
     )
 
-    candidates = (
-        detect_formula_candidates(
-            elements,
-            page_number,
+    page_geometry = detect_page_geometry(
+        page,
+        elements,
+    )
+
+    enriched_elements = [
+        enrich_element(
+            element,
+            page_geometry,
         )
+        for element in elements
+    ]
+
+    candidates = detect_formula_candidates(
+        enriched_elements,
+        page_number,
     )
 
     groups = build_formula_groups(
@@ -1337,12 +2107,11 @@ def process_page(
     )
 
     numbers = detect_formula_numbers(
-        elements
+        enriched_elements
     )
 
     formula_records, relations = (
         link_formula_numbers(
-            candidates,
             groups,
             numbers,
         )
@@ -1350,283 +2119,39 @@ def process_page(
 
     enrich_formula_context(
         formula_records,
-        elements,
+        enriched_elements,
     )
 
     return {
-        "page_number": page_number,
+        "page_number":
+            page_number,
 
-        "elements_count": len(
-            elements
-        ),
+        "page_geometry":
+            page_geometry,
 
-        "formula_candidates": (
-            candidates
-        ),
+        "elements_count":
+            len(
+                enriched_elements
+            ),
 
-        "formula_groups": groups,
+        "elements":
+            enriched_elements,
 
-        "formula_numbers": numbers,
+        "formula_candidates":
+            candidates,
 
-        "formulas": formula_records,
+        "formula_groups":
+            groups,
 
-        "formula_relations": relations,
+        "formula_numbers":
+            numbers,
+
+        "formulas":
+            formula_records,
+
+        "formula_relations":
+            relations,
     }
-
-
-# =====================================================================
-# DEBUG
-# =====================================================================
-
-def debug_page(
-    page_number: int,
-    page_result: Dict[str, Any],
-    elements: List[Dict[str, Any]],
-) -> None:
-
-    print()
-    print("=" * 70)
-    print(
-        f"ELEMENT DEBUG — PAGE {page_number}"
-    )
-    print("=" * 70)
-    print()
-
-    for position, element in enumerate(
-        elements
-    ):
-
-        index = get_element_index(
-            element
-        )
-
-        xref = get_element_xref(
-            element
-        )
-
-        element_type = element.get(
-            "type"
-        )
-
-        bbox = element.get(
-            "bbox"
-        )
-
-        text = ""
-
-        if element_type == "text":
-            text = normalize_text(
-                get_text(element)
-            )
-
-        if len(text) > 120:
-            text = text[:120] + "..."
-
-        print(
-            f"#{position:<4}"
-            f"{element_type:<8}"
-            f"index={str(index):<4}"
-            f"xref={str(xref):<4}"
-            f"bbox={bbox} "
-            f"{text!r}"
-        )
-
-    print()
-    print("=" * 70)
-    print(
-        f"FORMULA DEBUG — PAGE {page_number}"
-    )
-    print("=" * 70)
-    print()
-
-    print("Formula candidates:")
-    print("-" * 70)
-
-    for formula in page_result[
-        "formula_candidates"
-    ]:
-
-        print(
-            f"formula_id="
-            f"{formula['formula_id']}"
-        )
-
-        print(
-            f"  element_index="
-            f"{formula['element_index']}"
-        )
-
-        print(
-            f"  xref="
-            f"{formula['xref']}"
-        )
-
-        print(
-            f"  bbox="
-            f"{formula['bbox']}"
-        )
-
-        print(
-            f"  detection_reason="
-            f"{formula['detection_reason']}"
-        )
-
-        print(
-            f"  area="
-            f"{formula['area']}"
-        )
-
-        print()
-
-    print("Formula groups:")
-    print("-" * 70)
-
-    for group in page_result[
-        "formula_groups"
-    ]:
-
-        print(
-            f"group="
-            f"{group['group_id']} "
-            f"members="
-            f"{group['members']} "
-            f"composite="
-            f"{group['composite']}"
-        )
-
-        print(
-            f"  indices="
-            f"{group['element_indices']}"
-        )
-
-        print(
-            f"  xrefs="
-            f"{group['xrefs']}"
-        )
-
-        print(
-            f"  bbox="
-            f"{group['bbox']}"
-        )
-
-        print()
-
-    print("Formula numbers:")
-    print("-" * 70)
-
-    for number in page_result[
-        "formula_numbers"
-    ]:
-
-        print(
-            f"number="
-            f"{number['number']} "
-            f"element_index="
-            f"{number['number_element_index']}"
-        )
-
-        print(
-            f"  container_bbox="
-            f"{number['number_container_bbox']}"
-        )
-
-        print(
-            f"  estimated_bbox="
-            f"{number['number_estimated_bbox']}"
-        )
-
-        print(
-            f"  text="
-            f"{number['text']!r}"
-        )
-
-        print()
-
-    print("Formula records:")
-    print("-" * 70)
-
-    for formula in page_result[
-        "formulas"
-    ]:
-
-        print(
-            f"formula_id="
-            f"{formula['formula_id']}"
-        )
-
-        print(
-            f"  element_index="
-            f"{formula['element_index']}"
-        )
-
-        print(
-            f"  xref="
-            f"{formula['xref']}"
-        )
-
-        print(
-            f"  group_id="
-            f"{formula['group_id']}"
-        )
-
-        print(
-            f"  group_members="
-            f"{formula['group_members']}"
-        )
-
-        print(
-            f"  composite="
-            f"{formula['composite']}"
-        )
-
-        print(
-            f"  number="
-            f"{formula['number']}"
-        )
-
-        print(
-            f"  number_element_index="
-            f"{formula['number_element_index']}"
-        )
-
-        print(
-            f"  link_score="
-            f"{formula['link_score']}"
-        )
-
-        print(
-            f"  number_bbox="
-            f"{formula['number_bbox']}"
-        )
-
-        print(
-            f"  estimated_number_bbox="
-            f"{formula['number_estimated_bbox']}"
-        )
-
-        print()
-
-    print("Formula relations:")
-    print("-" * 70)
-
-    for relation in page_result[
-        "formula_relations"
-    ]:
-
-        print(
-            f"formula="
-            f"{relation['element_index']} "
-            f"xref="
-            f"{relation['xref']} "
-            f"group="
-            f"{relation['group_id']} "
-            f"number="
-            f"{relation['number']} "
-            f"score="
-            f"{relation['score']}"
-        )
-
-    print()
 
 
 # =====================================================================
@@ -1639,105 +2164,150 @@ def validate_page_result(
 
     errors = []
 
-    candidates = page_result[
-        "formula_candidates"
-    ]
+    elements = page_result.get(
+        "elements",
+        [],
+    )
 
-    groups = page_result[
-        "formula_groups"
-    ]
+    candidates = page_result.get(
+        "formula_candidates",
+        [],
+    )
 
-    formulas = page_result[
-        "formulas"
-    ]
+    groups = page_result.get(
+        "formula_groups",
+        [],
+    )
 
-    relations = page_result[
-        "formula_relations"
-    ]
+    formulas = page_result.get(
+        "formulas",
+        [],
+    )
 
-    # ---------------------------------------------------------------
-    # 1. У кандидатов должен быть index.
-    # ---------------------------------------------------------------
+    relations = page_result.get(
+        "formula_relations",
+        [],
+    )
 
-    for formula in candidates:
+    element_indices = {
+        get_parser_index(
+            element
+        )
+        for element in elements
+    }
+
+    # -------------------------------------------------------------
+    # 1. У каждого элемента должен быть parser_index.
+    # -------------------------------------------------------------
+
+    for element in elements:
+
+        index = get_parser_index(
+            element
+        )
 
         if not isinstance(
-            formula.get(
-                "element_index"
-            ),
+            index,
             int,
         ):
+
             errors.append(
-                "formula candidate "
-                "without valid element_index"
+                "element without valid "
+                "parser_index"
             )
 
-    # ---------------------------------------------------------------
-    # 2. У групп не должно быть None.
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------
+    # 2. Кандидаты должны ссылаться на реальные элементы.
+    # -------------------------------------------------------------
+
+    for candidate in candidates:
+
+        index = candidate.get(
+            "parser_index"
+        )
+
+        if index not in element_indices:
+
+            errors.append(
+                "formula candidate "
+                "points to unknown "
+                "parser_index"
+            )
+
+    # -------------------------------------------------------------
+    # 3. Группы.
+    # -------------------------------------------------------------
+
+    group_ids = set()
 
     for group in groups:
 
+        group_id = group.get(
+            "group_id"
+        )
+
+        if group_id in group_ids:
+
+            errors.append(
+                f"duplicate group_id "
+                f"{group_id}"
+            )
+
+        group_ids.add(
+            group_id
+        )
+
         for index in group.get(
-            "element_indices",
+            "parser_indices",
             [],
         ):
 
-            if not isinstance(
-                index,
-                int,
-            ):
+            if index not in element_indices:
+
                 errors.append(
                     "formula group contains "
-                    "invalid element_index"
+                    "unknown parser_index"
                 )
 
-    # ---------------------------------------------------------------
-    # 3. Formula должна существовать в группе.
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------
+    # 4. Формулы должны иметь группу.
+    # -------------------------------------------------------------
+
+    valid_group_ids = {
+        group.get(
+            "group_id"
+        )
+        for group in groups
+    }
 
     for formula in formulas:
-
-        index = formula.get(
-            "element_index"
-        )
 
         group_id = formula.get(
             "group_id"
         )
 
-        if index is None:
+        if group_id not in valid_group_ids:
+
             errors.append(
-                "formula has "
-                "element_index=None"
+                "formula points to "
+                "unknown group"
             )
 
-        if group_id is None:
-            errors.append(
-                f"formula {formula.get('formula_id')} "
-                f"has no group"
-            )
-
-    # ---------------------------------------------------------------
-    # 4. Relation должна указывать на реальную формулу.
-    # ---------------------------------------------------------------
-
-    formula_ids = {
-        formula.get(
-            "formula_id"
-        )
-        for formula in formulas
-    }
+    # -------------------------------------------------------------
+    # 5. Relations.
+    # -------------------------------------------------------------
 
     for relation in relations:
 
-        if relation.get(
-            "formula_id"
-        ) not in formula_ids:
+        group_id = relation.get(
+            "group_id"
+        )
+
+        if group_id not in valid_group_ids:
 
             errors.append(
                 "relation points to "
-                "unknown formula"
+                "unknown group"
             )
 
     return errors
@@ -1764,126 +2334,164 @@ def build_statistics(
         for page in pages
     )
 
-    images_count = 0
+    images_count = sum(
+        1
+        for page in pages
+        for element in page.get(
+            "elements",
+            [],
+        )
+        if is_image_element(
+            element
+        )
+    )
 
-    formula_candidates_count = 0
-    formula_groups_count = 0
-    composite_groups_count = 0
-    formula_numbers_count = 0
-    relations_count = 0
+    symbols_count = sum(
+        1
+        for page in pages
+        for element in page.get(
+            "elements",
+            [],
+        )
+        if element.get(
+            "semantic_role"
+        ) == "symbol"
+    )
 
-    formulas_without_number = 0
+    formula_fragments_count = sum(
+        1
+        for page in pages
+        for element in page.get(
+            "elements",
+            [],
+        )
+        if element.get(
+            "semantic_role"
+        ) == "formula_fragment"
+    )
 
-    for page in pages:
+    diagram_candidates_count = sum(
+        1
+        for page in pages
+        for element in page.get(
+            "elements",
+            [],
+        )
+        if element.get(
+            "semantic_role"
+        ) == "diagram_candidate"
+    )
 
-        formula_candidates_count += len(
+    formula_candidates_count = sum(
+        len(
             page.get(
                 "formula_candidates",
                 [],
             )
         )
+        for page in pages
+    )
 
-        formula_groups = page.get(
-            "formula_groups",
-            [],
+    formula_groups_count = sum(
+        len(
+            page.get(
+                "formula_groups",
+                [],
+            )
         )
+        for page in pages
+    )
 
-        formula_groups_count += len(
-            formula_groups
-        )
-
-        composite_groups_count += sum(
+    composite_groups_count = sum(
+        sum(
             1
-            for group in formula_groups
+            for group in page.get(
+                "formula_groups",
+                []
+            )
             if group.get(
                 "composite"
             )
         )
+        for page in pages
+    )
 
-        formula_numbers_count += len(
+    formula_numbers_count = sum(
+        len(
             page.get(
                 "formula_numbers",
                 [],
             )
         )
+        for page in pages
+    )
 
-        relations_count += len(
+    relations_count = sum(
+        len(
             page.get(
                 "formula_relations",
                 [],
             )
         )
+        for page in pages
+    )
 
-        formulas_without_number += sum(
+    formulas_without_number = sum(
+        sum(
             1
             for formula in page.get(
                 "formulas",
-                [],
+                []
             )
             if formula.get(
                 "number"
             ) is None
         )
-
-    return {
-        "pages": pages_count,
-        "elements": elements_count,
-        "images": images_count,
-        "formula_candidates": (
-            formula_candidates_count
-        ),
-        "formula_groups": (
-            formula_groups_count
-        ),
-        "composite_groups": (
-            composite_groups_count
-        ),
-        "formula_numbers": (
-            formula_numbers_count
-        ),
-        "formula_relations": (
-            relations_count
-        ),
-        "formulas_without_number": (
-            formulas_without_number
-        ),
-        "validation_errors": len(
-            validation_errors
-        ),
-    }
-
-
-# =====================================================================
-# COUNT IMAGES
-# =====================================================================
-
-def count_images(
-    source: Dict[str, Any],
-) -> int:
-
-    count = 0
-
-    pages = source.get(
-        "pages",
-        [],
+        for page in pages
     )
 
-    for page in pages:
+    return {
+        "pages":
+            pages_count,
 
-        elements = page.get(
-            "elements",
-            [],
-        )
+        "elements":
+            elements_count,
 
-        for element in elements:
+        "images":
+            images_count,
 
-            if element.get(
-                "type"
-            ) == "image":
+        "symbols":
+            symbols_count,
 
-                count += 1
+        "formula_fragments":
+            formula_fragments_count,
 
-    return count
+        "diagram_candidates":
+            diagram_candidates_count,
+
+        "formula_candidates":
+            formula_candidates_count,
+
+        "formula_groups":
+            formula_groups_count,
+
+        "composite_groups":
+            composite_groups_count,
+
+        "formula_numbers":
+            formula_numbers_count,
+
+        "formula_relations":
+            relations_count,
+
+        "formulas_without_number":
+            formulas_without_number,
+
+        "validation_errors":
+            len(
+                validation_errors
+            ),
+    }
 
 
 # =====================================================================
@@ -1902,10 +2510,9 @@ def get_pages(
         pages,
         list,
     ):
+
         return pages
 
-    # Иногда elements.json может содержать
-    # pages внутри data.
     data = source.get(
         "data"
     )
@@ -1923,9 +2530,182 @@ def get_pages(
             pages,
             list,
         ):
+
             return pages
 
     return []
+
+
+# =====================================================================
+# DEBUG
+# =====================================================================
+
+def debug_page(
+    page_number: int,
+    page_result: Dict[str, Any],
+) -> None:
+
+    print()
+    print("=" * 80)
+    print(
+        f"ELEMENT DEBUG — PAGE {page_number}"
+    )
+    print("=" * 80)
+    print()
+
+    print(
+        "Page geometry:",
+        page_result[
+            "page_geometry"
+        ],
+    )
+
+    print()
+
+    for element in page_result[
+        "elements"
+    ]:
+
+        parser_index = get_parser_index(
+            element
+        )
+
+        source_index = get_source_index(
+            element
+        )
+
+        xref = get_element_xref(
+            element
+        )
+
+        element_type = element.get(
+            "type"
+        )
+
+        bbox = element.get(
+            "bbox"
+        )
+
+        role = element.get(
+            "semantic_role",
+            "",
+        )
+
+        text = ""
+
+        if is_text_element(
+            element
+        ):
+
+            text = normalize_text(
+                get_text(
+                    element
+                )
+            )
+
+        if len(text) > 100:
+            text = text[:100] + "..."
+
+        print(
+            f"#{parser_index:<4} "
+            f"type={element_type:<7} "
+            f"source={str(source_index):<4} "
+            f"xref={str(xref):<4} "
+            f"role={role:<20} "
+            f"bbox={bbox} "
+            f"{text!r}"
+        )
+
+    print()
+    print("=" * 80)
+    print(
+        f"FORMULA GROUP DEBUG — PAGE {page_number}"
+    )
+    print("=" * 80)
+    print()
+
+    for group in page_result[
+        "formula_groups"
+    ]:
+
+        print(
+            f"group={group['group_id']} "
+            f"members={group['members']} "
+            f"composite={group['composite']} "
+            f"confidence={group['confidence']}"
+        )
+
+        print(
+            f"  parser_indices="
+            f"{group['parser_indices']}"
+        )
+
+        print(
+            f"  source_indices="
+            f"{group['source_indices']}"
+        )
+
+        print(
+            f"  xrefs="
+            f"{group['xrefs']}"
+        )
+
+        print(
+            f"  bbox="
+            f"{group['bbox']}"
+        )
+
+        print()
+
+    print("Formula numbers:")
+    print("-" * 80)
+
+    for number in page_result[
+        "formula_numbers"
+    ]:
+
+        print(
+            f"number={number['number']} "
+            f"parser_index="
+            f"{number['number_parser_index']} "
+            f"source_index="
+            f"{number['number_source_index']}"
+        )
+
+        print(
+            f"  bbox="
+            f"{number['number_container_bbox']}"
+        )
+
+        print(
+            f"  estimated="
+            f"{number['number_estimated_bbox']}"
+        )
+
+        print(
+            f"  text="
+            f"{number['text']!r}"
+        )
+
+        print()
+
+    print("Formula relations:")
+    print("-" * 80)
+
+    for relation in page_result[
+        "formula_relations"
+    ]:
+
+        print(
+            f"group="
+            f"{relation['group_id']} "
+            f"number="
+            f"{relation['number']} "
+            f"score="
+            f"{relation['score']}"
+        )
+
+    print()
 
 
 # =====================================================================
@@ -1937,18 +2717,18 @@ def parse_document(
     output_path: Path,
 ) -> None:
 
-    print("=" * 70)
+    print("=" * 80)
     print(
         f"VKS Expert AI — "
         f"Semantic PDF Parser v{VERSION}"
     )
-    print("=" * 70)
+    print("=" * 80)
     print()
 
     print(
-        f"Источник:\n"
-        f"{source_path}"
+        f"Источник:\n{source_path}"
     )
+
     print()
 
     print(
@@ -1971,6 +2751,7 @@ def parse_document(
     print(
         f"Страниц: {len(pages)}"
     )
+
     print()
 
     print(
@@ -1981,7 +2762,6 @@ def parse_document(
 
     validation_errors = []
 
-    debug_elements = None
     debug_result = None
 
     for page_position, page in enumerate(
@@ -2022,62 +2802,50 @@ def parse_document(
 
         if page_number == DEBUG_PAGE:
 
-            debug_elements = (
-                normalize_page_elements(
-                    page.get(
-                        "elements",
-                        [],
-                    )
-                )
-            )
-
             debug_result = page_result
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
     # Statistics
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
 
     statistics = build_statistics(
         semantic_pages,
         validation_errors,
     )
 
-    statistics[
-        "images"
-    ] = count_images(
-        source
-    )
-
-    # ---------------------------------------------------------------
-    # Output document
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
+    # Output
+    # -----------------------------------------------------------------
 
     result = {
         "parser": {
-            "name": (
+            "name":
                 "VKS Expert AI "
-                "Semantic PDF Parser"
-            ),
-            "version": VERSION,
+                "Semantic PDF Parser",
+
+            "version":
+                VERSION,
         },
 
-        "source": str(
-            source_path
-        ),
+        "source":
+            str(
+                source_path
+            ),
 
-        "statistics": statistics,
+        "statistics":
+            statistics,
 
-        "pages": semantic_pages,
+        "pages":
+            semantic_pages,
 
         "validation": {
-            "valid": (
-                len(validation_errors)
-                == 0
-            ),
+            "valid":
+                len(
+                    validation_errors
+                ) == 0,
 
-            "errors": (
-                validation_errors
-            ),
+            "errors":
+                validation_errors,
         },
     }
 
@@ -2098,29 +2866,25 @@ def parse_document(
             indent=2,
         )
 
-    # ---------------------------------------------------------------
-    # DEBUG
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
+    # Debug
+    # -----------------------------------------------------------------
 
-    if (
-        debug_elements is not None
-        and debug_result is not None
-    ):
+    if debug_result is not None:
 
         debug_page(
             DEBUG_PAGE,
             debug_result,
-            debug_elements,
         )
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
     # Final output
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
 
     print()
-    print("=" * 70)
+    print("=" * 80)
     print("ГОТОВО")
-    print("=" * 70)
+    print("=" * 80)
     print()
 
     print(
@@ -2132,61 +2896,74 @@ def parse_document(
     )
 
     print()
+
     print(
         "СТАТИСТИКА"
     )
 
-    print("-" * 70)
+    print("-" * 80)
 
-    print(
-        f"Страниц:"
-        f"{statistics['pages']:>20}"
-    )
+    labels = [
+        (
+            "Страниц",
+            "pages",
+        ),
+        (
+            "Элементов",
+            "elements",
+        ),
+        (
+            "Изображений",
+            "images",
+        ),
+        (
+            "Символов",
+            "symbols",
+        ),
+        (
+            "Фрагментов формул",
+            "formula_fragments",
+        ),
+        (
+            "Кандидатов схем",
+            "diagram_candidates",
+        ),
+        (
+            "Кандидатов формул",
+            "formula_candidates",
+        ),
+        (
+            "Групп формул",
+            "formula_groups",
+        ),
+        (
+            "Составных групп",
+            "composite_groups",
+        ),
+        (
+            "Номеров формул",
+            "formula_numbers",
+        ),
+        (
+            "Связанных формул",
+            "formula_relations",
+        ),
+        (
+            "Формул без номера",
+            "formulas_without_number",
+        ),
+        (
+            "Ошибок валидации",
+            "validation_errors",
+        ),
+    ]
 
-    print(
-        f"Элементов:"
-        f"{statistics['elements']:>18}"
-    )
+    for label, key in labels:
 
-    print(
-        f"Изображений:"
-        f"{statistics['images']:>16}"
-    )
-
-    print(
-        f"Кандидатов формул:"
-        f"{statistics['formula_candidates']:>10}"
-    )
-
-    print(
-        f"Групп формул:"
-        f"{statistics['formula_groups']:>15}"
-    )
-
-    print(
-        f"Составных групп:"
-        f"{statistics['composite_groups']:>12}"
-    )
-
-    print(
-        f"Номеров формул:"
-        f"{statistics['formula_numbers']:>13}"
-    )
-
-    print(
-        f"Связанных формул:"
-        f"{statistics['formula_relations']:>11}"
-    )
-
-    print(
-        f"Формул без номера:"
-        f"{statistics['formulas_without_number']:>10}"
-    )
-
-    print(
-        f"Ошибок валидации:"
-        f"{statistics['validation_errors']:>11}"
-    )
+        print(
+            f"{label + ':':<30}"
+            f"{statistics[key]:>10}"
+        )
 
     print()
 
@@ -2196,7 +2973,7 @@ def parse_document(
             "ПЕРВЫЕ ОШИБКИ ВАЛИДАЦИИ"
         )
 
-        print("-" * 70)
+        print("-" * 80)
 
         for error in validation_errors[
             :20
@@ -2273,4 +3050,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
