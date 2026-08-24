@@ -51,65 +51,58 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from semantic.config import (
+    VERSION,
+    DEFAULT_SOURCE,
+    DEFAULT_OUTPUT,
+    DEBUG_PAGE,
 
-# =====================================================================
-# CONFIG
-# =====================================================================
+    SYMBOL_MAX_AREA,
 
-VERSION = "0.6"
+    FORMULA_FRAGMENT_MIN_AREA,
+    FORMULA_FRAGMENT_MAX_AREA,
 
-DEFAULT_SOURCE = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\parsed"
-    r"\SP_30.13330.2020.elements.json"
+    FORMULA_CANDIDATE_MIN_AREA,
+
+    DIAGRAM_MIN_AREA,
+
+    SMALL_MATH_MAX_WIDTH,
+    SMALL_MATH_MAX_HEIGHT,
+
+    FORMULA_GROUP_MAX_X_GAP,
+    FORMULA_GROUP_MAX_Y_GAP,
+    FORMULA_GROUP_CENTER_Y_TOLERANCE,
+    FORMULA_GROUP_HEIGHT_RATIO,
+
+    FORMULA_NUMBER_Y_TOLERANCE,
+    FORMULA_NUMBER_MAX_X_DISTANCE,
+    FORMULA_NUMBER_MIN_LINK_SCORE,
 )
 
-DEFAULT_OUTPUT = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\parsed"
-    r"\SP_30.13330.2020.semantic.json"
+from semantic.geometry import (
+    safe_float,
+    bbox_area,
+    bbox_width,
+    bbox_height,
+    bbox_center,
+    bbox_union,
+    horizontal_gap,
+    vertical_gap,
+    detect_page_geometry,
+    horizontal_region,
 )
 
-DEBUG_PAGE = 12
-
-
-# ---------------------------------------------------------------------
-# Image classification
-# ---------------------------------------------------------------------
-
-SYMBOL_MAX_AREA = 1200.0
-
-FORMULA_FRAGMENT_MIN_AREA = 180.0
-FORMULA_FRAGMENT_MAX_AREA = 5000.0
-
-FORMULA_CANDIDATE_MIN_AREA = 500.0
-
-DIAGRAM_MIN_AREA = 5000.0
-
-SMALL_MATH_MAX_WIDTH = 120.0
-SMALL_MATH_MAX_HEIGHT = 80.0
-
-
-# ---------------------------------------------------------------------
-# Formula grouping
-# ---------------------------------------------------------------------
-
-FORMULA_GROUP_MAX_X_GAP = 45.0
-FORMULA_GROUP_MAX_Y_GAP = 18.0
-FORMULA_GROUP_CENTER_Y_TOLERANCE = 24.0
-
-FORMULA_GROUP_HEIGHT_RATIO = 3.5
-
-
-# ---------------------------------------------------------------------
-# Formula number
-# ---------------------------------------------------------------------
-
-FORMULA_NUMBER_Y_TOLERANCE = 45.0
-FORMULA_NUMBER_MAX_X_DISTANCE = 220.0
-
-FORMULA_NUMBER_MIN_LINK_SCORE = 50.0
-
+from semantic.elements import (
+    get_source_index,
+    get_parser_index,
+    get_element_xref,
+    element_identity,
+    normalize_page_elements,
+    is_text_element,
+    is_image_element,
+    get_text,
+    normalize_text,
+)
 
 # =====================================================================
 # REGEX
@@ -126,468 +119,6 @@ SECTION_NUMBER_RE = re.compile(
 BULLET_RE = re.compile(
     r"^\s*(?:[-–—•·]|\d+\))\s+"
 )
-
-
-# =====================================================================
-# BASIC HELPERS
-# =====================================================================
-
-def safe_float(
-    value: Any,
-    default: float = 0.0,
-) -> float:
-
-    try:
-        return float(value)
-
-    except (TypeError, ValueError):
-        return default
-
-
-def bbox_area(
-    bbox: Optional[List[float]],
-) -> float:
-
-    if not bbox or len(bbox) < 4:
-        return 0.0
-
-    x0, y0, x1, y1 = map(
-        safe_float,
-        bbox[:4],
-    )
-
-    return max(
-        0.0,
-        x1 - x0,
-    ) * max(
-        0.0,
-        y1 - y0,
-    )
-
-
-def bbox_width(
-    bbox: Optional[List[float]],
-) -> float:
-
-    if not bbox or len(bbox) < 4:
-        return 0.0
-
-    return max(
-        0.0,
-        safe_float(bbox[2])
-        - safe_float(bbox[0]),
-    )
-
-
-def bbox_height(
-    bbox: Optional[List[float]],
-) -> float:
-
-    if not bbox or len(bbox) < 4:
-        return 0.0
-
-    return max(
-        0.0,
-        safe_float(bbox[3])
-        - safe_float(bbox[1]),
-    )
-
-
-def bbox_center(
-    bbox: Optional[List[float]],
-) -> Tuple[float, float]:
-
-    if not bbox or len(bbox) < 4:
-        return 0.0, 0.0
-
-    x0, y0, x1, y1 = map(
-        safe_float,
-        bbox[:4],
-    )
-
-    return (
-        (x0 + x1) / 2.0,
-        (y0 + y1) / 2.0,
-    )
-
-
-def bbox_union(
-    bboxes: List[List[float]],
-) -> Optional[List[float]]:
-
-    valid = [
-        bbox
-        for bbox in bboxes
-        if bbox and len(bbox) >= 4
-    ]
-
-    if not valid:
-        return None
-
-    x0 = min(
-        safe_float(b[0])
-        for b in valid
-    )
-
-    y0 = min(
-        safe_float(b[1])
-        for b in valid
-    )
-
-    x1 = max(
-        safe_float(b[2])
-        for b in valid
-    )
-
-    y1 = max(
-        safe_float(b[3])
-        for b in valid
-    )
-
-    return [
-        round(x0, 3),
-        round(y0, 3),
-        round(x1, 3),
-        round(y1, 3),
-    ]
-
-
-def horizontal_gap(
-    bbox_a: List[float],
-    bbox_b: List[float],
-) -> float:
-
-    ax0, _, ax1, _ = bbox_a
-    bx0, _, bx1, _ = bbox_b
-
-    if ax1 < bx0:
-        return bx0 - ax1
-
-    if bx1 < ax0:
-        return ax0 - bx1
-
-    return 0.0
-
-
-def vertical_gap(
-    bbox_a: List[float],
-    bbox_b: List[float],
-) -> float:
-
-    _, ay0, _, ay1 = bbox_a
-    _, by0, _, by1 = bbox_b
-
-    if ay1 < by0:
-        return by0 - ay1
-
-    if by1 < ay0:
-        return ay0 - by1
-
-    return 0.0
-
-
-# =====================================================================
-# ELEMENT IDENTITY
-# =====================================================================
-
-def get_source_index(
-    element: Dict[str, Any],
-) -> Optional[int]:
-
-    value = element.get(
-        "source_index"
-    )
-
-    if isinstance(value, int):
-        return value
-
-    return None
-
-
-def get_parser_index(
-    element: Dict[str, Any],
-) -> Optional[int]:
-
-    value = element.get(
-        "parser_index"
-    )
-
-    if isinstance(value, int):
-        return value
-
-    return None
-
-
-def get_element_xref(
-    element: Dict[str, Any],
-) -> Optional[int]:
-
-    value = element.get(
-        "xref"
-    )
-
-    if isinstance(value, int):
-        return value
-
-    try:
-
-        if value is not None:
-            return int(value)
-
-    except (TypeError, ValueError):
-        pass
-
-    return None
-
-
-def element_identity(
-    element: Dict[str, Any],
-) -> Dict[str, Any]:
-
-    return {
-        "parser_index": get_parser_index(
-            element
-        ),
-
-        "source_index": get_source_index(
-            element
-        ),
-
-        "xref": get_element_xref(
-            element
-        ),
-    }
-
-
-# =====================================================================
-# ELEMENT NORMALIZATION
-# =====================================================================
-
-def normalize_page_elements(
-    elements: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-
-    normalized = []
-
-    for position, original in enumerate(
-        elements
-    ):
-
-        if not isinstance(
-            original,
-            dict,
-        ):
-            continue
-
-        element = dict(
-            original
-        )
-
-        # -------------------------------------------------------------
-        # Сохраняем исходный index.
-        # -------------------------------------------------------------
-
-        original_index = element.get(
-            "index"
-        )
-
-        if isinstance(
-            original_index,
-            int,
-        ):
-
-            element[
-                "source_index"
-            ] = original_index
-
-        else:
-
-            element[
-                "source_index"
-            ] = None
-
-        # -------------------------------------------------------------
-        # Главный внутренний идентификатор.
-        #
-        # ВСЕГДА физическая позиция элемента.
-        # -------------------------------------------------------------
-
-        element[
-            "parser_index"
-        ] = position
-
-        normalized.append(
-            element
-        )
-
-    return normalized
-
-
-# =====================================================================
-# ELEMENT TYPE
-# =====================================================================
-
-def is_text_element(
-    element: Dict[str, Any],
-) -> bool:
-
-    return element.get(
-        "type"
-    ) == "text"
-
-
-def is_image_element(
-    element: Dict[str, Any],
-) -> bool:
-
-    return element.get(
-        "type"
-    ) == "image"
-
-
-# =====================================================================
-# TEXT
-# =====================================================================
-
-def get_text(
-    element: Dict[str, Any],
-) -> str:
-
-    value = element.get(
-        "text"
-    )
-
-    if value is None:
-
-        value = element.get(
-            "content"
-        )
-
-    if value is None:
-        return ""
-
-    return str(
-        value
-    )
-
-
-def normalize_text(
-    text: str,
-) -> str:
-
-    return re.sub(
-        r"\s+",
-        " ",
-        text.replace(
-            "\n",
-            " ",
-        ),
-    ).strip()
-
-
-# =====================================================================
-# PAGE GEOMETRY
-# =====================================================================
-
-def detect_page_geometry(
-    page: Dict[str, Any],
-    elements: List[Dict[str, Any]],
-) -> Dict[str, float]:
-
-    page_width = safe_float(
-        page.get(
-            "width"
-        )
-    )
-
-    page_height = safe_float(
-        page.get(
-            "height"
-        )
-    )
-
-    # Если размер страницы не указан,
-    # вычисляем его по bbox элементов.
-
-    if page_width <= 0:
-
-        page_width = max(
-            (
-                safe_float(
-                    element.get(
-                        "bbox"
-                    )[2]
-                )
-                for element in elements
-                if element.get(
-                    "bbox"
-                )
-                and len(
-                    element.get(
-                        "bbox"
-                    )
-                ) >= 4
-            ),
-            default=0.0,
-        )
-
-    if page_height <= 0:
-
-        page_height = max(
-            (
-                safe_float(
-                    element.get(
-                        "bbox"
-                    )[3]
-                )
-                for element in elements
-                if element.get(
-                    "bbox"
-                )
-                and len(
-                    element.get(
-                        "bbox"
-                    )
-                ) >= 4
-            ),
-            default=0.0,
-        )
-
-    return {
-        "width": round(
-            page_width,
-            3,
-        ),
-
-        "height": round(
-            page_height,
-            3,
-        ),
-    }
-
-
-def horizontal_region(
-    bbox: List[float],
-    page_width: float,
-) -> str:
-
-    if not bbox or page_width <= 0:
-        return "unknown"
-
-    center_x = bbox_center(
-        bbox
-    )[0]
-
-    ratio = center_x / page_width
-
-    if ratio < 0.33:
-        return "left"
-
-    if ratio < 0.67:
-        return "center"
-
-    return "right"
-
 
 # =====================================================================
 # IMAGE CLASSIFICATION
