@@ -1,261 +1,218 @@
 """
 VKS Expert AI
+RAG Pipeline v1.2
 
-RAG Pipeline v1.1
-
-Purpose:
 Engineering RAG pipeline.
 
-Flow:
+Architecture:
 
-User Question
-        |
-        v
+Question
+    |
+    v
+Query Classifier
+    |
+    v
+Engineering Intent
+    |
+    v
 Retriever
-        |
-        v
-Relevant normative pages
-        |
-        v
+    |
+    v
+FAISS Search
+    |
+    v
 Context Builder
-        |
-        v
-LM Studio Client
-        |
-        v
-Engineering answer
+    |
+    v
+LM Studio
+    |
+    v
+Technical Answer
 """
+
+
+from pathlib import Path
 
 
 from app.rag.retriever import Retriever
 from app.rag.context_builder import ContextBuilder
+from app.rag.query_classifier import QueryClassifier
+
 from app.llm.lmstudio_client import LMStudioClient
 
 
 
-SYSTEM_PROMPT = """
-Ты являешься инженерным AI-ассистентом
-VKS Expert AI.
-
-Ты работаешь с нормативной документацией
-в области проектирования инженерных систем.
-
-Правила ответа:
-
-1. Отвечай только на основании
-предоставленного нормативного контекста.
-
-2. Не используй знания из памяти модели,
-если они отсутствуют в контексте.
-
-3. Не показывай внутренние рассуждения.
-
-4. Используй профессиональную инженерную
-терминологию.
-
-5. Если информации недостаточно,
-укажи это явно.
-
-6. Не объединяй требования разных систем.
-Например:
-- водоснабжение;
-- канализация;
-- внутренний водосток;
-- пожарный водопровод
-
-рассматривай отдельно.
-
-7. В конце ответа обязательно укажи:
-
-Источник:
-документ
-страницы
-"""
-
-
 class RAGPipeline:
+    """
+    Main VKS Expert AI RAG pipeline.
+    """
 
 
-    def __init__(
+    def __init__(self):
 
-        self,
+        print("Loading components...")
 
-        retriever=None,
+        self.classifier = QueryClassifier()
 
-        context_builder=None,
+        self.retriever = Retriever()
 
-        llm_client=None,
+        self.context_builder = ContextBuilder()
 
-    ):
-
-
-        self.retriever = (
-
-            retriever
-
-            if retriever
-
-            else Retriever()
-
+        self.llm = LMStudioClient(
+            model="qwen/qwen3.5-9b-mtp"
         )
 
-
-        self.context_builder = (
-
-            context_builder
-
-            if context_builder
-
-            else ContextBuilder()
-
-        )
-
-
-        self.llm = (
-
-            llm_client
-
-            if llm_client
-
-            else LMStudioClient(
-                model="qwen/qwen3.5-9b"
-            )
-
-        )
+        print("Pipeline ready")
 
 
 
     def ask(
-
         self,
-
         question: str,
-
-        top_k: int = 3,
-
+        top_k: int = 5
     ):
 
 
-        #
-        # 1. Search knowledge base
-        #
+        print("\nQUESTION:")
+        print(question)
 
-        results = self.retriever.search(
 
-            question,
 
-            top_k=top_k
+        # --------------------------------------------------
+        # 1. Query classification
+        # --------------------------------------------------
 
+        intent = (
+            self.classifier.classify(
+                question
+            )
         )
 
 
-
-        #
-        # 2. Prepare normative context
-        #
-
-        context = self.context_builder.build(
-
-            question,
-
-            results
-
-        )
+        print("\nINTENT:")
+        print(intent)
 
 
 
-        #
-        # 3. Create LLM prompt
-        #
+        # --------------------------------------------------
+        # 2. Enhanced query
+        # --------------------------------------------------
 
-        prompt = f"""
+        enhanced_query = f"""
 
-Нормативный контекст:
+Инженерная область:
+{intent.discipline}
 
-====================
+Система:
+{intent.system}
 
-{context}
+Тема:
+{intent.topic}
 
-====================
 
-
-Вопрос инженера:
-
+Запрос:
 {question}
-
-
-Подготовь технический ответ.
-
-Используй только приведённые
-нормативные данные.
 
 """
 
 
-        #
-        # 4. Generate answer
-        #
+        # --------------------------------------------------
+        # 3. Retrieval
+        # --------------------------------------------------
 
-        answer = self.llm.chat(
-
-            prompt,
-
-            system_prompt=SYSTEM_PROMPT,
-
-            temperature=0.1,
-
-            max_tokens=2048,
-
-            enable_thinking=False,
-
+        results = (
+            self.retriever.search(
+                enhanced_query,
+                top_k=top_k
+            )
         )
 
+
+
+        # --------------------------------------------------
+        # 4. Context building
+        # --------------------------------------------------
+
+        context = (
+            self.context_builder.build(
+                results
+            )
+        )
+
+
+
+        # --------------------------------------------------
+        # 5. Prompt
+        # --------------------------------------------------
+
+        system_prompt = """
+
+Ты являешься инженерным AI-ассистентом
+VKS Expert AI.
+
+
+Правила ответа:
+
+1. Отвечай только на русском языке.
+2. Используй только предоставленный нормативный контекст.
+3. Не придумывай требований отсутствующих в СП.
+4. Используй инженерную терминологию ВК.
+5. Указывай источник ответа.
+6. Если данных недостаточно — сообщи об этом.
+
+
+Формат:
+
+Краткий вывод
+
+Расчет / требования
+
+Источник СП
+
+"""
+
+
+        user_prompt = f"""
+
+Вопрос:
+
+{question}
+
+
+Нормативный контекст:
+
+{context}
+
+"""
+
+
+        # --------------------------------------------------
+        # 6. LLM
+        # --------------------------------------------------
+
+        answer = (
+            self.llm.chat(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.1,
+                max_tokens=2048,
+                enable_thinking=False
+            )
+        )
 
 
         return {
 
             "question": question,
 
+            "intent": intent,
+
             "answer": answer,
 
-            "context": context,
-
-            "sources": results,
+            "sources": results
 
         }
 
-
-
-def print_sources(results):
-
-
-    print("\nSOURCES:")
-
-    print("-" * 40)
-
-
-    for item in results:
-
-
-        page = item.get(
-            "page",
-            "?"
-        )
-
-
-        score = item.get(
-            "score",
-            0
-        )
-
-
-        print(
-
-            f"СП 30.13330.2020 | "
-            f"page={page} | "
-            f"score={score:.4f}"
-
-        )
 
 
 
@@ -263,15 +220,8 @@ def demo():
 
 
     print("=" * 70)
-
-    print(
-        "VKS Expert AI"
-    )
-
-    print(
-        "RAG Pipeline v1.1"
-    )
-
+    print("VKS Expert AI")
+    print("RAG Pipeline v1.2")
     print("=" * 70)
 
 
@@ -289,45 +239,39 @@ def demo():
 """
 
 
-
-    print(
-        "\nQUESTION:"
-    )
-
-    print(question)
-
-
-
-    result = pipeline.ask(
-
-        question,
-
-        top_k=3
-
+    result = (
+        pipeline.ask(
+            question
+        )
     )
 
 
 
-    print(
-        "\nANSWER:"
-    )
+    print("\n")
+    print("=" * 70)
 
+    print("ANSWER:")
 
-    print(
-        result["answer"]
-    )
+    print(result["answer"])
 
 
 
-    print_sources(
+    print("\n")
+    print("SOURCES:")
+    
 
-        result["sources"]
+    for item in result["sources"]:
 
-    )
+        print(
+            f"""
+{item['document']}
+page={item['page']}
+score={item['score']}
+"""
+        )
 
 
 
 if __name__ == "__main__":
 
     demo()
-    
