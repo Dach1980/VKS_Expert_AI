@@ -1,46 +1,48 @@
 """
-Document Chunk Builder v1
+VKS Expert AI
+
+Document Chunk Builder v6
 
 Назначение:
 
-Объединение всех элементов нормативного документа
-в единый индекс для RAG.
-
-Текущая версия:
+Создание RAG chunks из enriched нормативного документа.
 
 Поддерживает:
-    - FormulaIndexer output
-    - Formula chunks
 
-Подготовка:
-    - FAISS
-    - ChromaDB
-    - Graph-RAG
-
+- text_blocks
+- formulas
+- UniMERNet LaTeX recognition
+- formula context
+- formula images
 
 Pipeline:
 
-SP PDF
+PDF
  |
- PyMuPDF
+PyMuPDF
  |
- FormulaCrop
+pages
  |
- UniMERNet
+FormulaCrop
  |
- FormulaIndexer
+UniMERNet
  |
- DocumentChunkBuilder
+enriched
  |
- document_chunks.json
-
-
+DocumentChunkBuilder
+ |
+document_chunks/all_chunks.json
+ |
+Embeddings
+ |
+FAISS
 """
 
 
 import json
 from pathlib import Path
 from datetime import datetime
+from collections import Counter
 
 
 
@@ -49,16 +51,22 @@ from datetime import datetime
 # ============================================================
 
 
+BASE_DIR = Path(
+    "knowledge/index/SP_30.13330"
+)
+
+
 INPUT_DIR = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\index\SP_30.13330\pages"
+    BASE_DIR
+    /
+    "enriched"
 )
 
 
 OUTPUT_DIR = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\index\SP_30.13330"
-    r"\document_chunks"
+    BASE_DIR
+    /
+    "document_chunks"
 )
 
 
@@ -87,7 +95,7 @@ class DocumentChunkBuilder:
 
 
 
-    def load_page(
+    def load_json(
         self,
         file
     ):
@@ -102,30 +110,198 @@ class DocumentChunkBuilder:
 
 
 
-    def build_formula_chunk(
+    # ========================================================
+    # TEXT CHUNK
+    # ========================================================
+
+
+    def build_text_chunk(
         self,
         page,
-        formula
+        block,
+        index
     ):
 
 
-        chunk_id = (
-            f"{self.document}"
-            f"-page-{page:03}"
-            f"-formula-"
-            f"{formula['id'].split('-')[-1]}"
-        )
-
-
-        latex = formula.get(
-            "latex"
-        )
-
-
-        context = formula.get(
-            "context",
+        text = block.get(
+            "text",
             ""
+        ).strip()
+
+
+        if not text:
+
+            return None
+
+
+
+        chunk_id = (
+
+            f"{self.document}"
+
+            f"-page-{page:03}"
+
+            f"-text-{index:03}"
+
         )
+
+
+
+        embedding_text = (
+
+            f"Документ: {self.document}. "
+
+            f"Версия: {self.version}. "
+
+            f"Страница: {page}. "
+
+            f"Тип: нормативный текст. "
+
+            f"Текст: {text}"
+
+        )
+
+
+
+        return {
+
+
+            "chunk_id":
+                chunk_id,
+
+
+            "type":
+                "text",
+
+
+
+            "document":
+                self.document,
+
+
+
+            "version":
+                self.version,
+
+
+
+            "page":
+                page,
+
+
+
+            "content":
+                {
+
+                    "text":
+                        text
+
+                },
+
+
+
+            "embedding_text":
+                embedding_text,
+
+
+
+            "metadata":
+                {
+
+                    "source":
+                        "SP_30.13330",
+
+
+                    "created":
+                        datetime.now()
+                        .isoformat()
+
+                }
+
+        }
+
+
+
+    # ========================================================
+    # FORMULA CHUNK
+    # ========================================================
+
+
+    def build_formula_chunk(
+        self,
+        page,
+        formula,
+        index
+    ):
+
+
+        latex = (
+
+            formula
+            .get(
+                "recognition",
+                {}
+            )
+            .get(
+                "latex",
+                ""
+            )
+
+        )
+
+
+
+        context = (
+
+            formula
+            .get(
+                "context",
+                {}
+            )
+            .get(
+                "nearest_text_block",
+                {}
+            )
+            .get(
+                "text",
+                ""
+            )
+
+        )
+
+
+
+        image = (
+
+            formula
+            .get(
+                "crop",
+                {}
+            )
+            .get(
+                "path"
+            )
+
+        )
+
+
+
+        if not latex and not context:
+
+            return None
+
+
+
+        chunk_id = (
+
+            f"{self.document}"
+
+            f"-page-{page:03}"
+
+            f"-formula-{index:03}"
+
+        )
+
 
 
         embedding_text = (
@@ -140,28 +316,18 @@ class DocumentChunkBuilder:
 
             f"Контекст: {context}. "
 
+            f"Формула: {latex}"
+
         )
 
 
-        if latex:
 
-            embedding_text += (
-
-                f" "
-
-                f"Формула: "
-
-                f"{latex}"
-
-            )
-
-
-
-        chunk = {
+        return {
 
 
             "chunk_id":
                 chunk_id,
+
 
 
             "type":
@@ -187,7 +353,6 @@ class DocumentChunkBuilder:
             "content":
                 {
 
-
                     "text":
                         context,
 
@@ -197,39 +362,7 @@ class DocumentChunkBuilder:
 
 
                     "image":
-                        formula.get(
-                            "image"
-                        )
-
-                },
-
-
-
-            "location":
-                {
-
-
-                    "pdf":
-                        formula
-                        .get(
-                            "location",
-                            {}
-                        )
-                        .get(
-                            "pdf"
-                        ),
-
-
-
-                    "page":
-                        page,
-
-
-
-                    "bbox":
-                        formula.get(
-                            "bbox"
-                        )
+                        image
 
                 },
 
@@ -243,26 +376,23 @@ class DocumentChunkBuilder:
             "metadata":
                 {
 
-
                     "source":
                         "SP_30.13330",
-
 
 
                     "created":
                         datetime.now()
                         .isoformat()
 
-
-
                 }
 
         }
 
 
-        return chunk
 
-
+    # ========================================================
+    # PAGE PROCESS
+    # ========================================================
 
 
     def process_page(
@@ -271,29 +401,107 @@ class DocumentChunkBuilder:
     ):
 
 
-        page_number = data["page"]
+        page = data["page"]
 
 
         chunks = []
 
 
-        for formula in data.get(
-            "formulas",
-            []
+
+        text_count = 0
+
+        formula_count = 0
+
+
+
+        # ----------------------------
+        # TEXT
+        # ----------------------------
+
+
+        for index, block in enumerate(
+
+            data.get(
+                "text_blocks",
+                []
+            ),
+
+            start=1
+
+        ):
+
+
+            chunk = self.build_text_chunk(
+
+                page,
+
+                block,
+
+                index
+
+            )
+
+
+            if chunk:
+
+                chunks.append(
+                    chunk
+                )
+
+                text_count += 1
+
+
+
+
+        # ----------------------------
+        # FORMULAS
+        # ----------------------------
+
+
+        for index, formula in enumerate(
+
+            data.get(
+                "formulas",
+                []
+            ),
+
+            start=1
+
         ):
 
 
             chunk = self.build_formula_chunk(
 
-                page_number,
+                page,
 
-                formula
+                formula,
+
+                index
 
             )
 
 
-            chunks.append(
-                chunk
+            if chunk:
+
+                chunks.append(
+                    chunk
+                )
+
+                formula_count += 1
+
+
+
+        if formula_count:
+
+
+            print(
+
+                f"page={page}: "
+
+                f"text={text_count}, "
+
+                f"formula={formula_count}"
+
             )
 
 
@@ -302,20 +510,24 @@ class DocumentChunkBuilder:
 
 
 
-    def process_all_pages(
-        self,
-        input_dir
+    # ========================================================
+    # ALL PAGES
+    # ========================================================
+
+
+    def build(
+        self
     ):
 
 
-        all_chunks = []
-
-
         files = sorted(
-            Path(input_dir)
-            .glob(
-                "page_*.json"
+
+            INPUT_DIR.glob(
+
+                "page_*_enriched.json"
+
             )
+
         )
 
 
@@ -323,6 +535,11 @@ class DocumentChunkBuilder:
             "Pages found:",
             len(files)
         )
+
+
+
+        all_chunks = []
+
 
 
         for file in files:
@@ -334,13 +551,13 @@ class DocumentChunkBuilder:
             )
 
 
-            page_data = self.load_page(
+            data = self.load_json(
                 file
             )
 
 
             chunks = self.process_page(
-                page_data
+                data
             )
 
 
@@ -349,40 +566,52 @@ class DocumentChunkBuilder:
             )
 
 
+
         return all_chunks
 
 
 
 
+    # ========================================================
+    # SAVE
+    # ========================================================
+
+
     def save(
         self,
-        chunks,
-        output_dir
+        chunks
     ):
 
 
-        output = Path(
-            output_dir
-        )
+        OUTPUT_DIR.mkdir(
 
-
-        output.mkdir(
             parents=True,
+
             exist_ok=True
+
         )
 
 
+        output_file = (
 
-        file = (
-            output /
+            OUTPUT_DIR
+
+            /
+
             "all_chunks.json"
+
         )
+
 
 
         with open(
-            file,
+
+            output_file,
+
             "w",
+
             encoding="utf-8"
+
         ) as f:
 
 
@@ -399,17 +628,40 @@ class DocumentChunkBuilder:
             )
 
 
+
         print()
 
         print(
             "Saved:",
-            file
+            output_file
         )
+
 
         print(
             "Total chunks:",
             len(chunks)
         )
+
+
+        print()
+
+        print(
+            "Chunk statistics:"
+        )
+
+
+        print(
+
+            Counter(
+
+                x["type"]
+
+                for x in chunks
+
+            )
+
+        )
+
 
 
 
@@ -422,8 +674,21 @@ def main():
 
 
     print(
-        "Starting Document Chunk Builder..."
+        "=" * 70
     )
+
+    print(
+        "VKS Expert AI"
+    )
+
+    print(
+        "Document Chunk Builder v6"
+    )
+
+    print(
+        "=" * 70
+    )
+
 
 
     builder = DocumentChunkBuilder(
@@ -435,25 +700,21 @@ def main():
     )
 
 
-    chunks = builder.process_all_pages(
 
-        INPUT_DIR
+    chunks = builder.build()
 
-    )
 
 
     builder.save(
-
-        chunks,
-
-        OUTPUT_DIR
-
+        chunks
     )
+
 
 
     print(
         "DONE"
     )
+
 
 
 

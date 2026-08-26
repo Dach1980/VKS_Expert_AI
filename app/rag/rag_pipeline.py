@@ -145,8 +145,9 @@ class RAGPipeline:
 
         evidence = (
             self.validator.validate(
-                results,
-                intent
+                enhanced_query,
+                top_k=top_k,
+                intent=intent
             )
         )
 
