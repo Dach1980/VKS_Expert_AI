@@ -135,7 +135,8 @@ class RAGPipeline:
 
         context = (
             self.context_builder.build(
-                results
+                query=question,
+                results=results,
             )
         )
 
