@@ -1,79 +1,116 @@
-import json
-import urllib.request
-import urllib.error
-from pathlib import Path
+"""
+VKS Expert AI
+LM Studio Client v1
+
+Purpose:
+Communication with local LLM server
+running in LM Studio.
+
+Compatible with:
+- Qwen GGUF
+- Llama GGUF
+- OpenAI-compatible API
+
+Architecture:
+
+Context Builder
+        |
+        v
+LMStudioClient
+        |
+        v
+LM Studio Local Server
+        |
+        v
+LLM response
+"""
+
+
+from typing import Optional
+import requests
 
 
 class LMStudioClient:
-    """Клиент для работы с локальным сервером LM Studio."""
+    """
+    Client for LM Studio OpenAI-compatible API.
+    """
 
-    def __init__(self, config_path: str = "config/settings.json"):
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
 
-        lm_config = self.config["lm_studio"]
+    def __init__(
+        self,
+        base_url: str = "http://localhost:1234/v1",
+        model: Optional[str] = None,
+        timeout: int = 120,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.timeout = timeout
 
-        self.base_url = lm_config["base_url"].rstrip("/")
-        self.model = lm_config["model"]
-        self.temperature = lm_config.get("temperature", 0.2)
-        self.max_tokens = lm_config.get("max_tokens", 2048)
 
-    def _load_config(self) -> dict:
-        """Загружает конфигурацию проекта."""
+    def get_models(self):
+        """
+        Get available models from LM Studio.
+        """
 
-        if not self.config_path.exists():
-            raise FileNotFoundError(
-                f"Файл конфигурации не найден: {self.config_path}"
-            )
-
-        with self.config_path.open("r", encoding="utf-8") as file:
-            return json.load(file)
-
-    def get_models(self) -> list[dict]:
-        """Возвращает модели, доступные через LM Studio API."""
-
-        url = f"{self.base_url}/models"
-
-        request = urllib.request.Request(
-            url,
-            method="GET",
+        url = (
+            f"{self.base_url}/models"
         )
 
-        try:
-            with urllib.request.urlopen(request, timeout=10) as response:
-                result = json.loads(
-                    response.read().decode("utf-8")
-                )
+        response = requests.get(
+            url,
+            timeout=self.timeout,
+        )
 
-            return result.get("data", [])
+        response.raise_for_status()
 
-        except urllib.error.URLError as error:
-            raise ConnectionError(
-                f"Не удалось подключиться к LM Studio: {error}"
-            ) from error
+        return response.json()
 
-    def is_model_available(self) -> bool:
-        """Проверяет наличие выбранной модели."""
 
-        models = self.get_models()
-
-        available_models = {
-            model.get("id")
-            for model in models
-        }
-
-        return self.model in available_models
 
     def chat(
         self,
-        message: str,
-        system_prompt: str | None = None,
+        prompt: str,
+        system_prompt: str = None,
+        temperature: float = 0.2,
     ) -> str:
-        """Отправляет сообщение модели и возвращает ответ."""
+        """
+        Send prompt to local LLM.
+
+        Args:
+            prompt:
+                User message
+
+            system_prompt:
+                Expert system instruction
+
+            temperature:
+                Generation randomness
+
+        Returns:
+            LLM answer
+        """
+
+
+        if self.model is None:
+
+            models = self.get_models()
+
+            if not models.get("data"):
+
+                raise RuntimeError(
+                    "No model loaded in LM Studio"
+                )
+
+            self.model = (
+                models["data"][0]["id"]
+            )
+
 
         messages = []
 
+
         if system_prompt:
+
             messages.append(
                 {
                     "role": "system",
@@ -81,109 +118,96 @@ class LMStudioClient:
                 }
             )
 
+
         messages.append(
             {
                 "role": "user",
-                "content": message,
+                "content": prompt,
             }
         )
 
+
         payload = {
+
             "model": self.model,
+
             "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+
+            "temperature": temperature,
+
         }
 
-        data = json.dumps(
-            payload,
-            ensure_ascii=False,
-        ).encode("utf-8")
 
-        request = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-            },
-            method="POST",
+        url = (
+            f"{self.base_url}/chat/completions"
         )
 
-        try:
-            with urllib.request.urlopen(
-                request,
-                timeout=300,
-            ) as response:
-                result = json.loads(
-                    response.read().decode("utf-8")
-                )
 
-        except urllib.error.HTTPError as error:
-            details = error.read().decode(
-                "utf-8",
-                errors="replace",
-            )
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=self.timeout,
+        )
 
-            raise RuntimeError(
-                f"LM Studio API вернул ошибку "
-                f"{error.code}: {details}"
-            ) from error
 
-        except urllib.error.URLError as error:
-            raise ConnectionError(
-                f"Не удалось подключиться к LM Studio: {error}"
-            ) from error
+        response.raise_for_status()
 
-        try:
-            return result["choices"][0]["message"]["content"]
 
-        except (KeyError, IndexError) as error:
-            raise RuntimeError(
-                f"Неожиданный ответ LM Studio: {result}"
-            ) from error
+        data = response.json()
+
+
+        return (
+            data["choices"][0]
+            ["message"]
+            ["content"]
+        )
+
+
+
+def demo():
+
+    print("=" * 70)
+    print("VKS Expert AI")
+    print("LM Studio Client v1")
+    print("=" * 70)
+
+
+    client = LMStudioClient()
+
+
+    print("\nAvailable models:")
+
+    models = client.get_models()
+
+
+    for model in models.get(
+        "data",
+        []
+    ):
+        print(
+            "-",
+            model["id"]
+        )
+
+
+    print("\nTest request...")
+
+
+    answer = client.chat(
+        """
+Объясни назначение СП 30.13330.2020
+для проектирования внутренних систем
+водоснабжения.
+        """
+    )
+
+
+    print("\nANSWER:")
+    print(answer)
+
 
 
 if __name__ == "__main__":
 
-    client = LMStudioClient()
-
-    print("=" * 60)
-    print("VKS Expert AI — LM Studio diagnostic")
-    print("=" * 60)
-
-    print("\nДоступные модели:")
-
-    models = client.get_models()
-
-    for model in models:
-        print(f"  • {model.get('id')}")
-
-    print("\nВыбранная модель:")
-    print(f"  {client.model}")
-
-    print("\nМодель доступна:")
-
-    if client.is_model_available():
-        print("  ✓ Да")
-    else:
-        print("  ✗ Нет")
-
-    print("\nОтправляем тестовый запрос...")
-
-    answer = client.chat(
-        "Объясни одним коротким абзацем, "
-        "что такое система внутреннего хозяйственно-питьевого "
-        "водопровода.",
-        system_prompt=(
-            "Ты являешься техническим AI-ассистентом "
-            "инженера по разделу ВК. "
-            "Отвечай технически точно и не выдумывай "
-            "нормативные требования."
-        ),
-    )
-
-    print("\nОтвет модели:")
-    print("-" * 60)
-    print(answer)
-    print("-" * 60)
+    demo()
     
