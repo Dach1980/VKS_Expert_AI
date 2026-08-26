@@ -4,6 +4,7 @@ __pycache__/
 
 # Virtual environment
 .venv/
+.venv_unimernet/
 
 # Environment variables
 .env
