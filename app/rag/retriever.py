@@ -1,35 +1,36 @@
 """
 VKS Expert AI
 
-Retriever v1.3
+Retriever v1.7
 
-Semantic retrieval layer.
+Hybrid RAG Retriever
 
-Architecture:
+Pipeline:
 
-Question
-    |
-    v
-EmbeddingClient
-    |
-    v
-LM Studio Embeddings
-    |
-    v
-FAISS similarity search
-    |
-    v
-Metadata filtering
-    |
-    v
-Retrieved chunks
+Query
+ |
+Embedding
+ |
+FAISS search
+ |
+Candidate reranking
+ |
+Hybrid score
+ |
+Results
+
+
+Ranking:
+
+FAISS similarity       65%
+Keyword matching       20%
+Formula boost          10%
+Section boost           5%
+
 """
 
 
 from pathlib import Path
-from typing import List, Dict
-
-
 import json
 import numpy as np
 import faiss
@@ -39,60 +40,117 @@ from app.rag.embedding_client import EmbeddingClient
 
 
 
-class Retriever:
-    """
-    FAISS based semantic retriever.
-    """
+# ============================================================
+# CONFIG
+# ============================================================
 
 
-    def __init__(
-        self,
-        index_root: str = "knowledge/index/SP_30.13330/embeddings",
-    ):
+DOCUMENT = "SP_30.13330"
 
+
+BASE_DIR = (
+    Path("knowledge/index")
+    /
+    DOCUMENT
+)
+
+
+INDEX_FILE = (
+    BASE_DIR
+    /
+    "embeddings"
+    /
+    "index.faiss"
+)
+
+
+VECTORS_FILE = (
+    BASE_DIR
+    /
+    "embeddings"
+    /
+    "vectors.npy"
+)
+
+
+METADATA_FILE = (
+    BASE_DIR
+    /
+    "embeddings"
+    /
+    "metadata.json"
+)
+
+
+
+TOP_K_FAISS = 50
+
+TOP_K_RESULT = 10
+
+
+
+# ============================================================
+# QUERY BOOST
+# ============================================================
+
+
+KEYWORDS = [
+
+    "максимальный расчетный расход",
+
+    "расчетный расход воды",
+
+    "расчетном участке сети",
+
+    "следует определять по формуле",
+
+    "определять по формуле",
+
+    "формуле"
+
+]
+
+
+
+SECTION_HINTS = [
+
+    "5.3",
+
+    "определение расчетных расходов воды",
+
+    "максимальный расчетный расход воды"
+
+]
+
+
+
+# ============================================================
+# RETRIEVER
+# ============================================================
+
+
+class HybridRetriever:
+
+
+    def __init__(self):
 
         print(
             "Loading FAISS index..."
         )
 
 
-        self.index_root = Path(index_root)
-
-
-        self.index_path = (
-            self.index_root /
-            "index.faiss"
+        self.index = faiss.read_index(
+            str(INDEX_FILE)
         )
-
-
-        self.metadata_path = (
-            self.index_root /
-            "metadata.json"
-        )
-
-
-
-        self._check_files()
-
 
 
         print(
             "Using index:"
         )
 
-
         print(
-            self.index_path.resolve()
+            INDEX_FILE
         )
-
-
-
-        self.index = faiss.read_index(
-
-            str(self.index_path)
-
-        )
-
 
 
         print(
@@ -108,7 +166,7 @@ class Retriever:
 
 
         with open(
-            self.metadata_path,
+            METADATA_FILE,
             "r",
             encoding="utf-8"
         ) as f:
@@ -125,11 +183,11 @@ class Retriever:
 
 
         print(
-            "Loading embedding client..."
+            "Initializing embedding client..."
         )
 
 
-        self.embedding_client = EmbeddingClient()
+        self.client = EmbeddingClient()
 
 
 
@@ -139,157 +197,245 @@ class Retriever:
 
 
 
-    # ==================================================
-    # CHECK FILES
-    # ==================================================
+    # --------------------------------------------------------
 
 
-    def _check_files(self):
+    def normalize(
+        self,
+        value
+    ):
 
 
-        if not self.index_path.exists():
+        if value < 0:
 
-            raise FileNotFoundError(
+            return 0
 
-                f"""
-FAISS index not found:
 
-{self.index_path}
+        if value > 1:
 
-"""
+            return 1
 
+
+        return value
+
+
+
+    # --------------------------------------------------------
+
+
+    def keyword_score(
+        self,
+        query,
+        item
+    ):
+
+
+        text = (
+
+            item.get(
+                "embedding_text",
+                ""
+            )
+            +
+            " "
+            +
+            json.dumps(
+                item.get(
+                    "content",
+                    {}
+                ),
+                ensure_ascii=False
             )
 
+        ).lower()
 
-        if not self.metadata_path.exists():
 
-            raise FileNotFoundError(
 
-                f"""
-Metadata not found:
+        score = 0
 
-{self.metadata_path}
 
-"""
 
+        for word in KEYWORDS:
+
+            if word.lower() in query.lower():
+
+                if word.lower() in text:
+
+                    score += 0.05
+
+
+
+        return self.normalize(
+            score
+        )
+
+
+
+    # --------------------------------------------------------
+
+
+    def formula_boost(
+        self,
+        item
+    ):
+
+
+        if item.get(
+            "type"
+        ) == "formula":
+
+            return 1.0
+
+
+        return 0
+
+
+
+    # --------------------------------------------------------
+
+
+    def section_boost(
+        self,
+        item
+    ):
+
+
+        text = (
+
+            item.get(
+                "embedding_text",
+                ""
+            )
+            +
+            json.dumps(
+                item.get(
+                    "content",
+                    {}
+                ),
+                ensure_ascii=False
             )
 
+        ).lower()
 
 
-    # ==================================================
-    # SEARCH
-    # ==================================================
+
+        score = 0
+
+
+
+        for hint in SECTION_HINTS:
+
+
+            if hint.lower() in text:
+
+                score += 0.3
+
+
+
+        return self.normalize(
+            score
+        )
+
+
+
+    # --------------------------------------------------------
+
+
+    def hybrid_score(
+        self,
+        query,
+        faiss_score,
+        item
+    ):
+
+
+        score = (
+
+            faiss_score * 0.65
+
+            +
+
+            self.keyword_score(
+                query,
+                item
+            )
+            *
+            0.20
+
+
+            +
+
+            self.formula_boost(
+                item
+            )
+            *
+            0.10
+
+
+            +
+
+            self.section_boost(
+                item
+            )
+            *
+            0.05
+
+        )
+
+
+        return score
+
+
+
+    # --------------------------------------------------------
 
 
     def search(
         self,
-        query: str,
-        top_k: int = 5,
-    ) -> List[Dict]:
-        """
-        Semantic search.
-
-        Args:
-            query:
-                User query
-
-            top_k:
-                Number of results
-
-        Returns:
-            Retrieved records
-        """
-
+        query
+    ):
 
 
         print()
-
         print(
             "SEARCH QUERY:"
         )
 
-        print(
+        print(query)
+
+
+
+        vector = self.client.embed(
             query
         )
 
 
-
-        # ----------------------------------------------
-        # Create embedding
-        # ----------------------------------------------
-
-
-        vector = self.embedding_client.embed(
-
-            query
-
-        )
-
-
-
-        query_vector = np.array(
-
-            [vector],
-
+        vector = np.array(
+            [
+                vector
+            ],
             dtype="float32"
-
         )
 
-
-
-        # ----------------------------------------------
-        # Validate dimension
-        # ----------------------------------------------
-
-
-        if query_vector.shape[1] != self.index.d:
-
-            raise ValueError(
-
-                f"""
-Embedding dimension mismatch.
-
-FAISS index:
-{self.index.d}
-
-Query vector:
-{query_vector.shape[1]}
-
-"""
-
-            )
-
-
-
-        # ----------------------------------------------
-        # Normalize
-        # ----------------------------------------------
 
 
         faiss.normalize_L2(
-
-            query_vector
-
+            vector
         )
 
-
-
-        # ----------------------------------------------
-        # Search
-        # ----------------------------------------------
 
 
         scores, ids = self.index.search(
 
-            query_vector,
+            vector,
 
-            top_k
+            TOP_K_FAISS
 
         )
 
 
 
-        results = []
+        candidates = []
 
 
 
@@ -305,15 +451,15 @@ Query vector:
 
 
 
-            item = self.metadata[idx].copy()
+            item = self.metadata[idx]
 
 
 
-            item["score"] = float(score)
+            final = self.hybrid_score(
 
+                query,
 
-
-            results.append(
+                float(score),
 
                 item
 
@@ -321,71 +467,53 @@ Query vector:
 
 
 
-        return results
+            candidates.append(
+
+                {
+
+                    "final_score":
+                        final,
+
+
+                    "faiss_score":
+                        float(score),
+
+
+                    "index":
+                        int(idx),
+
+
+                    **item
+
+                }
+
+            )
 
 
 
-    # ==================================================
-    # DEBUG
-    # ==================================================
+        candidates.sort(
 
+            key=lambda x:
+                x["final_score"],
 
-    def print_results(
-        self,
-        results: List[Dict]
-    ):
+            reverse=True
 
-
-        print()
-
-        print("=" * 70)
-
-        print(
-            "RETRIEVAL RESULTS"
         )
 
-        print("=" * 70)
+
+
+        return candidates[
+            :TOP_K_RESULT
+        ]
 
 
 
-        for item in results:
+# ============================================================
+# TEST
+# ============================================================
 
 
-            print()
-
-            print(
-                item.get(
-                    "document",
-                    "?"
-                )
-            )
-
-
-            print(
-                "page=",
-                item.get(
-                    "page",
-                    "?"
-                )
-            )
-
-
-            print(
-                "score=",
-                item.get(
-                    "score",
-                    0
-                )
-            )
-
-
-
-# ======================================================
-# DEMO
-# ======================================================
-
-
-def demo():
+def main():
 
 
     print("=" * 70)
@@ -395,14 +523,14 @@ def demo():
     )
 
     print(
-        "Retriever v1.3"
+        "Retriever v1.7"
     )
 
     print("=" * 70)
 
 
 
-    retriever = Retriever()
+    retriever = HybridRetriever()
 
 
 
@@ -417,24 +545,110 @@ def demo():
 
 
     results = retriever.search(
-
-        query,
-
-        top_k=5
-
+        query
     )
 
 
 
-    retriever.print_results(
+    print()
 
-        results
-
+    print(
+        "HYBRID RESULTS"
     )
+
+    print("=" * 70)
+
+
+
+    for i, item in enumerate(
+        results,
+        start=1
+    ):
+
+
+        print()
+
+        print(
+            f"RESULT #{i}"
+        )
+
+        print(
+            "-" * 70
+        )
+
+
+        print(
+            "Final:",
+            round(
+                item["final_score"],
+                5
+            )
+        )
+
+
+        print(
+            "FAISS:",
+            round(
+                item["faiss_score"],
+                5
+            )
+        )
+
+
+        print(
+            "Index:",
+            item["index"]
+        )
+
+
+        print(
+            "Page:",
+            item["page"]
+        )
+
+
+        print(
+            "Type:",
+            item["type"]
+        )
+
+
+        print(
+            "Chunk:",
+            item["chunk_id"]
+        )
+
+
+        print()
+
+        content = item.get(
+            "content",
+            {}
+        )
+
+
+        if isinstance(
+            content,
+            dict
+        ):
+
+
+            print(
+                content.get(
+                    "text",
+                    ""
+                )
+            )
+
+        else:
+
+            print(
+                content
+            )
 
 
 
 if __name__ == "__main__":
 
-    demo()
+    main()
     

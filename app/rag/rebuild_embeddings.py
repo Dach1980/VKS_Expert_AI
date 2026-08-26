@@ -175,35 +175,45 @@ def build_embeddings(chunks):
         )
 
 
-        metadata.append(
-            {
-                "chunk_id": item.get(
-                    "chunk_id"
+        metadata.append({
+
+            "chunk_id":
+                item["chunk_id"],
+
+
+            "type":
+                item["type"],
+
+
+            "document":
+                item["document"],
+
+
+            "page":
+                item["page"],
+
+
+            "content":
+                item.get(
+                    "content",
+                    {}
                 ),
 
-                "document": item.get(
-                    "document",
-                    DOCUMENT
+
+            "metadata":
+                item.get(
+                    "metadata",
+                    {}
                 ),
 
-                "type": item.get(
-                    "type",
-                    "text"
-                ),
 
-                "page": item.get(
-                    "page",
-                    None
-                ),
-
-                "text": text,
-
-                "embedding_text": item.get(
+            "embedding_text":
+                item.get(
                     "embedding_text",
                     ""
                 )
-            }
-        )
+
+        })
 
     print()
     print("==============================")
