@@ -1,8 +1,9 @@
 """
 VKS Expert AI
-RAG Pipeline v1.2
+RAG Pipeline v1.3
 
-Engineering RAG pipeline.
+Engineering RAG pipeline
+with evidence validation.
 
 Architecture:
 
@@ -21,6 +22,9 @@ Retriever
 FAISS Search
     |
     v
+Evidence Validator
+    |
+    v
 Context Builder
     |
     v
@@ -31,12 +35,10 @@ Technical Answer
 """
 
 
-from pathlib import Path
-
-
 from app.rag.retriever import Retriever
 from app.rag.context_builder import ContextBuilder
 from app.rag.query_classifier import QueryClassifier
+from app.rag.evidence_validator import EvidenceValidator
 
 from app.llm.lmstudio_client import LMStudioClient
 
@@ -52,15 +54,20 @@ class RAGPipeline:
 
         print("Loading components...")
 
+
         self.classifier = QueryClassifier()
 
         self.retriever = Retriever()
 
+        self.validator = EvidenceValidator()
+
         self.context_builder = ContextBuilder()
+
 
         self.llm = LMStudioClient(
             model="qwen/qwen3.5-9b-mtp"
         )
+
 
         print("Pipeline ready")
 
@@ -95,7 +102,7 @@ class RAGPipeline:
 
 
         # --------------------------------------------------
-        # 2. Enhanced query
+        # 2. Engineering query enrichment
         # --------------------------------------------------
 
         enhanced_query = f"""
@@ -109,11 +116,14 @@ class RAGPipeline:
 Тема:
 {intent.topic}
 
+Ключевые слова:
+{intent.keywords}
 
 Запрос:
 {question}
 
 """
+
 
 
         # --------------------------------------------------
@@ -130,20 +140,57 @@ class RAGPipeline:
 
 
         # --------------------------------------------------
-        # 4. Context building
+        # 4. Evidence validation
+        # --------------------------------------------------
+
+        evidence = (
+            self.validator.validate(
+                question,
+                results
+            )
+        )
+
+
+        print("\nEVIDENCE:")
+
+        print(
+            "confidence=",
+            evidence.confidence
+        )
+
+        print(
+            "accepted=",
+            len(evidence.accepted)
+        )
+
+        print(
+            "rejected=",
+            len(evidence.rejected)
+        )
+
+
+
+        validated_results = (
+            evidence.accepted
+        )
+
+
+
+        # --------------------------------------------------
+        # 5. Context building
         # --------------------------------------------------
 
         context = (
             self.context_builder.build(
                 query=question,
-                results=results,
+                results=validated_results,
             )
         )
 
 
 
         # --------------------------------------------------
-        # 5. Prompt
+        # 6. Engineering prompt
         # --------------------------------------------------
 
         system_prompt = """
@@ -155,14 +202,22 @@ VKS Expert AI.
 Правила ответа:
 
 1. Отвечай только на русском языке.
-2. Используй только предоставленный нормативный контекст.
-3. Не придумывай требований отсутствующих в СП.
-4. Используй инженерную терминологию ВК.
-5. Указывай источник ответа.
-6. Если данных недостаточно — сообщи об этом.
+
+2. Используй только предоставленный
+нормативный контекст.
+
+3. Не придумывай требований,
+формул и пунктов СП.
+
+4. Если информации недостаточно,
+сообщи об этом.
+
+5. Используй инженерную терминологию ВК.
+
+6. Указывай источник ответа.
 
 
-Формат:
+Формат ответа:
 
 Краткий вывод
 
@@ -173,6 +228,20 @@ VKS Expert AI.
 """
 
 
+
+        if not evidence.sufficient:
+
+
+            system_prompt += """
+
+Внимание:
+Нормативного контекста недостаточно.
+Не делай предположений.
+"""
+
+
+
+
         user_prompt = f"""
 
 Вопрос:
@@ -180,15 +249,21 @@ VKS Expert AI.
 {question}
 
 
-Нормативный контекст:
+Проверенный нормативный контекст:
 
 {context}
+
+
+Уровень уверенности Evidence:
+
+{evidence.confidence}
 
 """
 
 
+
         # --------------------------------------------------
-        # 6. LLM
+        # 7. LLM generation
         # --------------------------------------------------
 
         answer = (
@@ -202,6 +277,7 @@ VKS Expert AI.
         )
 
 
+
         return {
 
             "question": question,
@@ -210,7 +286,13 @@ VKS Expert AI.
 
             "answer": answer,
 
-            "sources": results
+            "sources": validated_results,
+
+            "evidence_confidence":
+                evidence.confidence,
+
+            "evidence_sufficient":
+                evidence.sufficient,
 
         }
 
@@ -221,8 +303,15 @@ def demo():
 
 
     print("=" * 70)
-    print("VKS Expert AI")
-    print("RAG Pipeline v1.2")
+
+    print(
+        "VKS Expert AI"
+    )
+
+    print(
+        "RAG Pipeline v1.3"
+    )
+
     print("=" * 70)
 
 
@@ -240,6 +329,7 @@ def demo():
 """
 
 
+
     result = (
         pipeline.ask(
             question
@@ -253,13 +343,23 @@ def demo():
 
     print("ANSWER:")
 
-    print(result["answer"])
-
+    print(
+        result["answer"]
+    )
 
 
     print("\n")
-    print("SOURCES:")
-    
+
+    print(
+        "EVIDENCE CONFIDENCE:",
+        result["evidence_confidence"]
+    )
+
+
+    print(
+        "SOURCES:"
+    )
+
 
     for item in result["sources"]:
 
@@ -276,3 +376,4 @@ score={item['score']}
 if __name__ == "__main__":
 
     demo()
+    
