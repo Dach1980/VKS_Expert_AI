@@ -1,16 +1,16 @@
 """
 VKS Expert AI
-LM Studio Client v1.5
+LM Studio Client v1.6
 
 Purpose:
 Communication with LM Studio local server.
 
 Features:
 - OpenAI compatible API
-- Qwen3.5 support
-- thinking mode control
-- reasoning diagnostics
+- Qwen3.5 thinking mode control
+- reasoning_content protection
 - RAG ready
+- Production-safe output filtering
 """
 
 
@@ -19,21 +19,10 @@ import requests
 
 
 
-DEFAULT_SYSTEM_PROMPT = """
-Ты являешься инженерным AI-ассистентом VKS Expert AI.
-
-Правила ответа:
-
-1. Отвечай только на русском языке.
-2. Не показывай внутренние рассуждения модели.
-3. Не выводи chain-of-thought.
-4. Формируй только итоговый технический ответ.
-5. Используй инженерную и нормативную терминологию.
-"""
-
-
-
 class LMStudioClient:
+    """
+    Client for LM Studio OpenAI-compatible API.
+    """
 
 
     def __init__(
@@ -41,17 +30,18 @@ class LMStudioClient:
         base_url: str = "http://localhost:1234/v1",
         model: Optional[str] = None,
         timeout: int = 300,
-        debug: bool = False,
     ):
 
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
-        self.debug = debug
 
 
 
     def get_models(self):
+        """
+        Get available models.
+        """
 
         response = requests.get(
             f"{self.base_url}/models",
@@ -67,11 +57,17 @@ class LMStudioClient:
     def chat(
         self,
         prompt: str,
-        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        system_prompt: str = None,
         temperature: float = 0.1,
         max_tokens: int = 2048,
         enable_thinking: bool = False,
-    ):
+    ) -> str:
+        """
+        Send request to LM Studio.
+
+        Important:
+        reasoning_content is NEVER returned.
+        """
 
 
         if self.model is None:
@@ -104,7 +100,6 @@ class LMStudioClient:
             )
 
 
-
         messages.append(
             {
                 "role": "user",
@@ -125,9 +120,8 @@ class LMStudioClient:
             "max_tokens": max_tokens,
 
 
-            #
-            # LM Studio engine parameters
-            #
+            # Qwen3/Qwen3.5 control
+            # Disable internal reasoning
             "extra_body":
             {
                 "chat_template_kwargs":
@@ -140,10 +134,15 @@ class LMStudioClient:
 
 
 
-        if self.debug:
-
-            print("\nREQUEST:")
-            print(payload)
+        print("\nLM STUDIO REQUEST:")
+        print(
+            {
+                "model": self.model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "thinking": enable_thinking,
+            }
+        )
 
 
 
@@ -153,7 +152,7 @@ class LMStudioClient:
 
             json=payload,
 
-            timeout=self.timeout,
+            timeout=self.timeout
 
         )
 
@@ -165,19 +164,10 @@ class LMStudioClient:
 
 
 
-        if self.debug:
-
-            print("\nRAW RESPONSE:")
-
-            print(data)
-
-
-
         message = (
             data["choices"][0]
             ["message"]
         )
-
 
 
         content = (
@@ -189,17 +179,6 @@ class LMStudioClient:
         )
 
 
-
-        if content.strip():
-
-            return content.strip()
-
-
-
-        #
-        # Диагностика Qwen thinking
-        #
-
         reasoning = (
             message.get(
                 "reasoning_content",
@@ -209,44 +188,45 @@ class LMStudioClient:
         )
 
 
-        if self.debug:
+
+        # --------------------------------------------------
+        # Security check
+        # Never expose chain-of-thought
+        # --------------------------------------------------
+
+        if reasoning.strip():
 
             print(
-                "\nWARNING:"
-            )
-
-            print(
-                "content is empty"
+                "WARNING:"
+                " reasoning_content received from model"
             )
 
 
-            if reasoning:
 
-                print(
-                    "reasoning_content detected"
-                )
+        # --------------------------------------------------
+        # Normal answer
+        # --------------------------------------------------
+
+        if content.strip():
+
+            return content.strip()
 
 
-            try:
 
-                print(
-                    "reasoning tokens:",
-                    data["usage"]
-                    ["completion_tokens_details"]
-                    .get(
-                        "reasoning_tokens"
-                    )
-                )
+        # --------------------------------------------------
+        # Empty answer protection
+        # --------------------------------------------------
 
-            except Exception:
+        if reasoning.strip():
 
-                pass
-
+            return (
+                "LLM вернул только внутреннее рассуждение. "
+                "Проверьте режим Qwen thinking в LM Studio."
+            )
 
 
         return (
-            "LLM вернул пустой ответ. "
-            "Модель использовала reasoning режим."
+            "LLM вернул пустой ответ."
         )
 
 
@@ -255,52 +235,41 @@ def demo():
 
 
     print("=" * 70)
-
     print(
         "VKS Expert AI"
     )
-
     print(
-        "LM Studio Client v1.5"
+        "LM Studio Client v1.6"
     )
-
     print("=" * 70)
 
 
 
     client = LMStudioClient(
-
-        model="qwen/qwen3.5-9b",
-
-        debug=True
-
+        model="qwen3.5-4b-mtp"
     )
 
 
 
-    print(
-        "\nAvailable models:"
-    )
+    print("\nAvailable models:")
 
 
     models = client.get_models()
 
 
-    for m in models.get(
+    for model in models.get(
         "data",
         []
     ):
 
         print(
             "-",
-            m["id"]
+            model["id"]
         )
 
 
 
-    print(
-        "\nTest request...\n"
-    )
+    print("\nTest request...\n")
 
 
 
@@ -312,21 +281,27 @@ def demo():
 водоснабжения.
 """,
 
+        system_prompt="""
+Ты инженерный AI-ассистент VKS Expert AI.
+
+Отвечай только на русском языке.
+Используй инженерную терминологию.
+Не показывай внутренние рассуждения модели.
+""",
+
         temperature=0.1,
 
         max_tokens=2048,
 
-        enable_thinking=False,
+        enable_thinking=False
 
     )
 
 
 
-    print(
-        "\nANSWER:"
-    )
-
+    print("\nANSWER:")
     print(answer)
+
 
 
 

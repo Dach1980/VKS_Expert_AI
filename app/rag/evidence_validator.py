@@ -1,10 +1,11 @@
 """
 VKS Expert AI
-Evidence Validator v1
+
+Evidence Validator v1.1
 
 Purpose:
-Validate retrieved RAG evidence before sending
-context to LLM.
+Validate retrieved RAG evidence
+before sending context to LLM.
 
 Architecture:
 
@@ -13,24 +14,12 @@ Retriever results
         v
 Evidence Validator
         |
-        +-- relevance check
+        +---- accepted evidence
         |
-        +-- score filtering
-        |
-        +-- source validation
+        +---- rejected evidence
         |
         v
-Validated evidence
-        |
-        v
-Context Builder
-        |
-        v
-LLM
-
-
-Phase:
-2 - RAG Quality Control
+Confidence score
 """
 
 
@@ -42,161 +31,245 @@ from typing import List, Dict
 @dataclass
 class EvidenceResult:
     """
-    Validation result.
+    Evidence validation result.
     """
 
-    accepted: list
-    rejected: list
     confidence: float
+
+    accepted: List[dict]
+
+    rejected: List[dict]
+
     sufficient: bool
 
 
 
 class EvidenceValidator:
     """
-    Validate retrieved normative evidence.
+    Engineering evidence validator.
+
+    Filters FAISS results according
+    to engineering intent.
     """
 
 
     def __init__(
         self,
         min_score: float = 0.65,
-        min_results: int = 1,
+        min_confidence: float = 0.55,
     ):
 
         self.min_score = min_score
-        self.min_results = min_results
 
+        self.min_confidence = min_confidence
+
+
+
+    # --------------------------------------------------
+    # Engineering dictionaries
+    # --------------------------------------------------
+
+    DOMAIN_KEYWORDS = {
+
+
+        "internal_water_supply":
+
+        [
+            "водоснабж",
+            "водопровод",
+            "хвс",
+            "гвс",
+            "расход воды",
+            "секундный расход",
+            "давление",
+            "напор",
+            "трубопровод",
+            "стояк",
+        ],
+
+
+
+        "sewerage":
+
+        [
+            "канализа",
+            "сток",
+            "водоотведение",
+            "гидравлический затвор",
+        ],
+
+
+
+        "fire_water":
+
+        [
+            "пожар",
+            "внутренний пожарный водопровод",
+            "спринклер",
+            "расход пожарный",
+        ],
+
+    }
+
+
+
+    TOPIC_KEYWORDS = {
+
+
+        "hydraulic_calculation":
+
+        [
+            "расход",
+            "напор",
+            "давление",
+            "гидравличес",
+            "диаметр",
+            "потери",
+            "формула",
+        ],
+
+
+        "pipe_selection":
+
+        [
+            "диаметр",
+            "труба",
+            "материал",
+            "скорость",
+        ],
+
+
+        "normative_requirement":
+
+        [
+            "требования",
+            "должен",
+            "следует",
+            "нормы",
+        ],
+
+    }
+
+
+
+    # --------------------------------------------------
+    # Validation
+    # --------------------------------------------------
 
 
     def validate(
         self,
-        question: str,
-        results: List[Dict],
+        results: List[dict],
+        intent=None,
     ) -> EvidenceResult:
         """
-        Validate FAISS retrieval results.
-
-        Args:
-
-            question:
-                User question
-
-            results:
-                Retriever output
-
-
-        Returns:
-
-            EvidenceResult
+        Validate retrieved fragments.
         """
 
 
         accepted = []
+
         rejected = []
+
+
+        confidence_values = []
 
 
 
         for item in results:
 
 
-            score = item.get(
-                "score",
-                0
+            text = (
+                item.get(
+                    "text",
+                    ""
+                )
+                .lower()
             )
 
 
-            text = item.get(
-                "text",
-                ""
-            )
-
-
-            document = item.get(
-                "document",
-                ""
+            score = float(
+                item.get(
+                    "score",
+                    0
+                )
             )
 
 
 
-            reason = None
+            relevance = self._calculate_relevance(
+                text,
+                intent
+            )
 
 
 
-            # -----------------------------------------
-            # Score validation
-            # -----------------------------------------
-
-            if score < self.min_score:
-
-                reason = (
-                    f"low similarity score "
-                    f"{score:.3f}"
-                )
-
-
-            # -----------------------------------------
-            # Empty text
-            # -----------------------------------------
-
-            if not text.strip():
-
-                reason = (
-                    "empty evidence text"
-                )
-
-
-            # -----------------------------------------
-            # Document validation
-            # -----------------------------------------
-
-            if not document:
-
-                reason = (
-                    "unknown document"
-                )
+            final_score = (
+                score * 0.6
+                +
+                relevance * 0.4
+            )
 
 
 
-            if reason:
+            item["evidence_score"] = round(
+                final_score,
+                3
+            )
 
 
-                rejected.append(
-                    {
-                        "item": item,
-                        "reason": reason
-                    }
-                )
 
-            else:
+            if final_score >= self.min_score:
 
                 accepted.append(
                     item
                 )
 
+                confidence_values.append(
+                    final_score
+                )
 
 
-        confidence = (
-            self._calculate_confidence(
-                accepted
+            else:
+
+                rejected.append(
+                    item
+                )
+
+
+
+        if confidence_values:
+
+            confidence = sum(
+                confidence_values
+            ) / len(
+                confidence_values
             )
-        )
+
+        else:
+
+            confidence = 0.0
+
 
 
         sufficient = (
-            len(accepted)
-            >= self.min_results
+            len(accepted) > 0
+            and
+            confidence >= self.min_confidence
         )
 
 
 
         return EvidenceResult(
 
+            confidence=round(
+                confidence,
+                3
+            ),
+
             accepted=accepted,
 
             rejected=rejected,
-
-            confidence=confidence,
 
             sufficient=sufficient
 
@@ -204,140 +277,180 @@ class EvidenceValidator:
 
 
 
-    def _calculate_confidence(
+    # --------------------------------------------------
+    # Relevance calculation
+    # --------------------------------------------------
+
+
+    def _calculate_relevance(
         self,
-        accepted: list
+        text: str,
+        intent
     ) -> float:
         """
-        Calculate evidence confidence.
+        Calculate engineering relevance.
         """
 
 
-        if not accepted:
+        if intent is None:
 
-            return 0.0
+            return 0.5
 
 
 
-        scores = [
+        score = 0.0
 
-            item.get(
-                "score",
-                0
+
+
+        # system match
+
+        system_words = (
+            self.DOMAIN_KEYWORDS
+            .get(
+                intent.system,
+                []
             )
-
-            for item in accepted
-
-        ]
+        )
 
 
-        return round(
-            sum(scores)
-            /
-            len(scores),
+        system_hits = sum(
 
-            3
+            1
+
+            for word in system_words
+
+            if word in text
 
         )
 
 
 
-def print_validation(
-    result: EvidenceResult
-):
+        if system_hits:
 
-    print("=" * 70)
-    print("EVIDENCE VALIDATION")
-    print("=" * 70)
-
-
-    print(
-        "Accepted:",
-        len(result.accepted)
-    )
+            score += min(
+                system_hits * 0.12,
+                0.5
+            )
 
 
-    print(
-        "Rejected:",
-        len(result.rejected)
-    )
+
+        # topic match
+
+        topic_words = (
+            self.TOPIC_KEYWORDS
+            .get(
+                intent.topic,
+                []
+            )
+        )
 
 
-    print(
-        "Confidence:",
-        result.confidence
-    )
+        topic_hits = sum(
+
+            1
+
+            for word in topic_words
+
+            if word in text
+
+        )
 
 
-    print(
-        "Sufficient:",
-        result.sufficient
-    )
 
+        if topic_hits:
+
+            score += min(
+                topic_hits * 0.08,
+                0.4
+            )
+
+
+
+        return min(
+            score,
+            1.0
+        )
+
+
+
+# --------------------------------------------------
+# Demo
+# --------------------------------------------------
 
 
 def demo():
 
-    from app.rag.retriever import Retriever
+    print("=" * 70)
 
-
-    retriever = Retriever()
-
-
-    question = (
-        "Как определяется "
-        "максимальный расчетный "
-        "расход воды?"
+    print(
+        "VKS Expert AI"
     )
 
-
-    results = retriever.search(
-        question,
-        top_k=5
+    print(
+        "Evidence Validator v1.1"
     )
+
+    print("=" * 70)
+
+
+
+    sample = [
+
+        {
+            "page": 27,
+            "score": 0.81,
+            "text":
+            """
+            Максимальный расчетный расход воды
+            определяется по формуле.
+            Гидравлический расчет внутренних
+            систем водоснабжения.
+            """
+        },
+
+
+        {
+            "page": 35,
+            "score": 0.74,
+            "text":
+            """
+            Канализационный стояк.
+            Гидравлический затвор.
+            """
+        }
+
+    ]
+
 
 
     validator = EvidenceValidator()
 
 
-    validation = validator.validate(
-        question,
-        results
+
+    result = validator.validate(
+        sample
     )
 
 
-    print_validation(
-        validation
+
+    print(
+        "confidence:",
+        result.confidence
     )
 
+    print(
+        "accepted:",
+        len(result.accepted)
+    )
 
-    print("\nVALID SOURCES:")
-
-
-    for item in validation.accepted:
-
-        print(
-            item["document"],
-            "page=",
-            item["page"],
-            "score=",
-            item["score"]
-        )
+    print(
+        "rejected:",
+        len(result.rejected)
+    )
 
 
 
 if __name__ == "__main__":
-
-
-    print("=" * 70)
-    print(
-        "VKS Expert AI"
-    )
-    print(
-        "Evidence Validator v1"
-    )
-    print("=" * 70)
-
 
     demo()
     

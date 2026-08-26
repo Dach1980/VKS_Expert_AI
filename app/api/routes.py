@@ -27,7 +27,10 @@ Technical Answer
 
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
 
+from app.api.dependencies import get_rag_pipeline
+from app.rag.rag_pipeline import RAGPipeline
 
 from app.api.schemas import (
     QuestionRequest,
@@ -38,31 +41,12 @@ from app.api.schemas import (
 )
 
 
-from app.rag.rag_pipeline import RAGPipeline
-
-
-
 # ==========================================================
 # Router
 # ==========================================================
 
 
 router = APIRouter()
-
-
-
-# ==========================================================
-# Pipeline initialization
-# ==========================================================
-
-
-print("Loading RAG pipeline...")
-
-
-pipeline = RAGPipeline()
-
-
-print("RAG pipeline loaded")
 
 
 
@@ -107,9 +91,9 @@ def health():
     response_model=AnswerResponse
 )
 def ask(
-    request: QuestionRequest
+    request: QuestionRequest,
+    pipeline: RAGPipeline = Depends(get_rag_pipeline)
 ):
-
     try:
 
         result = pipeline.ask(

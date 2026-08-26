@@ -145,8 +145,8 @@ class RAGPipeline:
 
         evidence = (
             self.validator.validate(
-                question,
-                results
+                results,
+                intent
             )
         )
 
@@ -376,4 +376,3 @@ score={item['score']}
 if __name__ == "__main__":
 
     demo()
-    
