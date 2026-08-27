@@ -137,19 +137,107 @@ class RAGPipeline:
             )
         )
 
+        print("\n===== RETRIEVER RESULTS =====")
 
+        for r in results:
+
+            print(
+                "PAGE:",
+                r.get("page")
+            )
+
+            print(
+                "TYPE:",
+                r.get("type")
+            )
+
+            print(
+                "SCORE:",
+                r.get("score")
+            )
+
+            print(
+                "CONTENT:",
+                str(r.get("content"))[:300]
+            )
+
+            print("-"*50)
 
         # --------------------------------------------------
         # 4. Evidence validation
         # --------------------------------------------------
 
+        # Convert Retriever output
+        # into EvidenceValidator format
+
+        validation_results = []
+
+
+        for r in results:
+
+            item = r.get(
+                "item",
+                {}
+            )
+
+            content = item.get(
+                "content",
+                {}
+            )
+
+
+            validation_results.append(
+
+                {
+
+                    "text":
+                        content.get(
+                            "text",
+                            ""
+                        ),
+
+
+                    "score":
+                        r.get(
+                            "score",
+                            0.0
+                        ),
+
+
+                    "page":
+                        item.get(
+                            "page"
+                        ),
+
+
+                    "document":
+                        item.get(
+                            "document"
+                        ),
+
+
+                    "type":
+                        item.get(
+                            "type"
+                        ),
+
+
+                    "content":
+                        content
+
+                }
+
+            )
+
+
+
         evidence = (
             self.validator.validate(
-                enhanced_query,
-                top_k=top_k,
+                validation_results,
                 intent=intent
             )
         )
+
 
 
         print("\nEVIDENCE:")
@@ -171,10 +259,42 @@ class RAGPipeline:
 
 
 
-        validated_results = (
-            evidence.accepted
-        )
+        # Restore ContextBuilder format
 
+        validated_results = [
+
+            {
+
+                "document":
+                    x.get(
+                        "document"
+                    ),
+
+                "page":
+                    x.get(
+                        "page"
+                    ),
+
+                "type":
+                    x.get(
+                        "type"
+                    ),
+
+                "content":
+                    x.get(
+                        "content"
+                    ),
+
+                "score":
+                    x.get(
+                        "score"
+                    )
+
+            }
+
+            for x in evidence.accepted
+
+        ]
 
 
         # --------------------------------------------------
@@ -183,8 +303,7 @@ class RAGPipeline:
 
         context = (
             self.context_builder.build(
-                query=question,
-                results=validated_results,
+                validated_results
             )
         )
 
@@ -266,6 +385,10 @@ VKS Expert AI.
         # --------------------------------------------------
         # 7. LLM generation
         # --------------------------------------------------
+
+        print("\n===== CONTEXT SENT TO LLM =====")
+        print(context)
+        print("===============================")
 
         answer = (
             self.llm.chat(

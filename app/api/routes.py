@@ -186,9 +186,11 @@ def ask(
 
         )
 
-
     except Exception as e:
 
+        import traceback
+
+        traceback.print_exc()
 
         raise HTTPException(
 
@@ -197,4 +199,4 @@ def ask(
             detail=str(e)
 
         )
-    
+        

@@ -161,6 +161,7 @@ class EvidenceValidator:
         self,
         results: List[dict],
         intent=None,
+        top_k: int = 5,
     ) -> EvidenceResult:
         """
         Validate retrieved fragments.
@@ -179,13 +180,24 @@ class EvidenceValidator:
         for item in results:
 
 
-            text = (
-                item.get(
+            content = item.get(
+                "content",
+                {}
+            )
+
+
+            if isinstance(content, dict):
+
+                text = content.get(
                     "text",
                     ""
                 )
-                .lower()
-            )
+            else:
+
+                text = str(content)
+
+
+            text = text.lower()
 
 
             score = float(
@@ -204,10 +216,21 @@ class EvidenceValidator:
 
 
 
+            formula_bonus = 0
+
+
+            if item.get("type") == "formula_context":
+
+                formula_bonus = 0.25
+
+
+
             final_score = (
-                score * 0.6
+                score * 0.55
                 +
-                relevance * 0.4
+                relevance * 0.35
+                +
+                formula_bonus
             )
 
 
@@ -258,7 +281,18 @@ class EvidenceValidator:
             confidence >= self.min_confidence
         )
 
+        # --------------------------------------------------
+        # Limit accepted evidence
+        # --------------------------------------------------
 
+        accepted = sorted(
+            accepted,
+            key=lambda x: x.get(
+                "evidence_score",
+                0
+            ),
+            reverse=True
+        )[:top_k]
 
         return EvidenceResult(
 

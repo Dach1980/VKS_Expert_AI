@@ -1,47 +1,54 @@
 """
 VKS Expert AI
 
-Document Chunk Builder v6
+Document Chunk Builder v7
 
-Назначение:
+Formula Context Merge
 
-Создание RAG chunks из нормативного документа.
+Purpose:
 
-Поддерживает:
-
-- текстовые блоки
-- формулы UniMERNet
-- контекст формул
+Convert enriched PDF pages into RAG chunks.
 
 Pipeline:
 
-PDF
+SP PDF
  |
- PyMuPDF
+PyMuPDF
  |
- pages/*.json
+Enriched pages
  |
- enriched pages
+Text blocks
  |
- DocumentChunkBuilder
+Formula recognition
  |
- document_chunks/all_chunks.json
+Formula Context Merge
  |
- Embeddings
- |
- FAISS
+all_chunks.json
 
 
-Version:
+Supports:
 
-v6
+- text chunks
+- formula_context chunks
+
+
+Formula context:
+
+TEXT BEFORE
++
+FORMULA
++
+TEXT AFTER
+
 """
 
 
+
 import json
+
 from pathlib import Path
+
 from datetime import datetime
-from collections import Counter
 
 
 
@@ -51,21 +58,26 @@ from collections import Counter
 
 
 INPUT_DIR = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\index\SP_30.13330\enriched"
+    r"knowledge\index\SP_30.13330\enriched"
 )
 
 
 OUTPUT_DIR = (
-    r"D:\Projects\VKS_Expert_AI"
-    r"\knowledge\index\SP_30.13330"
-    r"\document_chunks"
+    r"knowledge\index\SP_30.13330\document_chunks"
 )
 
 
-DOCUMENT = "СП 30.13330.2020"
 
-VERSION = "base"
+DOCUMENT = (
+    "СП 30.13330.2020"
+)
+
+
+
+VERSION = (
+    "base"
+)
+
 
 
 
@@ -74,7 +86,9 @@ VERSION = "base"
 # ============================================================
 
 
+
 class DocumentChunkBuilder:
+
 
 
     def __init__(
@@ -84,18 +98,20 @@ class DocumentChunkBuilder:
     ):
 
         self.document = document
+
         self.version = version
 
 
 
-    # --------------------------------------------------------
-    # LOAD PAGE
-    # --------------------------------------------------------
+
+    # ---------------------------------------------------------
+
 
     def load_page(
         self,
         file
     ):
+
 
         with open(
             file,
@@ -103,13 +119,14 @@ class DocumentChunkBuilder:
             encoding="utf-8"
         ) as f:
 
+
             return json.load(f)
 
 
 
-    # --------------------------------------------------------
-    # TEXT CHUNK
-    # --------------------------------------------------------
+
+    # ---------------------------------------------------------
+
 
     def build_text_chunk(
         self,
@@ -118,12 +135,15 @@ class DocumentChunkBuilder:
         index
     ):
 
+
         text = (
+
             block.get(
                 "text",
                 ""
             )
             .strip()
+
         )
 
 
@@ -133,232 +153,12 @@ class DocumentChunkBuilder:
 
 
 
-        return {
+        chunk_id = (
 
-            "chunk_id":
-                f"{DOCUMENT}-page-{page:03}-text-{index:03}",
+            f"{self.document}"
+            f"-page-{page:03}"
+            f"-text-{index:03}"
 
-
-            "type":
-                "text",
-
-
-            "document":
-                self.document,
-
-
-            "version":
-                self.version,
-
-
-            "page":
-                page,
-
-
-            "content":
-                {
-                    "text": text
-                },
-
-
-            "embedding_text":
-
-                (
-                    f"Документ: {self.document}. "
-                    f"Версия: {self.version}. "
-                    f"Страница: {page}. "
-                    f"Тип: нормативный текст. "
-                    f"Текст: {text}"
-                ),
-
-
-            "metadata":
-                {
-                    "source": "SP_30.13330",
-                    "created":
-                        datetime.now()
-                        .isoformat()
-                }
-
-        }
-
-
-
-    # --------------------------------------------------------
-    # FIND FORMULA CONTEXT
-    # --------------------------------------------------------
-
-    def find_formula_context(
-        self,
-        blocks,
-        formula
-    ):
-
-
-        formula_bbox = formula.get(
-            "bbox"
-        )
-
-
-        if not formula_bbox:
-
-            return "", ""
-
-
-
-        formula_y = formula_bbox[1]
-
-
-        before = ""
-
-        after = ""
-
-
-        candidates = []
-
-
-        for block in blocks:
-
-
-            text = (
-                block.get(
-                    "text",
-                    ""
-                )
-                .strip()
-            )
-
-
-            if not text:
-
-                continue
-
-
-
-            bbox = block.get(
-                "bbox"
-            )
-
-
-            if not bbox:
-
-                continue
-
-
-
-            y = bbox[1]
-
-
-            distance = abs(
-                y - formula_y
-            )
-
-
-            candidates.append(
-                (
-                    distance,
-                    y,
-                    text
-                )
-            )
-
-
-
-        candidates.sort(
-            key=lambda x: x[0]
-        )
-
-
-
-        for _, y, text in candidates:
-
-
-            if y < formula_y:
-
-                before = text
-
-                break
-
-
-
-        for _, y, text in candidates:
-
-
-            if y > formula_y:
-
-                after = text
-
-                break
-
-
-
-        return before, after
-
-
-
-    # --------------------------------------------------------
-    # FORMULA CHUNK
-    # --------------------------------------------------------
-
-    def build_formula_chunk(
-        self,
-        page,
-        formula,
-        blocks,
-        index
-    ):
-
-
-        latex = (
-            formula
-            .get(
-                "recognition",
-                {}
-            )
-            .get(
-                "latex",
-                ""
-            )
-        )
-
-
-        context = (
-            formula
-            .get(
-                "context",
-                {}
-            )
-        )
-
-
-        if isinstance(
-            context,
-            dict
-        ):
-
-            context_text = (
-                context
-                .get(
-                    "nearest_text_block",
-                    {}
-                )
-                .get(
-                    "text",
-                    ""
-                )
-            )
-
-        else:
-
-            context_text = context
-
-
-
-        before, after = (
-            self.find_formula_context(
-                blocks,
-                formula
-            )
         )
 
 
@@ -371,17 +171,9 @@ class DocumentChunkBuilder:
 
             f"Страница: {page}. "
 
-            f"Раздел: определение расчетных расходов воды. "
+            f"Тип: нормативный текст. "
 
-            f"Тип: нормативная формула. "
-
-            f"Контекст перед формулой: {before}. "
-
-            f"Описание формулы: {context_text}. "
-
-            f"Контекст после формулы: {after}. "
-
-            f"Формула: {latex}"
+            f"Текст: {text}"
 
         )
 
@@ -389,12 +181,13 @@ class DocumentChunkBuilder:
 
         return {
 
+
             "chunk_id":
-                f"{DOCUMENT}-page-{page:03}-formula-{index:03}",
+                chunk_id,
 
 
             "type":
-                "formula",
+                "text",
 
 
             "document":
@@ -412,23 +205,16 @@ class DocumentChunkBuilder:
             "content":
                 {
 
-                    "context_before":
-                        before,
-
-                    "context":
-                        context_text,
-
-                    "context_after":
-                        after,
-
-                    "latex":
-                        latex
+                    "text":
+                        text
 
                 },
 
 
+
             "embedding_text":
                 embedding_text,
+
 
 
             "metadata":
@@ -437,19 +223,392 @@ class DocumentChunkBuilder:
                     "source":
                         "SP_30.13330",
 
+
                     "created":
                         datetime.now()
                         .isoformat()
 
                 }
 
+
         }
 
 
 
-    # --------------------------------------------------------
-    # PAGE PROCESSING
-    # --------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # FORMULA CONTEXT
+    # ---------------------------------------------------------
+
+
+    def find_nearest_text(
+        self,
+        formula,
+        blocks
+    ):
+
+
+        context_before = ""
+
+        context_after = ""
+
+
+
+        if not blocks:
+
+            return (
+                "",
+                ""
+            )
+
+
+
+        formula_y = (
+
+            formula
+            .get(
+                "bbox",
+                [
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            )[1]
+
+        )
+
+
+
+        before = []
+
+        after = []
+
+
+
+        for block in blocks:
+
+
+            bbox = block.get(
+                "bbox",
+                [
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            )
+
+
+            text = block.get(
+                "text",
+                ""
+            ).strip()
+
+
+
+            if not text:
+
+                continue
+
+
+
+            y = bbox[3]
+
+
+
+            if y <= formula_y:
+
+                before.append(
+                    (
+                        y,
+                        text
+                    )
+                )
+
+
+            else:
+
+                after.append(
+                    (
+                        y,
+                        text
+                    )
+                )
+
+
+
+        before.sort(
+            key=lambda x:x[0],
+            reverse=True
+        )
+
+
+        after.sort(
+            key=lambda x:x[0]
+        )
+
+
+
+        if before:
+
+            context_before = " ".join(
+                x[1]
+                for x in before[:3]
+            )
+
+
+
+        if after:
+
+            context_after = " ".join(
+                x[1]
+                for x in after[:2]
+            )
+
+
+
+        return (
+
+            context_before,
+
+            context_after
+
+        )
+
+
+
+
+    # ---------------------------------------------------------
+
+
+    def build_formula_context_chunk(
+        self,
+        page,
+        formula,
+        blocks,
+        index
+    ):
+
+
+
+        recognition = (
+
+            formula
+            .get(
+                "recognition",
+                {}
+            )
+
+        )
+
+
+
+        latex = (
+
+            recognition
+            .get(
+                "latex",
+                ""
+            )
+
+        )
+
+
+
+        before, after = self.find_nearest_text(
+
+            formula,
+
+            blocks
+
+        )
+
+
+
+        if not latex:
+
+            return None
+
+
+
+
+        chunk_id = (
+
+            f"{self.document}"
+            f"-page-{page:03}"
+            f"-formula-context-{index:03}"
+
+        )
+
+
+
+        embedding_text = (
+
+            f"Документ: {self.document}. "
+
+            f"Версия: {self.version}. "
+
+            f"Страница: {page}. "
+
+            f"Тип: нормативная формула. "
+
+            f"Область: ВК. "
+
+            f"Система: внутренний водопровод. "
+
+            f"Тема: гидравлический расчет. "
+
+            f"Нормативное описание: "
+
+            f"{before}. "
+
+            f"Формула: "
+
+            f"{latex}. "
+
+            f"Дополнительный текст: "
+
+            f"{after}"
+
+        )
+
+
+
+        return {
+
+
+
+            "chunk_id":
+
+                chunk_id,
+
+
+
+            "type":
+
+                "formula_context",
+
+
+
+
+            "document":
+
+                self.document,
+
+
+
+            "version":
+
+                self.version,
+
+
+
+            "page":
+
+                page,
+
+
+
+            "content":
+            {
+
+                "text":
+                    (
+                        before
+                        +
+                        "\n\nФормула: "
+                        +
+                        latex
+                        +
+                        "\n\n"
+                        +
+                        after
+                    ),
+
+                "formula":
+                    latex,
+
+                "before":
+                    before,
+
+                "after":
+                    after,
+
+
+                "engineering_context":
+                {
+
+                    "discipline":
+                        "ВК",
+
+                    "system":
+                        "Внутренний водопровод",
+
+                    "purpose":
+                        before,
+
+                    "calculation_type":
+                        "Гидравлический расчет"
+
+                }
+
+            },
+
+
+
+
+            "embedding_text":
+
+                embedding_text,
+
+
+
+
+        "metadata":
+
+        {
+
+            "source":
+
+                "SP_30.13330",
+
+
+            "formula":
+
+                True,
+
+
+            "discipline":
+
+                "ВК",
+
+
+            "system":
+
+                "internal_water_supply",
+
+
+            "topic":
+
+                "hydraulic_calculation",
+
+
+            "created":
+
+                datetime.now()
+                .isoformat()
+
+        }
+
+
+        }
+
+
+
+
+    # ---------------------------------------------------------
+
 
     def process_page(
         self,
@@ -459,41 +618,42 @@ class DocumentChunkBuilder:
 
         page = data["page"]
 
+
+
         chunks = []
 
 
 
-        blocks = (
-            data.get(
-                "text_blocks",
-                []
-            )
+        blocks = data.get(
+            "text_blocks",
+            []
         )
-
-
-        if not blocks:
-
-            blocks = (
-                data.get(
-                    "blocks",
-                    []
-                )
-            )
 
 
 
         # TEXT
 
+
         for i, block in enumerate(
+
             blocks,
+
             start=1
+
         ):
 
+
+
             chunk = self.build_text_chunk(
+
                 page,
+
                 block,
+
                 i
+
             )
+
 
 
             if chunk:
@@ -504,37 +664,46 @@ class DocumentChunkBuilder:
 
 
 
-        # FORMULAS
 
-        formulas = (
-            data.get(
-                "formulas",
-                []
-            )
+        # FORMULA CONTEXT
+
+
+        formulas = data.get(
+            "formulas",
+            []
         )
 
 
+
         for i, formula in enumerate(
+
             formulas,
+
             start=1
+
         ):
 
 
-            chunks.append(
 
-                self.build_formula_chunk(
+            chunk = self.build_formula_context_chunk(
 
-                    page,
+                page,
 
-                    formula,
+                formula,
 
-                    blocks,
+                blocks,
 
-                    i
-
-                )
+                i
 
             )
+
+
+
+            if chunk:
+
+                chunks.append(
+                    chunk
+                )
 
 
 
@@ -542,9 +711,10 @@ class DocumentChunkBuilder:
 
 
 
-    # --------------------------------------------------------
-    # ALL PAGES
-    # --------------------------------------------------------
+
+
+    # ---------------------------------------------------------
+
 
     def process_all_pages(
         self,
@@ -552,14 +722,17 @@ class DocumentChunkBuilder:
     ):
 
 
-        all_chunks = []
+        result = []
+
 
 
         files = sorted(
+
             Path(input_dir)
             .glob(
                 "page_*_enriched.json"
             )
+
         )
 
 
@@ -574,65 +747,78 @@ class DocumentChunkBuilder:
         for file in files:
 
 
+
             print(
                 "Processing:",
                 file.name
             )
 
 
-            page = self.load_page(
+
+            data = self.load_page(
                 file
             )
 
 
-            chunks = self.process_page(
-                page
+
+            result.extend(
+
+                self.process_page(
+                    data
+                )
+
             )
 
 
-            all_chunks.extend(
-                chunks
-            )
+
+        return result
 
 
 
-        return all_chunks
 
+    # ---------------------------------------------------------
 
-
-    # --------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------
 
     def save(
         self,
-        chunks
+        chunks,
+        output_dir
     ):
 
 
         output = Path(
-            OUTPUT_DIR
+            output_dir
         )
 
 
         output.mkdir(
+
             parents=True,
+
             exist_ok=True
+
         )
 
 
 
         file = (
-            output /
+
+            output
+            /
             "all_chunks.json"
+
         )
 
 
 
         with open(
+
             file,
+
             "w",
+
             encoding="utf-8"
+
         ) as f:
 
 
@@ -663,19 +849,6 @@ class DocumentChunkBuilder:
         )
 
 
-        print()
-
-        print(
-            "Chunk statistics:"
-        )
-
-        print(
-            Counter(
-                x["type"]
-                for x in chunks
-            )
-        )
-
 
 
 # ============================================================
@@ -683,12 +856,14 @@ class DocumentChunkBuilder:
 # ============================================================
 
 
+
 def main():
 
 
     print(
-        "Starting Document Chunk Builder v6..."
+        "Starting Document Chunk Builder v7..."
     )
+
 
 
     builder = DocumentChunkBuilder(
@@ -700,6 +875,7 @@ def main():
     )
 
 
+
     chunks = builder.process_all_pages(
 
         INPUT_DIR
@@ -707,10 +883,36 @@ def main():
     )
 
 
+
     builder.save(
-        chunks
+
+        chunks,
+
+        OUTPUT_DIR
+
     )
 
+
+
+    from collections import Counter
+
+
+
+    print()
+
+    print(
+        "Chunk statistics:"
+    )
+
+    print(
+        Counter(
+            x["type"]
+            for x in chunks
+        )
+    )
+
+
+    print()
 
     print(
         "DONE"
@@ -718,7 +920,7 @@ def main():
 
 
 
+
 if __name__ == "__main__":
 
     main()
-    

@@ -743,4 +743,137 @@ def main():
 if __name__ == "__main__":
 
     main()
-    
+
+# ============================================================
+# API RETRIEVER
+# ============================================================
+
+
+class Retriever:
+
+
+    def __init__(self):
+
+        print(
+            "Initializing Retriever..."
+        )
+
+
+        self.index = load_index()
+
+
+        self.metadata = load_metadata()
+
+
+        print(
+            "Initializing embedding client..."
+        )
+
+
+        self.client = EmbeddingClient()
+
+
+        self.formula_count = len(
+            [
+                x for x in self.metadata
+                if x.get("type")
+                ==
+                "formula_context"
+            ]
+        )
+
+
+        print(
+            "Formula contexts:",
+            self.formula_count
+        )
+
+
+        print(
+            "Retriever ready"
+        )
+
+
+
+    def search(
+        self,
+        query,
+        top_k=10
+    ):
+
+
+        formula_mode = is_formula_query(
+            query
+        )
+
+
+        faiss_results = search_faiss(
+            query,
+            self.index,
+            self.metadata,
+            self.client
+        )
+
+
+        formula_results = search_formula(
+            query,
+            self.metadata
+        )
+
+
+        results = merge_results(
+            faiss_results,
+            formula_results,
+            formula_mode
+        )
+
+
+        output = []
+
+
+        for r in results[:top_k]:
+
+            item = r["item"]
+
+
+            output.append({
+
+                "document":
+                    item.get(
+                        "document",
+                        DOCUMENT
+                    ),
+
+                "page":
+                    item.get(
+                        "page",
+                        0
+                    ),
+
+                "type":
+                    item.get(
+                        "type",
+                        "text"
+                    ),
+
+                "source":
+                    r.get(
+                        "source"
+                    ),
+
+                "score":
+                    r.get(
+                        "score",
+                        0
+                    ),
+
+                "content":
+                    item.get(
+                        "content",
+                        ""
+                    )
+
+            })
+
+
+        return output
