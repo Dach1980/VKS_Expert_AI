@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Диагностика LM Studio</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a1a1a;
+            margin-bottom: 20px;
+        }
+        .test-item {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+        }
+        .test-item.success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .test-item.error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .test-item.pending {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Диагностика подключения к LM Studio</h1>
+        
+        <div class="test-item pending" id="test1">
+            <span class="status-icon">⏳</span>
+            <strong>Тест 1: Проверка доступности сервера</strong>
+            <p>Проверяем http://127.0.0.1:1234/v1/models</p>
+            <div id="result1"></div>
+        </div>
+
+        <div class="test-item pending" id="test2">
+            <span class="status-icon">⏳</span>
+            <strong>Тест 2: Отправка тестового запроса</strong>
+            <p>Отправляем простой запрос к модели</p>
+            <div id="result2"></div>
+        </div>
+
+        <div class="test-item pending" id="test3">
+            <span class="status-icon">⏳</span>
+            <strong>Тест 3: Проверка CORS</strong>
+            <p>Проверяем, разрешены ли кросс-доменные запросы</p>
+            <div id="result3"></div>
+        </div>
+
+        <button onclick="runDiagnostics()">🚀 Запустить диагностику</button>
+        <button onclick="window.location.href='knowledge-base-direct.html'">📚 Открыть базу знаний</button>
+    </div>
+
+    <script>
+        const LMSTUDIO_URL = 'http://127.0.0.1:1234/v1';
+
+        async function runDiagnostics() {
+            // Тест 1: Проверка доступности
+            try {
+                const response = await fetch(`${LMSTUDIO_URL}/models`);
+                const data = await response.json();
+                document.getElementById('test1').className = 'test-item success';
+                document.getElementById('test1').querySelector('.status-icon').textContent = '✅';
+                document.getElementById('result1').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('test1').className = 'test-item error';
+                document.getElementById('test1').querySelector('.status-icon').textContent = '❌';
+                document.getElementById('result1').innerHTML = `<p><strong>Ошибка:</strong> ${error.message}</p>`;
+            }
+
+            // Тест 2: Отправка запроса
+            try {
+                const response = await fetch(`${LMSTUDIO_URL}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'local-model',
+                        messages: [
+                            { role: 'user', content: 'Привет! Это тест.' }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 50
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('test2').className = 'test-item success';
+                document.getElementById('test2').querySelector('.status-icon').textContent = '✅';
+                document.getElementById('result2').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('test2').className = 'test-item error';
+                document.getElementById('test2').querySelector('.status-icon').textContent = '❌';
+                document.getElementById('result2').innerHTML = `<p><strong>Ошибка:</strong> ${error.message}</p>`;
+            }
+
+            // Тест 3: CORS
+            try {
+                const response = await fetch(`${LMSTUDIO_URL}/models`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                document.getElementById('test3').className = 'test-item success';
+                document.getElementById('test3').querySelector('.status-icon').textContent = '✅';
+                document.getElementById('result3').innerHTML = `<p>CORS разрешён ✅</p>`;
+            } catch (error) {
+                document.getElementById('test3').className = 'test-item error';
+                document.getElementById('test3').querySelector('.status-icon').textContent = '❌';
+                document.getElementById('result3').innerHTML = `<p><strong>CORS ошибка:</strong> ${error.message}</p><p>LM Studio блокирует запросы из браузера. Нужно включить CORS в настройках LM Studio.</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
