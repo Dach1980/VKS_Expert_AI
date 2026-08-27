@@ -1,179 +1,136 @@
 """
 VKS Expert AI
-Context Builder v1
+Context Builder v1.0
 
-Purpose:
-Prepare retrieved FAISS results for LLM prompt.
-
-Pipeline:
-
-Question
-    ↓
-Retriever
-    ↓
-Retrieved records
-    ↓
-Context Builder
-    ↓
-Structured LLM context
+Builds LLM-ready context from retriever results.
 """
 
-
-from pathlib import Path
-from datetime import datetime
+from typing import List, Dict
 
 
 class ContextBuilder:
-    """
-    Builds clean context from Retriever results.
-    """
 
     def __init__(
         self,
-        document="СП 30.13330.2020",
-        max_chars=12000,
+        max_context_chars: int = 12000
     ):
-        self.document = document
-        self.max_chars = max_chars
+        self.max_context_chars = max_context_chars
 
 
     def build(
         self,
-        query: str,
-        results: list,
+        results: List[Dict]
     ) -> str:
-        """
-        Build LLM-ready context.
 
-        Args:
-            query:
-                User question
+        blocks = []
 
-            results:
-                Retriever output list
+        for r in results:
 
-        Returns:
-            formatted context string
-        """
+            source = r.get(
+                "source",
+                "unknown"
+            )
 
-        context_parts = []
-
-        header = f"""
-DOCUMENT:
-{self.document}
-
-QUERY:
-{query}
-
-RELEVANT CONTEXT:
-""".strip()
-
-        context_parts.append(header)
-
-
-        current_length = len(header)
-
-
-        for item in results:
-
-            page = item.get(
+            page = r.get(
                 "page",
-                "?"
+                "-"
             )
 
-            score = item.get(
-                "score",
-                0
-            )
-
-            text = item.get(
-                "text",
+            doc = r.get(
+                "document",
                 ""
             )
 
-
-            if not text.strip():
-                continue
-
-
-            block = (
-                f"\n\n"
-                f"=== Page {page} "
-                f"(score={score:.4f}) ===\n\n"
-                f"{text.strip()}"
+            chunk_type = r.get(
+                "type",
+                "text"
             )
 
 
-            if (
-                current_length
-                + len(block)
-                > self.max_chars
-            ):
-                break
+            if chunk_type == "formula_context":
+
+                blocks.append(
+                    self._build_formula_block(r)
+                )
+
+            else:
+
+                blocks.append(
+                    self._build_text_block(r)
+                )
 
 
-            context_parts.append(block)
+        context = "\n\n".join(blocks)
 
-            current_length += len(block)
-
-
-        return "".join(context_parts)
+        return context[:self.max_context_chars]
 
 
+    def _build_formula_block(
+        self,
+        item: Dict
+    ) -> str:
 
-def print_context(context: str):
-
-    print("=" * 70)
-    print("GENERATED CONTEXT")
-    print("=" * 70)
-    print(context)
-    print("=" * 70)
-
-
-
-def demo():
-
-    """
-    Small standalone test.
-    """
-
-    from app.rag.retriever import Retriever
+        content = item.get(
+            "content",
+            {}
+        )
 
 
-    retriever = Retriever()
+        text = content.get(
+            "text",
+            ""
+        )
+
+        formula = content.get(
+            "formula",
+            ""
+        )
+
+        after = content.get(
+            "after",
+            ""
+        )
 
 
-    query = (
-        "расчетный расход воды "
-        "внутреннего водоснабжения"
-    )
+        return f"""
+Нормативная формула.
+
+Страница:
+{item.get('page')}
+
+Контекст:
+
+{text}
 
 
-    results = retriever.search(
-        query=query,
-        top_k=5,
-    )
+Формула:
+
+$$
+{formula}
+$$
 
 
-    builder = ContextBuilder()
+Продолжение:
+
+{after}
+"""
 
 
-    context = builder.build(
-        query=query,
-        results=results,
-    )
+    def _build_text_block(
+        self,
+        item: Dict
+    ) -> str:
+
+        return f"""
+Документ:
+{item.get('document')}
+
+Страница:
+{item.get('page')}
 
 
-    print_context(context)
+Текст:
 
-
-
-if __name__ == "__main__":
-
-    print("=" * 70)
-    print("VKS Expert AI")
-    print("Context Builder v1")
-    print("=" * 70)
-
-    demo()
+{item.get('content','')}
+"""
     
