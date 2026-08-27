@@ -1,39 +1,53 @@
 """
 VKS Expert AI
 
-Retriever v1.7
+Retriever v1.14
 
-Hybrid RAG Retriever
+Normative Formula Intent Retrieval
+
+Features:
+
+- FAISS semantic retrieval
+- Formula context retrieval
+- Normative intent detection
+- Formula priority ranking
+- Formula rendering
+- Unified result output
+
 
 Pipeline:
 
 Query
  |
-Embedding
+ v
+Intent Detection
  |
-FAISS search
+ +----------------+
+ |                |
+ v                v
+FAISS        Formula Search
  |
-Candidate reranking
+ +----------------+
  |
-Hybrid score
+ v
+Ranking
  |
+ v
+Context Expansion
+ |
+ v
 Results
 
-
-Ranking:
-
-FAISS similarity       65%
-Keyword matching       20%
-Formula boost          10%
-Section boost           5%
 
 """
 
 
 from pathlib import Path
 import json
-import numpy as np
+import re
+
 import faiss
+import numpy as np
 
 
 from app.rag.embedding_client import EmbeddingClient
@@ -50,466 +64,587 @@ DOCUMENT = "SP_30.13330"
 
 BASE_DIR = (
     Path("knowledge/index")
-    /
-    DOCUMENT
+    / DOCUMENT
+)
+
+
+EMBEDDINGS_DIR = (
+    BASE_DIR
+    / "embeddings"
 )
 
 
 INDEX_FILE = (
-    BASE_DIR
-    /
-    "embeddings"
-    /
-    "index.faiss"
+    EMBEDDINGS_DIR
+    / "index.faiss"
 )
 
 
 VECTORS_FILE = (
-    BASE_DIR
-    /
-    "embeddings"
-    /
-    "vectors.npy"
+    EMBEDDINGS_DIR
+    / "vectors.npy"
 )
 
 
 METADATA_FILE = (
-    BASE_DIR
-    /
-    "embeddings"
-    /
-    "metadata.json"
+    EMBEDDINGS_DIR
+    / "metadata.json"
 )
 
 
 
-TOP_K_FAISS = 50
-
-TOP_K_RESULT = 10
+TOP_K = 10
 
 
 
 # ============================================================
-# QUERY BOOST
+# LOAD
 # ============================================================
 
 
-KEYWORDS = [
+def load_index():
 
-    "максимальный расчетный расход",
+    print("Loading FAISS index...")
 
-    "расчетный расход воды",
+    index = faiss.read_index(
+        str(INDEX_FILE)
+    )
 
-    "расчетном участке сети",
 
-    "следует определять по формуле",
+    print(
+        "Vectors loaded:",
+        index.ntotal
+    )
 
-    "определять по формуле",
 
-    "формуле"
+    return index
+
+
+
+def load_metadata():
+
+    print(
+        "Loading metadata..."
+    )
+
+    with open(
+        METADATA_FILE,
+        "r",
+        encoding="utf-8"
+    ) as f:
+
+        data = json.load(f)
+
+
+    print(
+        "Records loaded:",
+        len(data)
+    )
+
+
+    return data
+
+
+
+# ============================================================
+# QUERY INTENT
+# ============================================================
+
+
+FORMULA_KEYWORDS = [
+
+    "формул",
+    "определяется",
+    "определить",
+    "следует определять",
+    "расчет",
+    "расчетный",
+    "значение",
+    "коэффициент",
+    "принимается",
+    "вычисляется"
 
 ]
 
 
 
-SECTION_HINTS = [
+def is_formula_query(query):
 
-    "5.3",
+    text = (
+        query
+        .lower()
+    )
 
-    "определение расчетных расходов воды",
 
-    "максимальный расчетный расход воды"
+    score = 0
 
-]
+
+    for word in FORMULA_KEYWORDS:
+
+        if word in text:
+
+            score += 1
+
+
+    return score >= 2
 
 
 
 # ============================================================
-# RETRIEVER
+# FORMULA HELPERS
 # ============================================================
 
 
-class HybridRetriever:
+def normalize_formula(formula):
+
+    if not formula:
+
+        return ""
 
 
-    def __init__(self):
-
-        print(
-            "Loading FAISS index..."
-        )
-
-
-        self.index = faiss.read_index(
-            str(INDEX_FILE)
-        )
+    formula = (
+        formula
+        .replace("\\,", " ")
+        .replace("\\;", " ")
+        .replace("\\cdot", "*")
+        .replace("\\alpha", "α")
+    )
 
 
-        print(
-            "Using index:"
-        )
-
-        print(
-            INDEX_FILE
-        )
+    formula = re.sub(
+        r"\s+",
+        " ",
+        formula
+    )
 
 
-        print(
-            "Vectors loaded:",
-            self.index.ntotal
-        )
+    return formula.strip()
 
 
 
-        print(
-            "Loading metadata..."
-        )
+def render_formula(item):
 
-
-        with open(
-            METADATA_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            self.metadata = json.load(f)
-
-
-
-        print(
-            "Records loaded:",
-            len(self.metadata)
-        )
-
-
-
-        print(
-            "Initializing embedding client..."
-        )
-
-
-        self.client = EmbeddingClient()
-
-
-
-        print(
-            "Retriever ready"
-        )
-
-
-
-    # --------------------------------------------------------
-
-
-    def normalize(
-        self,
-        value
+    if (
+        item.get("type")
+        !=
+        "formula_context"
     ):
 
-
-        if value < 0:
-
-            return 0
+        return ""
 
 
-        if value > 1:
-
-            return 1
-
-
-        return value
+    content = item.get(
+        "content",
+        {}
+    )
 
 
-
-    # --------------------------------------------------------
-
-
-    def keyword_score(
-        self,
-        query,
-        item
-    ):
+    formula = content.get(
+        "formula",
+        ""
+    )
 
 
-        text = (
+    if not formula:
 
-            item.get(
-                "embedding_text",
-                ""
-            )
-            +
-            " "
-            +
-            json.dumps(
-                item.get(
-                    "content",
-                    {}
-                ),
-                ensure_ascii=False
-            )
+        return ""
 
-        ).lower()
+
+    return (
+
+        "\n\n"
+        "FORMULA:\n"
+        +
+        normalize_formula(formula)
+
+    )
 
 
 
-        score = 0
+# ============================================================
+# FORMULA SCORE
+# ============================================================
 
 
-
-        for word in KEYWORDS:
-
-            if word.lower() in query.lower():
-
-                if word.lower() in text:
-
-                    score += 0.05
+def formula_score(
+    query,
+    item
+):
 
 
-
-        return self.normalize(
-            score
-        )
-
-
-
-    # --------------------------------------------------------
-
-
-    def formula_boost(
-        self,
-        item
-    ):
-
-
-        if item.get(
-            "type"
-        ) == "formula":
-
-            return 1.0
-
+    if item.get("type") != "formula_context":
 
         return 0
 
 
+    score = 0
 
-    # --------------------------------------------------------
 
+    text = (
 
-    def section_boost(
-        self,
         item
-    ):
+        .get("content", {})
+        .get("text", "")
 
-
-        text = (
-
-            item.get(
-                "embedding_text",
-                ""
-            )
-            +
-            json.dumps(
-                item.get(
-                    "content",
-                    {}
-                ),
-                ensure_ascii=False
-            )
-
-        ).lower()
+    ).lower()
 
 
 
-        score = 0
+    query_words = (
 
-
-
-        for hint in SECTION_HINTS:
-
-
-            if hint.lower() in text:
-
-                score += 0.3
-
-
-
-        return self.normalize(
-            score
-        )
-
-
-
-    # --------------------------------------------------------
-
-
-    def hybrid_score(
-        self,
-        query,
-        faiss_score,
-        item
-    ):
-
-
-        score = (
-
-            faiss_score * 0.65
-
-            +
-
-            self.keyword_score(
-                query,
-                item
-            )
-            *
-            0.20
-
-
-            +
-
-            self.formula_boost(
-                item
-            )
-            *
-            0.10
-
-
-            +
-
-            self.section_boost(
-                item
-            )
-            *
-            0.05
-
-        )
-
-
-        return score
-
-
-
-    # --------------------------------------------------------
-
-
-    def search(
-        self,
         query
+        .lower()
+        .split()
+
+    )
+
+
+    for word in query_words:
+
+        if len(word) > 3:
+
+            if word in text:
+
+                score += 0.05
+
+
+
+    if (
+        "максимальный"
+        in query.lower()
+        and
+        "максимальный"
+        in text
     ):
 
-
-        print()
-        print(
-            "SEARCH QUERY:"
-        )
-
-        print(query)
+        score += 0.25
 
 
 
-        vector = self.client.embed(
-            query
-        )
+    if (
+        "расчетный"
+        in query.lower()
+        and
+        "расчетный"
+        in text
+    ):
 
-
-        vector = np.array(
-            [
-                vector
-            ],
-            dtype="float32"
-        )
-
-
-
-        faiss.normalize_L2(
-            vector
-        )
+        score += 0.25
 
 
 
-        scores, ids = self.index.search(
+    if "формула" in query.lower():
 
-            vector,
-
-            TOP_K_FAISS
-
-        )
+        score += 0.2
 
 
 
-        candidates = []
-
-
-
-        for score, idx in zip(
-            scores[0],
-            ids[0]
-        ):
-
-
-            if idx < 0:
-
-                continue
-
-
-
-            item = self.metadata[idx]
-
-
-
-            final = self.hybrid_score(
-
-                query,
-
-                float(score),
-
-                item
-
-            )
-
-
-
-            candidates.append(
-
-                {
-
-                    "final_score":
-                        final,
-
-
-                    "faiss_score":
-                        float(score),
-
-
-                    "index":
-                        int(idx),
-
-
-                    **item
-
-                }
-
-            )
-
-
-
-        candidates.sort(
-
-            key=lambda x:
-                x["final_score"],
-
-            reverse=True
-
-        )
-
-
-
-        return candidates[
-            :TOP_K_RESULT
-        ]
+    return min(
+        score,
+        0.5
+    )
 
 
 
 # ============================================================
-# TEST
+# EMBEDDING SEARCH
+# ============================================================
+
+
+def search_faiss(
+    query,
+    index,
+    metadata,
+    client
+):
+
+
+    vector = client.embed(
+        query
+    )
+
+
+    vector = np.array(
+        [vector],
+        dtype="float32"
+    )
+
+
+    faiss.normalize_L2(
+        vector
+    )
+
+
+    scores, ids = index.search(
+        vector,
+        TOP_K
+    )
+
+
+    results = []
+
+
+    for score, idx in zip(
+        scores[0],
+        ids[0]
+    ):
+
+
+        item = metadata[idx]
+
+
+        results.append({
+
+            "item": item,
+
+            "score":
+                float(score),
+
+            "source":
+                "faiss"
+
+        })
+
+
+    return results
+
+
+
+# ============================================================
+# FORMULA SEARCH
+# ============================================================
+
+
+def search_formula(
+    query,
+    metadata
+):
+
+
+    results = []
+
+
+    for item in metadata:
+
+
+        if (
+            item.get("type")
+            ==
+            "formula_context"
+        ):
+
+
+            score = formula_score(
+                query,
+                item
+            )
+
+
+            if score > 0:
+
+                results.append({
+
+                    "item": item,
+
+                    "score":
+                        score,
+
+                    "source":
+                        "formula"
+
+                })
+
+
+    return results
+
+
+
+# ============================================================
+# MERGE
+# ============================================================
+
+
+def merge_results(
+    faiss_results,
+    formula_results,
+    formula_mode
+):
+
+
+    merged = []
+
+
+    for r in faiss_results:
+
+
+        item = r["item"]
+
+
+        bonus = 0
+
+
+        if formula_mode:
+
+            if item.get("type") == "formula_context":
+
+                bonus = 0.30
+
+
+        merged.append({
+
+            "item":
+                item,
+
+            "source":
+                r["source"],
+
+            "score":
+                r["score"]
+                +
+                bonus
+
+        })
+
+
+
+    for r in formula_results:
+
+
+        merged.append({
+
+            "item":
+                r["item"],
+
+            "source":
+                "formula",
+
+            "score":
+                r["score"]
+                +
+                0.35
+
+        })
+
+
+
+    merged.sort(
+        key=lambda x:
+            x["score"],
+        reverse=True
+    )
+
+
+    return merged[:TOP_K]
+
+
+
+# ============================================================
+# DISPLAY
+# ============================================================
+
+
+def print_results(results):
+
+
+    print()
+    print(
+        "=" * 70
+    )
+
+    print(
+        "NORMATIVE FORMULA INTENT RESULTS"
+    )
+
+    print(
+        "=" * 70
+    )
+
+
+
+    for i, r in enumerate(
+        results,
+        1
+    ):
+
+        item = r["item"]
+
+
+        content = item.get(
+            "content",
+            {}
+        )
+
+
+        text = content.get(
+            "text",
+            ""
+        )
+
+
+        print()
+        print(
+            f"RESULT #{i}"
+        )
+
+        print(
+            "-" * 70
+        )
+
+
+        print(
+            "FINAL:",
+            round(
+                r["score"],
+                5
+            )
+        )
+
+
+        print(
+            "SOURCE:",
+            r["source"]
+        )
+
+
+        print(
+            "PAGE:",
+            item.get(
+                "page"
+            )
+        )
+
+
+        print(
+            "TYPE:",
+            item.get(
+                "type"
+            )
+        )
+
+
+        print()
+
+
+        print(
+            text
+        )
+
+
+        formula = render_formula(
+            item
+        )
+
+
+        if formula:
+
+            print(
+                formula
+            )
+
+
+
+# ============================================================
+# MAIN
 # ============================================================
 
 
@@ -523,128 +658,85 @@ def main():
     )
 
     print(
-        "Retriever v1.7"
+        "Retriever v1.14"
     )
 
     print("=" * 70)
 
 
 
-    retriever = HybridRetriever()
+    query = input(
+        "\nSEARCH QUERY:\n\n"
+    )
 
 
 
-    query = """
+    index = load_index()
 
-Как определяется максимальный
-расчетный расход воды
-на расчетном участке сети?
 
-"""
+    metadata = load_metadata()
 
 
 
-    results = retriever.search(
+    print(
+        "Initializing embedding client..."
+    )
+
+
+    client = EmbeddingClient()
+
+
+
+    print(
+        "Formula contexts:",
+        len(
+            [
+                x for x in metadata
+                if x.get("type")
+                ==
+                "formula_context"
+            ]
+        )
+    )
+
+
+    print(
+        "Retriever ready"
+    )
+
+
+
+    formula_mode = is_formula_query(
         query
     )
 
 
 
-    print()
-
-    print(
-        "HYBRID RESULTS"
+    faiss_results = search_faiss(
+        query,
+        index,
+        metadata,
+        client
     )
 
-    print("=" * 70)
+
+    formula_results = search_formula(
+        query,
+        metadata
+    )
 
 
 
-    for i, item in enumerate(
-        results,
-        start=1
-    ):
+    results = merge_results(
+        faiss_results,
+        formula_results,
+        formula_mode
+    )
 
 
-        print()
-
-        print(
-            f"RESULT #{i}"
-        )
-
-        print(
-            "-" * 70
-        )
-
-
-        print(
-            "Final:",
-            round(
-                item["final_score"],
-                5
-            )
-        )
-
-
-        print(
-            "FAISS:",
-            round(
-                item["faiss_score"],
-                5
-            )
-        )
-
-
-        print(
-            "Index:",
-            item["index"]
-        )
-
-
-        print(
-            "Page:",
-            item["page"]
-        )
-
-
-        print(
-            "Type:",
-            item["type"]
-        )
-
-
-        print(
-            "Chunk:",
-            item["chunk_id"]
-        )
-
-
-        print()
-
-        content = item.get(
-            "content",
-            {}
-        )
-
-
-        if isinstance(
-            content,
-            dict
-        ):
-
-
-            print(
-                content.get(
-                    "text",
-                    ""
-                )
-            )
-
-        else:
-
-            print(
-                content
-            )
+    print_results(
+        results
+    )
 
 
 
