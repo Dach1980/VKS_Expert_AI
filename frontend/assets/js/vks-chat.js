@@ -1,6 +1,7 @@
 
         // ===== CONFIGURATION =====
-        const LMSTUDIO_URL = 'http://127.0.0.1:1234/v1';
+        const API_URL =
+    'http://127.0.0.1:8000/api/knowledge-base/query';
         let chatHistory = [];
         let isProcessing = false;
 
@@ -91,7 +92,16 @@
                         ${sources.map(source => `
                             <div class="source-item">
                                 <span class="source-doc">${source.document}</span>
-                                <div>${source.text}</div>
+                                <div>
+                                Страница:
+                                ${source.page}
+
+                                <br>
+
+                                Релевантность:
+                                ${source.score.toFixed(3)}
+
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -137,76 +147,167 @@
         }
 
         // ===== SEND MESSAGE TO LM STUDIO =====
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            
-            if (!message || isProcessing) return;
+async function sendMessage() {
 
-            const searchInNorms = document.getElementById('searchInNorms').checked;
-            const searchInDocs = document.getElementById('searchInDocs').checked;
 
-            // Hide welcome screen
-            const welcomeScreen = document.getElementById('welcomeScreen');
-            if (welcomeScreen) {
-                welcomeScreen.remove();
-            }
+    const input =
+        document.getElementById('chatInput');
 
-            // Add user message
-            addMessageToChat('user', message);
-            input.value = '';
-            input.style.height = 'auto';
 
-            // Show typing indicator
-            showTypingIndicator();
-            isProcessing = true;
+    const message =
+        input.value.trim();
 
-            try {
-                // Direct call to LM Studio API
-                const response = await fetch(`${LMSTUDIO_URL}/chat/completions`, {
-                    method: 'POST',
+
+    if (!message || isProcessing) {
+        return;
+    }
+
+
+    console.log(
+        "Sending query to VKS RAG:",
+        message
+    );
+
+
+    const searchInNorms =
+        document.getElementById(
+            'searchInNorms'
+        ).checked;
+
+
+    const searchInDocs =
+        document.getElementById(
+            'searchInDocs'
+        ).checked;
+
+
+
+    addMessageToChat(
+        'user',
+        message
+    );
+
+
+    input.value = '';
+
+    input.style.height = 'auto';
+
+
+    showTypingIndicator();
+
+    isProcessing = true;
+
+
+
+    try {
+
+
+        const response =
+            await fetch(
+                API_URL,
+                {
+
+                    method: "POST",
+
                     headers: {
-                        'Content-Type': 'application/json',
+
+                        "Content-Type":
+                            "application/json"
+
                     },
-                    body: JSON.stringify({
-                        model: 'local-model',
-                        messages: [
-                            {
-                                role: 'system',
-                                content: 'Вы эксперт по нормоконтролю в строительстве, специализирующийся на внутренних водопроводных и канализационных системах. Отвечайте на вопросы на основе нормативных документов (СП, ГОСТ, СНиП). Если информация не найдена, честно скажите об этом.'
-                            },
-                            {
-                                role: 'user',
-                                content: message
-                            }
-                        ],
-                        temperature: 0.3,
-                        max_tokens: 2000,
-                        stream: false
-                    })
-                });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+
+                    body:
+                        JSON.stringify({
+
+                            question:
+                                message,
+
+
+                            search_in_norms:
+                                searchInNorms,
+
+
+                            search_in_docs:
+                                searchInDocs
+
+                        })
+
                 }
+            );
 
-                const data = await response.json();
-                const answer = data.choices[0].message.content;
 
-                // Add AI response
-                addMessageToChat('ai', answer);
 
-            } catch (error) {
-                console.error('Error:', error);
-                addMessageToChat('ai', `Ошибка при обработке запроса: ${error.message}. Убедитесь, что LM Studio запущена на ${LMSTUDIO_URL}`);
-            } finally {
-                hideTypingIndicator();
-                isProcessing = false;
-            }
+        if (!response.ok) {
+
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+
         }
 
+
+
+        const data =
+            await response.json();
+
+
+
+        console.log(
+            "RAG response:",
+            data
+        );
+
+
+
+        addMessageToChat(
+            "ai",
+            data.answer,
+            data.sources
+        );
+
+
+
+    }
+    catch(error) {
+
+
+        console.error(
+            error
+        );
+
+
+        addMessageToChat(
+            "ai",
+            `
+            Ошибка VKS Expert AI API:
+            ${error.message}
+            `
+        );
+
+    }
+    finally {
+
+        hideTypingIndicator();
+
+        isProcessing = false;
+
+    }
+
+}
         // ===== INITIALIZATION =====
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Knowledge Base Chat initialized');
-            console.log('LM Studio URL:', LMSTUDIO_URL);
-        });
+document.addEventListener(
+    'DOMContentLoaded',
+    function() {
+
+        console.log(
+            'Knowledge Base Chat initialized'
+        );
+
+        console.log(
+            'VKS API:',
+            API_URL
+        );
+
+    }
+);
