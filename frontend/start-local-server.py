@@ -34,7 +34,7 @@ def run_server():
     
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         # Автоматически открыть браузер
-        webbrowser.open(f"http://localhost:{PORT}/knowledge-base-direct.html")
+        webbrowser.open(f"http://localhost:{PORT}/test-page.html")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

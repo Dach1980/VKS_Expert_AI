@@ -19,7 +19,7 @@ API Router
 RAG Pipeline
 """
 
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 
 from app.api.routes import router
@@ -51,7 +51,21 @@ Capabilities:
 
 )
 
+app.add_middleware(
 
+    CORSMiddleware,
+
+    allow_origins=[
+        "http://localhost:8080"
+    ],
+
+    allow_credentials=True,
+
+    allow_methods=["*"],
+
+    allow_headers=["*"],
+
+)
 
 # ==========================================================
 # Routes
