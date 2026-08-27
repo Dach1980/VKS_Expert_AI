@@ -25,7 +25,7 @@ RAG Pipeline
 Technical Answer
 """
 
-
+from app.api.knowledge_base import router as knowledge_router
 from fastapi import APIRouter, HTTPException
 from fastapi import Depends
 
@@ -48,7 +48,9 @@ from app.api.schemas import (
 
 router = APIRouter()
 
-
+router.include_router(
+    knowledge_router
+)
 
 # ==========================================================
 # Root
@@ -199,4 +201,3 @@ def ask(
             detail=str(e)
 
         )
-        
