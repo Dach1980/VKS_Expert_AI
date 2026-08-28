@@ -1,0 +1,734 @@
+<!doctype html>
+
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>VKS Expert AI</title>
+
+    <link rel="stylesheet" href="./assets/css/main-page/main.css" />
+  </head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon">Ч</div>
+                    <span>Черкашин AI/</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Основное</div>
+                    <div class="nav-item active" data-section="dashboard">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                        <span>Dashboard</span>
+                    </div>
+                    <div class="nav-item" data-section="norms">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Нормы</span>
+                        <span class="nav-badge" id="normsBadge">1</span>
+                    </div>
+                    <div class="nav-item" data-section="docs">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Документация</span>
+                        <span class="nav-badge" id="docsBadge">1</span>
+                    </div>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Аналитика</div>
+                    <div class="nav-item" data-section="checks">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                        </svg>
+                        <span>Проверки</span>
+                        <span class="nav-badge" id="checksBadge">10</span>
+                    </div>
+                    <div class="nav-item" data-section="reports">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Отчёты</span>
+                        <span class="nav-badge" id="reportsBadge">0</span>
+                    </div>
+                    <a href="knowledge-base-direct.html" class="nav-item" style="text-decoration: none; color: inherit;">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                        <span>База знаний</span>
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Система</div>
+                    <div class="nav-item" data-section="settings">
+                        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>Настройки</span>
+                    </div>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                v1.4.2 — Build 2026.08<br>
+                <small>Ctrl+? — горячие клавиши</small>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <div class="breadcrumbs">
+                    <span>Черкашин AI/</span>
+                    <span class="breadcrumb-separator">/</span>
+                    <span id="breadcrumbCurrent">Dashboard</span>
+                </div>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <input type="text" class="search-input" placeholder="Поиск... (Ctrl+K)">
+                    </div>
+                    <button class="theme-toggle" id="themeToggle" title="Переключить тему (Ctrl+D)">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Dashboard Section -->
+                <section class="section active" id="dashboardSection">
+                    <h1 class="section-title">Dashboard</h1>
+                    <p class="section-subtitle">Обзор системы нормоконтроля</p>
+
+                    <div class="dashboard-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Проверок выполнено</div>
+                            <div class="metric-value" id="metricChecks">247</div>
+                            <div class="metric-change positive">+12% за неделю</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Нарушений найдено</div>
+                            <div class="metric-value" id="metricViolations">38</div>
+                            <div class="metric-change negative">-5% за неделю</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Соответствий</div>
+                            <div class="metric-value" id="metricCompliance">84.6%</div>
+                            <div class="metric-change positive">+2.3%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Среднее время проверки</div>
+                            <div class="metric-value">4.2 мин</div>
+                            <div class="metric-change positive">-0.8 мин</div>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="navigateTo('checks')">Новая проверка</button>
+                        <button class="btn btn-secondary" onclick="navigateTo('norms')">Импорт норм</button>
+                        <button class="btn btn-secondary" onclick="navigateTo('reports')">Экспорт отчёта</button>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Активность за 7 дней</div>
+                        <div class="chart-placeholder">Количество проверок в день</div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Распределение по статусам</div>
+                        <div class="chart-placeholder">
+                            <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                                <div>Соответствует: <strong id="statCompliant">156</strong></div>
+                                <div>Нарушения: <strong id="statViolations">38</strong></div>
+                                <div>Не проверено: <strong id="statUnchecked">53</strong></div>
+                                <div>Критические: <strong id="statCritical">7</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-header">
+                            <div class="table-title">Последние проверки</div>
+                            <button class="btn btn-secondary btn-sm" onclick="navigateTo('checks')">Все проверки</button>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Документ</th>
+                                    <th>Раздел</th>
+                                    <th>Дата</th>
+                                    <th>Статус</th>
+                                    <th>Нарушения</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentChecksTable">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Norms Section -->
+                <section class="section" id="normsSection">
+                    <h1 class="section-title">Библиотека нормативных документов</h1>
+                    <p class="section-subtitle">Управление нормативной базой для проверок</p>
+
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="indexAllNorms()">Индексировать все</button>
+                    </div>
+
+                    <div class="dropzone" id="normsDropzone" onclick="handleDropzoneClick('norms')">
+                        <div class="dropzone-icon">📄</div>
+                        <div class="dropzone-title">Перетащите нормативные документы сюда или нажмите для выбора</div>
+                        <div class="dropzone-subtitle">Поддерживаемые форматы: PDF, DOCX, TXT. Максимум 50 МБ.</div>
+                    </div>
+
+                    <div class="indexing-progress" id="indexingProgress">
+                        <div class="indexing-progress-label" id="indexingLabel">Индексация...</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="indexingFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="norms-grid" id="normsGrid"></div>
+                </section>
+
+                <!-- Docs Section -->
+                <section class="section" id="docsSection">
+                    <h1 class="section-title">Проектная документация</h1>
+                    <p class="section-subtitle">Загрузка и управление проектными документами</p>
+
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="checkSelectedDocs()">Проверить выбранные</button>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: var(--text-primary);">
+                            <input type="checkbox" id="selectAllDocs" class="doc-checkbox" onchange="toggleSelectAllDocs()">
+                            <span id="selectAllLabel">Выбрать все</span>
+                        </label>
+                    </div>
+
+                    <div class="dropzone" id="docsDropzone" onclick="handleDropzoneClick('docs')">
+                        <div class="dropzone-icon">📁</div>
+                        <div class="dropzone-title">Перетащите проектную документацию или нажмите для выбора</div>
+                        <div class="dropzone-subtitle">Поддерживаемые форматы: PDF, DWG, DOCX. Максимум 100 МБ.</div>
+                    </div>
+
+                    <div class="docs-list" id="docsList"></div>
+                </section>
+
+                <!-- Checks Section -->
+                <section class="section" id="checksSection">
+                    <h1 class="section-title">Результаты проверок</h1>
+                    <p class="section-subtitle">Детальный анализ нарушений и соответствий</p>
+
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="navigateTo('reports')">Экспорт</button>
+                    </div>
+
+                    <div class="filter-tabs">
+                        <div class="filter-tab active" data-filter="all">Все</div>
+                        <div class="filter-tab" data-filter="violation">Нарушения</div>
+                        <div class="filter-tab" data-filter="compliant">Соответствия</div>
+                        <div class="filter-tab" data-filter="unchecked">Не проверено</div>
+                    </div>
+
+                    <div class="filter-tabs">
+                        <select class="select-input" id="sectionFilter">
+                            <option value="">Все разделы</option>
+                            <option value="ВК">ВК</option>
+                            <option value="ОВ">ОВ</option>
+                            <option value="ЭО">ЭО</option>
+                        </select>
+                        <select class="select-input" id="severityFilter">
+                            <option value="">Все критичности</option>
+                            <option value="critical">Критические</option>
+                            <option value="major">Значительные</option>
+                            <option value="minor">Незначительные</option>
+                        </select>
+                    </div>
+
+                    <div id="checksList"></div>
+                </section>
+
+                <!-- Reports Section -->
+                <section class="section" id="reportsSection">
+                    <h1 class="section-title">Отчёты</h1>
+                    <p class="section-subtitle">Создание и управление отчётами по результатам проверок</p>
+
+                    <div class="quick-actions">
+                        <button class="btn btn-primary" onclick="generateReport()">Создать отчёт</button>
+                    </div>
+
+                    <div class="reports-list" id="reportsList"></div>
+                </section>
+
+                <!-- Knowledge Base Section -->
+                <section class="section" id="knowledgeBaseSection">
+                    <h1 class="section-title">База знаний</h1>
+                    <p class="section-subtitle">Интеллектуальный помощник по нормативным документам и проектной документации</p>
+
+                    <!-- Трёхпанельный интерфейс чата -->
+                    <div class="kb-app-container">
+                        <!-- Левая панель (навигация) -->
+                        <aside class="kb-left-sidebar" id="kbLeftSidebar">
+                            <div class="kb-sidebar-header">
+                                <button class="kb-new-chat-btn" onclick="newKBChat()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Новая тема
+                                </button>
+                            </div>
+                            <div class="kb-sidebar-content">
+                                <div class="kb-sidebar-section">
+                                    <div class="kb-sidebar-section-title">Навигация</div>
+                                    <div class="kb-nav-item" onclick="switchSection('norms')">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                        </svg>
+                                        <span>Проекты</span>
+                                    </div>
+                                    <div class="kb-nav-item" onclick="switchSection('docs')">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                        </svg>
+                                        <span>Память</span>
+                                    </div>
+                                    <div class="kb-nav-item" onclick="switchSection('settings')">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                        </svg>
+                                        <span>Навыки</span>
+                                    </div>
+                                </div>
+                                <div class="kb-sidebar-section">
+                                    <div class="kb-sidebar-section-title">Чаты</div>
+                                    <div class="kb-chat-list" id="kbChatList">
+                                        <div class="kb-chat-item active">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                            </svg>
+                                            <span>Ассистент по нормам ВК</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="kb-sidebar-footer">
+                                <div class="kb-user-info">
+                                    <div class="kb-user-avatar">ДЧ</div>
+                                    <div class="kb-user-details">
+                                        <div class="kb-user-name">Дмитрий Черкашин</div>
+                                        <div class="kb-user-org">Da! Development</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <!-- Центральная область чата -->
+                        <main class="kb-main-content">
+                            <div class="kb-chat-header">
+                                <button class="kb-toggle-btn" onclick="toggleKBLeftSidebar()" title="Свернуть/развернуть левую панель">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                                    </svg>
+                                </button>
+                                <h2>База знаний</h2>
+                                <button class="kb-toggle-btn" onclick="toggleKBRightPanel()" title="Свернуть/развернуть правую панель">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="15" y1="3" x2="15" y2="21"></line>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="kb-chat-messages" id="kbChatMessages">
+                                <div class="kb-welcome-screen" id="kbWelcomeScreen">
+                                    <div class="kb-welcome-icon">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <h2>База знаний</h2>
+                                    <p>Задайте вопрос по нормативным документам или проектной документации. Система найдёт релевантную информацию и предоставит ответ с ссылками на источники.</p>
+                                    <div class="kb-example-queries">
+                                        <div class="kb-example-query" onclick="sendKBExample('Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?')">
+                                            Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?
+                                        </div>
+                                        <div class="kb-example-query" onclick="sendKBExample('Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?')">
+                                            Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?
+                                        </div>
+                                        <div class="kb-example-query" onclick="sendKBExample('Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?')">
+                                            Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="kb-input-area">
+                                <div class="kb-chat-options">
+                                    <label class="kb-option-checkbox">
+                                        <input type="checkbox" id="kbSearchInNorms" checked>
+                                        <span>Искать в нормативной документации</span>
+                                    </label>
+                                    <label class="kb-option-checkbox">
+                                        <input type="checkbox" id="kbSearchInDocs" checked>
+                                        <span>Искать в проектной документации</span>
+                                    </label>
+                                </div>
+                                <div class="kb-input-wrapper">
+                                    <textarea 
+                                        id="kbChatInput" 
+                                        class="kb-chat-input" 
+                                        placeholder="Введите запрос..."
+                                        rows="1"
+                                        onkeydown="handleKBInputKeydown(event)"
+                                        oninput="autoResizeKBInput(this)"
+                                    ></textarea>
+                                    <button class="kb-send-btn" id="kbSendBtn" onclick="sendKBMessage()">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </main>
+
+                        <!-- Правая панель (контекст) -->
+                        <aside class="kb-right-panel" id="kbRightPanel">
+                            <div class="kb-panel-header">
+                                <span>Контекст</span>
+                            </div>
+                            <div class="kb-panel-content">
+                                <div class="kb-panel-section">
+                                    <div class="kb-panel-section-title">Память</div>
+                                    <div class="kb-memory-list" id="kbMemoryList">
+                                        <div class="kb-memory-item">Предпочитает тёмную тему</div>
+                                        <div class="kb-memory-item">Работает с разделом ВК</div>
+                                        <div class="kb-memory-item">Использует СП 30.13330.2020</div>
+                                    </div>
+                                </div>
+                                <div class="kb-panel-section">
+                                    <div class="kb-panel-section-title">Подключённые навыки</div>
+                                    <div class="kb-skills-list">
+                                        <div class="kb-skill-item">
+                                            <span class="kb-skill-badge">dashboard</span>
+                                        </div>
+                                        <div class="kb-skill-item">
+                                            <span class="kb-skill-badge">neuro-skills</span>
+                                        </div>
+                                        <div class="kb-skill-item">
+                                            <span class="kb-skill-badge">memory</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="kb-panel-section">
+                                    <div class="kb-panel-section-title">Закреплённые положения</div>
+                                    <div class="kb-pinned-list">
+                                        <div class="kb-pinned-empty">Положений пока нет</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="kb-panel-footer">
+                                <button class="kb-footer-btn" onclick="switchSection('settings')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                    </svg>
+                                </button>
+                                <button class="kb-footer-btn" title="Помощь">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"></path>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                </button>
+                                <button class="kb-footer-btn" onclick="switchSection('dashboard')" title="Аналитика">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                                    </svg>
+                                </button>
+                                <button class="kb-footer-btn" title="Безопасность">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+
+                <!-- Settings Section -->
+                <section class="section" id="settingsSection">
+                    <h1 class="section-title">Настройки</h1>
+                    <p class="section-subtitle">Конфигурация системы нормоконтроля</p>
+
+                    <div class="settings-section">
+                        <div class="settings-title">Внешний вид</div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Тёмная тема</div>
+                                <div class="setting-description">Переключение между светлой и тёмной темой</div>
+                            </div>
+                            <div class="toggle-switch" id="themeSwitch" onclick="toggleTheme()"></div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-title">Подключение к AI</div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Путь к LM Studio</div>
+                                <div class="setting-description">Локальный сервер для обработки документов</div>
+                            </div>
+                            <input type="text" class="text-input" value="http://127.0.0.1:1234">
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Модель</div>
+                                <div class="setting-description">Выбранная модель для анализа</div>
+                            </div>
+                            <select class="select-input">
+                                <option>qwen2.5-7b-instruct</option>
+                                <option>llama-3.1-8b</option>
+                                <option>mistral-7b-v0.3</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-title">Хранилище данных</div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">База данных</div>
+                                <div class="setting-description">Путь для хранения базы данных SQLite с результатами проверок</div>
+                            </div>
+                            <div class="path-input-group">
+                                <input type="text" class="text-input" id="dbPath" value="./data/database.db" placeholder="Путь к базе данных">
+                                <button class="btn btn-secondary btn-sm" onclick="selectFolder('dbPath')">Обзор</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Документация</div>
+                                <div class="setting-description">Папка для хранения загруженных нормативных и проектных документов</div>
+                            </div>
+                            <div class="path-input-group">
+                                <input type="text" class="text-input" id="docsPath" value="./data/documents" placeholder="Папка для документов">
+                                <button class="btn btn-secondary btn-sm" onclick="selectFolder('docsPath')">Обзор</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Отчёты</div>
+                                <div class="setting-description">Папка для хранения экспортированных отчётов (PDF, Word, Markdown)</div>
+                            </div>
+                            <div class="path-input-group">
+                                <input type="text" class="text-input" id="reportsPath" value="./data/reports" placeholder="Папка для отчётов">
+                                <button class="btn btn-secondary btn-sm" onclick="selectFolder('reportsPath')">Обзор</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Векторная база</div>
+                                <div class="setting-description">Папка для хранения индексированных нормативных документов (ChromaDB)</div>
+                            </div>
+                            <div class="path-input-group">
+                                <input type="text" class="text-input" id="vectorDbPath" value="./data/vectordb" placeholder="Папка для векторной базы">
+                                <button class="btn btn-secondary btn-sm" onclick="selectFolder('vectorDbPath')">Обзор</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Кэш эмбеддингов</div>
+                                <div class="setting-description">Папка для кэширования векторных представлений (ускоряет повторные проверки)</div>
+                            </div>
+                            <div class="path-input-group">
+                                <input type="text" class="text-input" id="cachePath" value="./data/cache" placeholder="Папка для кэша">
+                                <button class="btn btn-secondary btn-sm" onclick="selectFolder('cachePath')">Обзор</button>
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; display: flex; gap: 12px;">
+                            <button class="btn btn-primary" onclick="saveStoragePaths()">Сохранить пути</button>
+                            <button class="btn btn-secondary" onclick="resetStoragePaths()">Сбросить по умолчанию</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                    <div class="settings-section">
+                        <div class="settings-title">Параметры проверки</div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Автоматическая проверка</div>
+                                <div class="setting-description">Запускать проверку при загрузке документа</div>
+                            </div>
+                            <div class="toggle-switch" onclick="this.classList.toggle('active')"></div>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Строгость проверки</div>
+                                <div class="setting-description">Уровень детализации анализа</div>
+                            </div>
+                            <select class="select-input">
+                                <option>Высокая</option>
+                                <option>Средняя</option>
+                                <option>Базовая</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <div>
+                                <div class="setting-label">Email для уведомлений</div>
+                                <div class="setting-description">Получать уведомления о завершении проверки</div>
+                            </div>
+                            <input type="email" class="text-input" placeholder="email@example.com">
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-title">Горячие клавиши</div>
+                        <div class="setting-item">
+                            <div class="setting-label">Переключение разделов</div>
+                            <div><span class="key">Ctrl</span>+<span class="key">1</span> — <span class="key">Ctrl</span>+<span class="key">6</span></div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">Поиск</div>
+                            <div><span class="key">Ctrl</span>+<span class="key">K</span></div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">Тёмная тема</div>
+                            <div><span class="key">Ctrl</span>+<span class="key">D</span></div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">Горячие клавиши</div>
+                            <div><span class="key">Ctrl</span>+<span class="key">?</span></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="shortcuts-overlay" id="shortcutsOverlay" onclick="closeShortcuts()">
+        <div class="shortcuts-modal" onclick="event.stopPropagation()">
+            <div class="shortcuts-title">Горячие клавиши</div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Dashboard</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">1</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Нормы</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">2</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Документация</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">3</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Проверки</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">4</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Отчёты</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">5</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Настройки</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">6</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Поиск</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">K</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Тёмная тема</span>
+                <div class="shortcut-keys"><span class="key">Ctrl</span><span class="key">D</span></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-label">Закрыть модальное окно</span>
+                <div class="shortcut-keys"><span class="key">Esc</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div class="progress-modal-overlay" id="progressModalOverlay">
+        <div class="progress-modal">
+            <div class="progress-modal-title">Создание отчёта</div>
+            <div class="progress-modal-subtitle">Пожалуйста, подождите...</div>
+            
+            <div class="progress-info">
+                <div class="progress-percent" id="progressPercent">0%</div>
+                <div class="progress-time" id="progressTime">Осталось: ~10 сек</div>
+            </div>
+            
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;">
+                    <span id="progressBarText">0%</span>
+                </div>
+            </div>
+            
+            <div class="progress-stages" id="progressStages">
+                <div class="progress-stage active" data-stage="1">
+                    <div class="progress-stage-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                        </svg>
+                    </div>
+                    <span>Анализ данных...</span>
+                </div>
+                <div class="progress-stage" data-stage="2">
+                    <div class="progress-stage-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                    </div>
+                    <span>Формирование структуры...</span>
+                </div>
+                <div class="progress-stage" data-stage="3">
+                    <div class="progress-stage-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </div>
+                    <span>Генерация отчёта...</span>
+                </div>
+                <div class="progress-stage" data-stage="4">
+                    <div class="progress-stage-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <span>Завершение...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./assets/js/main-page/main.js"></script>
+</body>
+</html>

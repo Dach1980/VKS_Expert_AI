@@ -27,14 +27,14 @@ def run_server():
     print(f" Запуск сервера на http://localhost:{PORT}")
     print(f"📁 Директория: {DIRECTORY}")
     print(f"\n📄 Доступные файлы:")
-    print(f"   - http://localhost:{PORT}/test-page.html (главное приложение)")
+    print(f"   - http://localhost:{PORT}/index.html (главное приложение)")
     print(f"   - http://localhost:{PORT}/knowledge-base-direct.html (база знаний)")
     print(f"   - http://localhost:{PORT}/lmstudio-diagnostic.html (диагностика)")
     print(f"\n⏹️  Для остановки нажмите Ctrl+C")
     
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         # Автоматически открыть браузер
-        webbrowser.open(f"http://localhost:{PORT}/test-page.html")
+        webbrowser.open(f"http://localhost:{PORT}/index.html")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

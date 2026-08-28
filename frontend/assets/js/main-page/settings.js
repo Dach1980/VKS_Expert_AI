@@ -1,86 +1,154 @@
-// ===== STORAGE PATHS MANAGEMENT =====
-function selectFolder(inputId) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
+// ===== SETTINGS =====
 
-  // В реальном приложении здесь будет диалог выбора папки
-  // Для демо просто показываем подсказку
-  const paths = {
-    dbPath: 'База данных',
-    docsPath: 'Документация',
-    reportsPath: 'Отчёты',
-    vectorDbPath: 'Векторная база',
-    cachePath: 'Кэш эмбеддингов',
-  };
+// ===== SETTINGS DEFAULTS =====
 
-  const pathName = paths[inputId] || 'папку';
-  showToast(
-    `Выберите ${pathName.toLowerCase()} через диалог (в реальном приложении)`,
-    'info',
-  );
+var DEFAULT_SETTINGS = {
+  theme: 'light',
+  notifications: true,
+  autoSave: true,
+  language: 'ru',
+  defaultSection: 'ВК',
+};
 
-  // Симуляция выбора папки
-  const simulatedPaths = {
-    dbPath: '/home/user/vk-normcontrol/data/database.db',
-    docsPath: '/home/user/vk-normcontrol/data/documents',
-    reportsPath: '/home/user/vk-normcontrol/data/reports',
-    vectorDbPath: '/home/user/vk-normcontrol/data/vectordb',
-    cachePath: '/home/user/vk-normcontrol/data/cache',
-  };
+// ===== GET SETTINGS =====
 
-  input.value = simulatedPaths[inputId] || input.value;
+function getSettings() {
+  if (typeof appSettings !== 'undefined' && appSettings) {
+    return appSettings;
+  }
+
+  return DEFAULT_SETTINGS;
 }
 
-function saveStoragePaths() {
-  const paths = {
-    dbPath: document.getElementById('dbPath')?.value || './data/database.db',
-    docsPath: document.getElementById('docsPath')?.value || './data/documents',
-    reportsPath:
-      document.getElementById('reportsPath')?.value || './data/reports',
-    vectorDbPath:
-      document.getElementById('vectorDbPath')?.value || './data/vectordb',
-    cachePath: document.getElementById('cachePath')?.value || './data/cache',
-  };
+// ===== RENDER SETTINGS =====
 
-  localStorage.setItem('storagePaths', JSON.stringify(paths));
-  showToast('Пути хранения сохранены', 'success');
-}
+function renderSettings() {
+  var settings = getSettings();
 
-function resetStoragePaths() {
-  const defaultPaths = {
-    dbPath: './data/database.db',
-    docsPath: './data/documents',
-    reportsPath: './data/reports',
-    vectorDbPath: './data/vectordb',
-    cachePath: './data/cache',
-  };
+  var themeSelect = document.getElementById('settingTheme');
 
-  document.getElementById('dbPath').value = defaultPaths.dbPath;
-  document.getElementById('docsPath').value = defaultPaths.docsPath;
-  document.getElementById('reportsPath').value = defaultPaths.reportsPath;
-  document.getElementById('vectorDbPath').value = defaultPaths.vectorDbPath;
-  document.getElementById('cachePath').value = defaultPaths.cachePath;
+  var notifications = document.getElementById('settingNotifications');
 
-  localStorage.removeItem('storagePaths');
-  showToast('Пути сброшены по умолчанию', 'info');
-}
+  var autoSave = document.getElementById('settingAutoSave');
 
-function loadStoragePaths() {
-  const saved = localStorage.getItem('storagePaths');
-  if (!saved) return;
+  var languageSelect = document.getElementById('settingLanguage');
 
-  try {
-    const paths = JSON.parse(saved);
-    if (paths.dbPath) document.getElementById('dbPath').value = paths.dbPath;
-    if (paths.docsPath)
-      document.getElementById('docsPath').value = paths.docsPath;
-    if (paths.reportsPath)
-      document.getElementById('reportsPath').value = paths.reportsPath;
-    if (paths.vectorDbPath)
-      document.getElementById('vectorDbPath').value = paths.vectorDbPath;
-    if (paths.cachePath)
-      document.getElementById('cachePath').value = paths.cachePath;
-  } catch (e) {
-    console.error('Ошибка загрузки путей:', e);
+  var sectionSelect = document.getElementById('settingDefaultSection');
+
+  if (themeSelect) {
+    themeSelect.value = settings.theme || 'light';
+  }
+
+  if (notifications) {
+    notifications.checked = settings.notifications !== false;
+  }
+
+  if (autoSave) {
+    autoSave.checked = settings.autoSave !== false;
+  }
+
+  if (languageSelect) {
+    languageSelect.value = settings.language || 'ru';
+  }
+
+  if (sectionSelect) {
+    sectionSelect.value = settings.defaultSection || 'ВК';
   }
 }
+
+// ===== SAVE SETTINGS =====
+
+function saveSettings() {
+  if (typeof appSettings === 'undefined') {
+    return;
+  }
+
+  var themeSelect = document.getElementById('settingTheme');
+
+  var notifications = document.getElementById('settingNotifications');
+
+  var autoSave = document.getElementById('settingAutoSave');
+
+  var languageSelect = document.getElementById('settingLanguage');
+
+  var sectionSelect = document.getElementById('settingDefaultSection');
+
+  if (themeSelect) {
+    appSettings.theme = themeSelect.value;
+  }
+
+  if (notifications) {
+    appSettings.notifications = notifications.checked;
+  }
+
+  if (autoSave) {
+    appSettings.autoSave = autoSave.checked;
+  }
+
+  if (languageSelect) {
+    appSettings.language = languageSelect.value;
+  }
+
+  if (sectionSelect) {
+    appSettings.defaultSection = sectionSelect.value;
+  }
+
+  applySettings();
+
+  showToast('Настройки сохранены', 'success');
+}
+
+// ===== APPLY SETTINGS =====
+
+function applySettings() {
+  var settings = getSettings();
+
+  // ===== THEME =====
+
+  if (settings.theme === 'dark') {
+    document.body.classList.add('dark-theme');
+  } else {
+    document.body.classList.remove('dark-theme');
+  }
+
+  // ===== LANGUAGE =====
+
+  document.documentElement.setAttribute('lang', settings.language || 'ru');
+}
+
+// ===== RESET SETTINGS =====
+
+function resetSettings() {
+  if (typeof appSettings === 'undefined') {
+    return;
+  }
+
+  appSettings.theme = DEFAULT_SETTINGS.theme;
+
+  appSettings.notifications = DEFAULT_SETTINGS.notifications;
+
+  appSettings.autoSave = DEFAULT_SETTINGS.autoSave;
+
+  appSettings.language = DEFAULT_SETTINGS.language;
+
+  appSettings.defaultSection = DEFAULT_SETTINGS.defaultSection;
+
+  renderSettings();
+
+  applySettings();
+
+  showToast('Настройки сброшены', 'info');
+}
+
+// ===== INITIALIZE SETTINGS =====
+
+function initSettings() {
+  renderSettings();
+  applySettings();
+}
+
+// ===== SETTINGS EVENTS =====
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSettings();
+});

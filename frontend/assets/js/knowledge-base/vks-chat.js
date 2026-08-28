@@ -21,7 +21,7 @@ function goToHome() {
     window.history.back();
   } else {
     // Если истории нет, показываем сообщение
-    alert('Откройте test-page.html для возврата на главную страницу');
+    alert('Откройте index.html для возврата на главную страницу');
   }
 }
 
