@@ -11,12 +11,7 @@ from app.knowledge.storage import KnowledgeStorage
 class PDFPageProcessor:
     """Извлекает страницы PDF в каталог pages через KnowledgeStorage."""
 
-    def __init__(
-        self,
-        document_id: str = "SP_30.13330",
-        version_id: str | None = None,
-        storage: KnowledgeStorage | None = None,
-    ) -> None:
+    def __init__(self, document_id="SP_30.13330", version_id=None, storage=None):
         self.document_id = document_id
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
@@ -35,7 +30,6 @@ class PDFPageProcessor:
     def extract_page(self, page, number):
         rect = page.rect
         blocks = []
-
         for index, block in enumerate(page.get_text("blocks")):
             x0, y0, x1, y1, text, *_ = block
             if not text.strip():
@@ -49,13 +43,10 @@ class PDFPageProcessor:
         return {
             "document": self.storage.get_document(self.document_id)["number"],
             "document_id": self.document_id,
-            "version": self.storage._get_version(self.document_id, self.version_id).get("id"),
+            "version": self.storage.get_version(self.document_id, self.version_id).get("id"),
             "page": number,
             "geometry": {"width": rect.width, "height": rect.height},
-            "source": {
-                "pdf": str(self.pdf_path),
-                "pipeline": ["PyMuPDF", "PDFPageProcessor"],
-            },
+            "source": {"pdf": str(self.pdf_path), "pipeline": ["PyMuPDF", "PDFPageProcessor"]},
             "created": datetime.now().isoformat(),
             "blocks": blocks,
             "formulas": [],
