@@ -7,15 +7,13 @@ from app.knowledge.storage import KnowledgeStorage
 
 
 class DocumentChunkBuilder:
-    """Создаёт RAG chunks из enriched pages через KnowledgeStorage."""
-
     def __init__(self, document_id="SP_30.13330", version_id=None, storage=None):
         self.document_id = document_id
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
         self.paths = self.storage.paths(document_id, version_id)
         self.document = self.storage.get_document(document_id)["number"]
-        self.version = self.storage._get_version(document_id, version_id).get("id")
+        self.version = self.storage.get_version(document_id, version_id).get("id")
 
     def load_page(self, file):
         with open(file, "r", encoding="utf-8") as f:
@@ -73,24 +71,16 @@ class DocumentChunkBuilder:
             "page": page,
             "location": {"page": page, "bbox": formula.get("bbox"), "pdf": str(self.paths.pdf)},
             "content": {
-                "text": text,
-                "formula": latex,
-                "before": before,
-                "after": after,
+                "text": text, "formula": latex, "before": before, "after": after,
                 "engineering_context": {
-                    "discipline": "ВК",
-                    "system": "Внутренний водопровод",
-                    "purpose": before,
-                    "calculation_type": "Гидравлический расчет",
+                    "discipline": "ВК", "system": "Внутренний водопровод",
+                    "purpose": before, "calculation_type": "Гидравлический расчет",
                 },
             },
             "embedding_text": embedding_text,
             "metadata": {
-                "source": self.document_id,
-                "formula": True,
-                "discipline": "ВК",
-                "system": "internal_water_supply",
-                "topic": "hydraulic_calculation",
+                "source": self.document_id, "formula": True, "discipline": "ВК",
+                "system": "internal_water_supply", "topic": "hydraulic_calculation",
                 "created": datetime.now().isoformat(),
             },
         }
@@ -132,8 +122,7 @@ class DocumentChunkBuilder:
 
 def main():
     builder = DocumentChunkBuilder()
-    chunks = builder.process_all_pages()
-    builder.save(chunks)
+    builder.save(builder.process_all_pages())
 
 
 if __name__ == "__main__":
