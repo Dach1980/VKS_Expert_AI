@@ -1,404 +1,91 @@
-"""
-PDF Page Processor v1
-
-Назначение:
-
-Преобразование нормативного PDF
-в структурированный индекс страниц.
-
-Pipeline:
-
-PDF
- |
- PyMuPDF
- |
- Page Processor
- |
- pages/page_xxx.json
-
-
-v1:
-
-Создаёт:
-
-- номер страницы
-- размеры страницы
-- текстовые блоки
-- координаты блоков
-- изображения страницы
-- источник PDF
-
-
-Подготовка:
-
-Formula extraction
-Tables
-Embedding
-RAG
-
-
-"""
-
+"""VKS Expert AI — PDF Page Processor v2."""
 
 import json
-from pathlib import Path
 from datetime import datetime
 
 import pymupdf
 
-
-
-# ============================================================
-# CONFIG
-# ============================================================
-
-
-PROJECT_ROOT = Path(
-    r"D:\Projects\VKS_Expert_AI"
-)
-
-
-PDF_PATH = (
-    PROJECT_ROOT /
-    "knowledge" /
-    "regulations" /
-    "SP_30.13330" /
-    "СП_30.13330_базовая_версия.pdf"
-)
-
-
-OUTPUT_DIR = (
-    PROJECT_ROOT /
-    "knowledge" /
-    "index" /
-    "SP_30.13330" /
-    "pages"
-)
-
-
-DOCUMENT = "СП 30.13330.2020"
-
-VERSION = "base"
-
-
-
-# ============================================================
-# PROCESSOR
-# ============================================================
+from app.knowledge.storage import KnowledgeStorage
 
 
 class PDFPageProcessor:
-
+    """Извлекает страницы PDF в каталог pages через KnowledgeStorage."""
 
     def __init__(
         self,
-        pdf_path,
-        output_dir
-    ):
-
-        self.pdf_path = pdf_path
-        self.output_dir = output_dir
-
-
+        document_id: str = "SP_30.13330",
+        version_id: str | None = None,
+        storage: KnowledgeStorage | None = None,
+    ) -> None:
+        self.document_id = document_id
+        self.version_id = version_id
+        self.storage = storage or KnowledgeStorage()
+        self.paths = self.storage.paths(document_id, version_id)
+        self.pdf_path = self.paths.pdf
+        self.output_dir = self.paths.pages
 
     def open_pdf(self):
-
-        print(
-            "Opening PDF..."
-        )
-
-
+        print("Opening PDF...")
         if not self.pdf_path.exists():
-
-            raise FileNotFoundError(
-                self.pdf_path
-            )
-
-
-        doc = pymupdf.open(
-            self.pdf_path
-        )
-
-
-        print(
-            "Pages:",
-            len(doc)
-        )
-
-
+            raise FileNotFoundError(f"PDF not found: {self.pdf_path}")
+        doc = pymupdf.open(self.pdf_path)
+        print("Pages:", len(doc))
         return doc
 
-
-
-
-    def extract_page(
-        self,
-        page,
-        number
-    ):
-
-
+    def extract_page(self, page, number):
         rect = page.rect
-
-
         blocks = []
 
-
-        text_blocks = page.get_text(
-            "blocks"
-        )
-
-
-        for index, block in enumerate(
-            text_blocks
-        ):
-
-
+        for index, block in enumerate(page.get_text("blocks")):
             x0, y0, x1, y1, text, *_ = block
-
-
             if not text.strip():
-
                 continue
+            blocks.append({
+                "index": index,
+                "bbox": [round(x0, 3), round(y0, 3), round(x1, 3), round(y1, 3)],
+                "text": text.strip(),
+            })
 
-
-
-            blocks.append(
-
-                {
-
-                    "index":
-                        index,
-
-
-                    "bbox":
-                        [
-
-                            round(x0,3),
-
-                            round(y0,3),
-
-                            round(x1,3),
-
-                            round(y1,3)
-
-                        ],
-
-
-                    "text":
-                        text.strip()
-
-                }
-
-            )
-
-
-
-        result = {
-
-
-            "document":
-                DOCUMENT,
-
-
-            "version":
-                VERSION,
-
-
-            "page":
-                number,
-
-
-            "geometry":
-                {
-
-
-                    "width":
-                        rect.width,
-
-
-                    "height":
-                        rect.height
-
-                },
-
-
-
-            "source":
-                {
-
-
-                    "pdf":
-                        str(
-                            self.pdf_path
-                        ),
-
-
-                    "pipeline":
-                        [
-
-                            "PyMuPDF",
-
-                            "PDFPageProcessor"
-
-                        ]
-
-                },
-
-
-
-            "created":
-                datetime.now()
-                .isoformat(),
-
-
-
-            "blocks":
-                blocks,
-
-
-
-            "formulas":
-                []
-
+        return {
+            "document": self.storage.get_document(self.document_id)["number"],
+            "document_id": self.document_id,
+            "version": self.storage._get_version(self.document_id, self.version_id).get("id"),
+            "page": number,
+            "geometry": {"width": rect.width, "height": rect.height},
+            "source": {
+                "pdf": str(self.pdf_path),
+                "pipeline": ["PyMuPDF", "PDFPageProcessor"],
+            },
+            "created": datetime.now().isoformat(),
+            "blocks": blocks,
+            "formulas": [],
         }
 
-
-
-        return result
-
-
-
-
-    def save_page(
-        self,
-        data
-    ):
-
-
-        self.output_dir.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-
-        filename = (
-
-            self.output_dir /
-            f"page_{data['page']:03}.json"
-
-        )
-
-
-        with open(
-            filename,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-
-            json.dump(
-
-                data,
-
-                f,
-
-                ensure_ascii=False,
-
-                indent=2
-
-            )
-
-
+    def save_page(self, data):
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        filename = self.output_dir / f"page_{data['page']:03}.json"
+        with filename.open("w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
         return filename
 
-
-
-
     def run(self):
-
-
+        self.storage.ensure_version_dirs(self.document_id, self.version_id)
         doc = self.open_pdf()
-
-
-        total = len(doc)
-
-
-
-        for index in range(total):
-
-
-            page_number = index + 1
-
-
-            print(
-                f"Processing page {page_number}/{total}"
-            )
-
-
-
-            page = doc[index]
-
-
-
-            data = self.extract_page(
-
-                page,
-
-                page_number
-
-            )
-
-
-
-            file = self.save_page(
-                data
-            )
-
-
-
-            print(
-                "Saved:",
-                file.name
-            )
-
-
-
-        doc.close()
-
-
-
-        print()
-
-        print(
-            "PDF processing completed"
-        )
-
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
+        try:
+            total = len(doc)
+            for index in range(total):
+                page_number = index + 1
+                print(f"Processing page {page_number}/{total}")
+                file = self.save_page(self.extract_page(doc[index], page_number))
+                print("Saved:", file.name)
+        finally:
+            doc.close()
+        print("\nPDF processing completed")
 
 
 def main():
-
-
-    processor = PDFPageProcessor(
-
-        PDF_PATH,
-
-        OUTPUT_DIR
-
-    )
-
-
-    processor.run()
-
+    PDFPageProcessor().run()
 
 
 if __name__ == "__main__":
-
     main()
-    
