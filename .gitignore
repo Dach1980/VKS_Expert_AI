@@ -43,3 +43,4 @@ knowledge/index/**/embeddings/*.npy
 
 # VKS Expert AI temporary processing
 knowledge/work/
+knowledge/index/**
