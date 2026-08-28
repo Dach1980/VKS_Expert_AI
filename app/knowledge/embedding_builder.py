@@ -1,380 +1,103 @@
+"""VKS Expert AI — Embedding Builder v2.
+
+Строит embeddings и FAISS из document chunks.
+Использует общий KnowledgeStorage и существующий EmbeddingClient.
+"""
+
 import json
-import os
-from pathlib import Path
-from datetime import datetime
 
-import numpy as np
 import faiss
-
-from sentence_transformers import SentenceTransformer
-
-
-# ============================================================
-# VKS Expert AI
-# Embedding Builder v1
-# ============================================================
-
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-
-DOCUMENT = "SP_30.13330"
-
-
-ENRICHED_DIR = (
-    BASE_DIR
-    / "knowledge"
-    / "index"
-    / DOCUMENT
-    / "enriched"
-)
-
-
-OUTPUT_DIR = (
-    BASE_DIR
-    / "knowledge"
-    / "index"
-    / DOCUMENT
-    / "embeddings"
-)
-
-
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-
-
-# ------------------------------------------------------------
-# helpers
-# ------------------------------------------------------------
-
-
-def ensure_dirs():
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-
-def load_pages():
-
-    pages = []
-
-    files = sorted(
-        ENRICHED_DIR.glob(
-            "page_*_enriched.json"
-        )
-    )
-
-    print(
-        f"Pages found: {len(files)}"
-    )
-
-    for file in files:
-
-        with open(
-            file,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            data = json.load(f)
-
-        pages.append(data)
-
-    return pages
-
-
-
-def build_embedding_records(pages):
-
-    records = []
-
-    counter = 0
-
-
-    for page in pages:
-
-
-        page_number = page.get(
-            "page",
-            page.get(
-                "page_number",
-                0
-            )
-        )
-
-
-        text_blocks = page.get(
-            "text_blocks",
-            []
-        )
-
-
-        formulas = page.get(
-            "formulas",
-            []
-        )
-
-
-        text_parts = []
-
-
-        for block in text_blocks:
-
-            if isinstance(block, dict):
-
-                text = block.get(
-                    "text",
-                    ""
-                )
-
-            else:
-
-                text = str(block)
-
-
-            if text:
-
-                text = str(text).strip()
-
-                if text:
-
-                    text_parts.append(
-                        text
-                    )
-
-
-        for formula in formulas:
-
-            if isinstance(formula, dict):
-
-                latex = formula.get(
-                    "latex"
-                )
-
-            else:
-
-                latex = formula
-
-
-            if latex:
-
-                latex = str(latex).strip()
-
-
-                if latex:
-
-                    text_parts.append(
-                        "Формула: "
-                        + latex
-                    )
-
-
-        if not text_parts:
-
-            continue
-
-
-        content = "\n".join(
-            text_parts
-        )
-
-
-        counter += 1
-
-
-        records.append(
-            {
-                "id": counter,
-
-                "document": DOCUMENT,
-
-                "page": page_number,
-
-                "text": content,
-
-                "created": datetime.now().isoformat()
-            }
-        )
-
-
-    return records
-
-
-
-def save_json(
-    filename,
-    data
-):
-
-    path = OUTPUT_DIR / filename
-
-
-    with open(
-        path,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        json.dump(
-            data,
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
-
-
-    print(
-        "Saved:",
-        path
-    )
-
-
-
-# ------------------------------------------------------------
-# main
-# ------------------------------------------------------------
+import numpy as np
+
+from app.knowledge.storage import KnowledgeStorage
+from app.rag.embedding_client import EmbeddingClient
+
+
+class EmbeddingBuilder:
+    def __init__(self, document_id="SP_30.13330", version_id=None, storage=None):
+        self.document_id = document_id
+        self.version_id = version_id
+        self.storage = storage or KnowledgeStorage()
+        self.paths = self.storage.paths(document_id, version_id)
+
+    def load_chunks(self):
+        file = self.paths.chunks / "all_chunks.json"
+        if not file.exists():
+            raise FileNotFoundError(f"Chunks not found: {file}")
+        with file.open("r", encoding="utf-8") as f:
+            chunks = json.load(f)
+        print("Chunks loaded:", len(chunks))
+        return chunks
+
+    def build_embeddings(self, chunks):
+        client = EmbeddingClient()
+        vectors = []
+        metadata = []
+
+        for index, item in enumerate(chunks, start=1):
+            text = item.get("embedding_text", "")
+            if not text:
+                content = item.get("content", {})
+                text = content.get("text", "") if isinstance(content, dict) else str(content)
+            if not str(text).strip():
+                continue
+
+            vector = client.embed(str(text))
+            vectors.append(vector)
+            metadata.append({
+                "chunk_id": item["chunk_id"],
+                "type": item.get("type", "text"),
+                "document": item.get("document", self.document_id),
+                "document_id": item.get("document_id", self.document_id),
+                "version": item.get("version"),
+                "page": item.get("page", 0),
+                "location": item.get("location", {}),
+                "content": item.get("content", {}),
+                "metadata": item.get("metadata", {}),
+                "embedding_text": text,
+            })
+            print(f"Embedded {index}/{len(chunks)}")
+
+        if not vectors:
+            raise RuntimeError("Embedding list is empty")
+
+        return np.asarray(vectors, dtype="float32"), metadata
+
+    def build_faiss(self, vectors):
+        faiss.normalize_L2(vectors)
+        index = faiss.IndexFlatIP(vectors.shape[1])
+        index.add(vectors)
+        return index
+
+    def save(self, index, vectors, metadata):
+        output = self.paths.embeddings
+        output.mkdir(parents=True, exist_ok=True)
+        index_file = output / "index.faiss"
+        vectors_file = output / "vectors.npy"
+        metadata_file = output / "metadata.json"
+
+        faiss.write_index(index, str(index_file))
+        np.save(vectors_file, vectors)
+        with metadata_file.open("w", encoding="utf-8") as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+        print("Saved:", index_file)
+        print("Saved:", vectors_file)
+        print("Saved:", metadata_file)
+        return index_file
+
+    def run(self):
+        chunks = self.load_chunks()
+        vectors, metadata = self.build_embeddings(chunks)
+        index = self.build_faiss(vectors)
+        self.save(index, vectors, metadata)
+        print("Vectors:", len(metadata))
+        print("DONE")
 
 
 def main():
-
-    print("=" * 70)
-    print("VKS Expert AI")
-    print("Embedding Builder v1")
-    print("=" * 70)
-
-
-    ensure_dirs()
-
-
-    pages = load_pages()
-
-
-    print(
-        "Building records..."
-    )
-
-
-    records = build_embedding_records(
-        pages
-    )
-
-
-    print(
-        "Chunks:",
-        len(records)
-    )
-
-
-    save_json(
-        "metadata.json",
-        records
-    )
-
-
-    print(
-        "Loading embedding model..."
-    )
-
-
-    model = SentenceTransformer(
-        MODEL_NAME
-    )
-
-
-    texts = [
-        r["text"]
-        for r in records
-    ]
-
-
-    print(
-        "Creating embeddings..."
-    )
-
-
-    embeddings = model.encode(
-        texts,
-        batch_size=16,
-        show_progress_bar=True,
-        normalize_embeddings=True
-    )
-
-
-    embeddings = np.array(
-        embeddings,
-        dtype="float32"
-    )
-
-
-    np.save(
-        OUTPUT_DIR / "vectors.npy",
-        embeddings
-    )
-
-
-    dimension = embeddings.shape[1]
-
-
-    print(
-        "Embedding dimension:",
-        dimension
-    )
-
-
-    print(
-        "Building FAISS index..."
-    )
-
-
-    index = faiss.IndexFlatIP(
-        dimension
-    )
-
-
-    index.add(
-        embeddings
-    )
-
-
-    faiss.write_index(
-        index,
-        str(
-            OUTPUT_DIR
-            / "index.faiss"
-        )
-    )
-
-
-    print()
-    print("=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-
-    print(
-        "Documents:",
-        DOCUMENT
-    )
-
-    print(
-        "Pages:",
-        len(pages)
-    )
-
-    print(
-        "Vectors:",
-        len(records)
-    )
-
-    print(
-        "Index:",
-        OUTPUT_DIR / "index.faiss"
-    )
-
-    print()
-    print("DONE")
-
+    EmbeddingBuilder().run()
 
 
 if __name__ == "__main__":
-
     main()
