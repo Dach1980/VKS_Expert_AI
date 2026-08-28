@@ -1,7 +1,4 @@
-"""VKS Expert AI — SP Index Builder v2.
-
-Оркестратор этапов индексации. Все пути получает через KnowledgeStorage.
-"""
+"""VKS Expert AI — SP Index Builder v2."""
 
 import json
 from datetime import datetime
@@ -19,7 +16,7 @@ class SPIndexBuilder:
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
         self.paths = self.storage.paths(document_id, version_id)
-        self.version = self.storage._get_version(document_id, version_id)
+        self.version = self.storage.get_version(document_id, version_id)
 
     def check_pdf(self):
         if not self.paths.pdf.exists():
@@ -35,17 +32,14 @@ class SPIndexBuilder:
         with self.paths.parsed.open("r", encoding="utf-8-sig") as f:
             data = json.load(f)
         sections = build_structure(data)
-        result, output = save_structure(
-            data, sections, self.storage, self.document_id, self.version["id"]
-        )
+        result, output = save_structure(data, sections, self.storage, self.document_id, self.version["id"])
         print("Structured:", output)
         return result
 
     def run_chunk_builder(self):
         builder = DocumentChunkBuilder(self.document_id, self.version["id"], self.storage)
         chunks = builder.process_all_pages()
-        output = builder.save(chunks)
-        return chunks, output
+        return chunks, builder.save(chunks)
 
     def run_embedding_builder(self):
         builder = EmbeddingBuilder(self.document_id, self.version["id"], self.storage)
