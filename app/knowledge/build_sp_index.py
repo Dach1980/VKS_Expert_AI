@@ -1,430 +1,115 @@
-"""
-SP Index Builder v1
+"""VKS Expert AI — SP Index Builder v2.
 
-Главный pipeline построения индекса нормативного документа.
-
-Назначение:
-
-Полный цикл обработки СП:
-
-PDF
- |
- PyMuPDF
- |
- Page extraction
- |
- Formula recognition
- |
- Formula indexing
- |
- Document chunks
- |
- RAG preparation
-
-
-Версия v1:
-
-Поддерживает:
-- PDF страницы
-- существующие page json
-- формулы
-- сбор chunks
-
-
-Подготовка:
-- FAISS
-- ChromaDB
-- Graph-RAG
-
-
+Оркестратор этапов индексации. Все пути получает через KnowledgeStorage.
 """
 
-
-from pathlib import Path
 import json
 from datetime import datetime
 
-
-
-# ============================================================
-# CONFIG
-# ============================================================
-
-
-PROJECT_ROOT = Path(
-    r"D:\Projects\VKS_Expert_AI"
-)
-
-
-DOCUMENT_NAME = (
-    "СП 30.13330.2020"
-)
-
-
-VERSION = "base"
-
-
-
-PDF_PATH = (
-
-    PROJECT_ROOT /
-    "knowledge" /
-    "regulations" /
-    "SP_30.13330" /
-    "СП_30.13330_базовая_версия.pdf"
-
-)
-
-
-
-PAGES_DIR = (
-
-    PROJECT_ROOT /
-    "knowledge" /
-    "index" /
-    "SP_30.13330" /
-    "pages"
-
-)
-
-
-
-CHUNKS_DIR = (
-
-    PROJECT_ROOT /
-    "knowledge" /
-    "index" /
-    "SP_30.13330" /
-    "document_chunks"
-
-)
-
-
-
-# ============================================================
-# BUILDER
-# ============================================================
+from app.knowledge.storage import KnowledgeStorage
+from app.knowledge.pdf_page_processor import PDFPageProcessor
+from app.knowledge.structure_parser import save_structure, build_structure
+from app.knowledge.document_chunk_builder import DocumentChunkBuilder
+from app.knowledge.embedding_builder import EmbeddingBuilder
 
 
 class SPIndexBuilder:
-
-
-
-    def __init__(
-        self,
-        pdf,
-        pages_dir,
-        chunks_dir
-    ):
-
-        self.pdf = pdf
-        self.pages_dir = pages_dir
-        self.chunks_dir = chunks_dir
-
-
+    def __init__(self, document_id="SP_30.13330", version_id=None, storage=None):
+        self.document_id = document_id
+        self.version_id = version_id
+        self.storage = storage or KnowledgeStorage()
+        self.paths = self.storage.paths(document_id, version_id)
+        self.version = self.storage._get_version(document_id, version_id)
 
     def check_pdf(self):
+        if not self.paths.pdf.exists():
+            raise FileNotFoundError(f"PDF not found: {self.paths.pdf}")
+        print("PDF:", self.paths.pdf)
 
-        print(
-            "Checking PDF..."
+    def run_page_processor(self):
+        PDFPageProcessor(self.document_id, self.version["id"], self.storage).run()
+
+    def run_structure_parser(self):
+        if not self.paths.parsed.exists():
+            raise FileNotFoundError(f"Parsed JSON not found: {self.paths.parsed}")
+        with self.paths.parsed.open("r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        sections = build_structure(data)
+        result, output = save_structure(
+            data, sections, self.storage, self.document_id, self.version["id"]
         )
+        print("Structured:", output)
+        return result
 
+    def run_chunk_builder(self):
+        builder = DocumentChunkBuilder(self.document_id, self.version["id"], self.storage)
+        chunks = builder.process_all_pages()
+        output = builder.save(chunks)
+        return chunks, output
 
-        if not self.pdf.exists():
+    def run_embedding_builder(self):
+        builder = EmbeddingBuilder(self.document_id, self.version["id"], self.storage)
+        builder.run()
 
-            raise FileNotFoundError(
-                f"PDF not found: {self.pdf}"
-            )
-
-
-        print(
-            "PDF:",
-            self.pdf.name
-        )
-
-
-
-    def collect_pages(self):
-
-        print()
-
-        print(
-            "Searching page indexes..."
-        )
-
-
-        files = sorted(
-            self.pages_dir.glob(
-                "page_*.json"
-            )
-        )
-
-
-        print(
-            "Pages found:",
-            len(files)
-        )
-
-
-        return files
-
-
-
-    def load_page(
-        self,
-        file
-    ):
-
-
-        with open(
-            file,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return json.load(f)
-
-
-
-    def build_summary(
-        self,
-        pages
-    ):
-
-
-        summary = {
-
-
-            "document":
-                DOCUMENT_NAME,
-
-
-            "version":
-                VERSION,
-
-
-            "source":
-                {
-
-                    "pdf":
-                        str(
-                            self.pdf
-                        )
-
-                },
-
-
-            "statistics":
-                {
-
-                    "pages":
-                        len(pages),
-
-
-                    "formulas":
-                        0
-
-
-                },
-
-
-            "created":
-                datetime.now()
-                .isoformat()
-
-
+    def build_summary(self):
+        paths = self.paths
+        page_count = len(list(paths.pages.glob("page_*.json"))) if paths.pages.exists() else 0
+        enriched_count = len(list(paths.enriched.glob("page_*_enriched.json"))) if paths.enriched.exists() else 0
+        chunks_file = paths.chunks / "all_chunks.json"
+        embedding_index = paths.embeddings / "index.faiss"
+        return {
+            "document": self.storage.get_document(self.document_id)["number"],
+            "document_id": self.document_id,
+            "version": self.version["id"],
+            "source": {"pdf": str(paths.pdf)},
+            "statistics": {
+                "pages": page_count,
+                "enriched_pages": enriched_count,
+                "chunks": self._count_chunks(chunks_file),
+                "vector_index": embedding_index.exists(),
+            },
+            "created": datetime.now().isoformat(),
         }
 
+    @staticmethod
+    def _count_chunks(file):
+        if not file.exists():
+            return 0
+        with file.open("r", encoding="utf-8") as f:
+            return len(json.load(f))
 
+    def save_summary(self, summary):
+        output = self.paths.chunks
+        output.mkdir(parents=True, exist_ok=True)
+        file = output / "index_summary.json"
+        with file.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        print("Saved summary:", file)
 
-        formulas = 0
-
-
-
-        for file in pages:
-
-            data = self.load_page(
-                file
-            )
-
-
-            formulas += len(
-                data.get(
-                    "formulas",
-                    []
-                )
-            )
-
-
-
-        summary["statistics"]["formulas"] = formulas
-
-
+    def run(self, build_pages=True, build_structure_stage=True, build_chunks=True, build_embeddings=True):
+        self.check_pdf()
+        self.storage.ensure_version_dirs(self.document_id, self.version["id"])
+        if build_pages:
+            self.run_page_processor()
+        if build_structure_stage:
+            self.run_structure_parser()
+        if build_chunks:
+            self.run_chunk_builder()
+        if build_embeddings:
+            self.run_embedding_builder()
+        summary = self.build_summary()
+        self.save_summary(summary)
         return summary
 
 
-
-
-    def save_summary(
-        self,
-        summary
-    ):
-
-
-        self.chunks_dir.mkdir(
-
-            parents=True,
-
-            exist_ok=True
-
-        )
-
-
-        file = (
-
-            self.chunks_dir /
-            "index_summary.json"
-
-        )
-
-
-
-        with open(
-            file,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-
-            json.dump(
-
-                summary,
-
-                f,
-
-                ensure_ascii=False,
-
-                indent=2
-
-            )
-
-
-
-        print()
-
-        print(
-            "Saved summary:",
-            file
-        )
-
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-
-
 def main():
-
-
-    print(
-        "=" * 70
-    )
-
-
-    print(
-        "VKS Expert AI"
-    )
-
-
-    print(
-        "SP Index Builder v1"
-    )
-
-
-    print(
-        "=" * 70
-    )
-
-
-
-    builder = SPIndexBuilder(
-
-        PDF_PATH,
-
-        PAGES_DIR,
-
-        CHUNKS_DIR
-
-    )
-
-
-
-    builder.check_pdf()
-
-
-
-    pages = builder.collect_pages()
-
-
-
-    if not pages:
-
-        print()
-
-        print(
-            "No page indexes found."
-        )
-
-        print(
-            "Run page extraction pipeline first."
-        )
-
-        return
-
-
-
-    summary = builder.build_summary(
-        pages
-    )
-
-
-
-    print()
-
-    print(
-        "INDEX SUMMARY"
-    )
-
-
-    print(
-        json.dumps(
-            summary,
-            ensure_ascii=False,
-            indent=2
-        )
-    )
-
-
-
-    builder.save_summary(
-        summary
-    )
-
-
-
-    print()
-
-    print(
-        "DONE"
-    )
-
-
-
+    print("=" * 70)
+    print("VKS Expert AI — SP Index Builder v2")
+    print("=" * 70)
+    summary = SPIndexBuilder().run()
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print("DONE")
 
 
 if __name__ == "__main__":
-
     main()
-    
