@@ -3,14 +3,10 @@
 // Real Registry/Storage API integration
 // ============================================================
 
+// The Registry is the source of truth for normative documents.
+// Remove legacy demo norms from state.js without changing project documents.
+normsData = [];
 var normsPollTimers = {};
-
-function normStatus(norm) {
-  var p = norm.processing || {};
-  if (p.vector_index && p.vector_metadata) return 'indexed';
-  if (p.uploaded) return 'pending';
-  return 'pending';
-}
 
 function normProgress(norm) {
   var p = norm.processing || {};
@@ -27,15 +23,13 @@ function renderNorms() {
   if (!grid) return;
 
   if (!normsData.length) {
-    grid.innerHTML = '<div style="text-align:center;padding:48px;color:var(--text-secondary);">' +
-      'Нет нормативных документов. Перетащите PDF или нажмите на зону загрузки.' +
-      '</div>';
+    grid.innerHTML = '<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нет нормативных документов. Перетащите PDF или нажмите на зону загрузки.</div>';
     return;
   }
 
   var html = '';
   normsData.forEach(function (norm) {
-    var status = norm.status || normStatus(norm);
+    var status = norm.status || 'pending';
     var progress = norm.progress == null ? normProgress(norm) : norm.progress;
     var processing = norm.processing || {};
     var id = JSON.stringify(norm.id);
@@ -43,9 +37,8 @@ function renderNorms() {
     html += '<div class="norm-card">';
     html += '<div class="norm-card-header"><div style="flex:1;">';
     html += '<div class="norm-card-title">' + escapeHtml(norm.title || norm.number || '') + '</div>';
-    html += '<div class="norm-card-subtitle">' + escapeHtml(norm.subtitle || norm.number || '') + '</div>';
+    html += '<div class="norm-card-subtitle">' + escapeHtml(norm.subtitle || '') + '</div>';
     html += '</div></div>';
-
     html += '<div class="norm-card-meta">';
     html += '<span>📅 ' + escapeHtml(norm.date || norm.effective_from || '') + '</span>';
     html += '<span>📄 ' + (processing.pages_count || 0) + ' стр.</span>';
@@ -69,7 +62,6 @@ function renderNorms() {
     html += '<button class="btn btn-secondary btn-sm" onclick="showNormInfo(' + id + ')">Информация</button>';
     html += '</div></div>';
   });
-
   grid.innerHTML = html;
 }
 
@@ -95,7 +87,7 @@ function loadNorms() {
           fileName: item.paths && item.paths.pdf ? item.paths.pdf.split(/[\\/]/).pop() : '',
           version_id: item.version_id,
           processing: p,
-          raw: item,
+          raw: item
         };
       });
       renderNorms();
@@ -144,7 +136,16 @@ function handleFiles(files, type) {
     var docs = [];
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
-      docs.push({ name: file.name, size: formatFileSize(file.size), date: new Date().toISOString().split('T')[0], status: 'new', section: 'ВК', checked: false });
+      docs.push({
+        id: nextDocId++,
+        name: file.name,
+        size: formatFileSize(file.size),
+        date: new Date().toISOString().split('T')[0],
+        status: 'new',
+        sheets: 0,
+        section: 'ВК',
+        checked: false
+      });
     }
     docsData = docsData.concat(docs);
     if (typeof renderDocs === 'function') renderDocs();
@@ -155,9 +156,7 @@ function handleFiles(files, type) {
 
   var uploads = [];
   for (var j = 0; j < files.length; j++) uploads.push(uploadNormFile(files[j]));
-  Promise.all(uploads).then(function () {
-    loadNorms();
-  }).catch(function () {});
+  Promise.all(uploads).then(function () { return loadNorms(); }).catch(function () {});
 }
 
 function uploadNormFile(file) {
@@ -198,9 +197,7 @@ function indexNorm(id) {
   norm.progress = 20;
   renderNorms();
 
-  fetch('/api/norms/' + encodeURIComponent(norm.id) + '/' + encodeURIComponent(norm.version_id) + '/index', {
-    method: 'POST',
-  })
+  fetch('/api/norms/' + encodeURIComponent(norm.id) + '/' + encodeURIComponent(norm.version_id) + '/index', { method: 'POST' })
     .then(function (response) {
       return response.json().then(function (data) {
         if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
@@ -236,7 +233,6 @@ function pollNormStatus(documentId, versionId) {
         norm.progress = normProgress(data);
         norm.status = norm.processing.vector_index && norm.processing.vector_metadata ? 'indexed' : 'indexing';
         renderNorms();
-
         if (norm.status === 'indexed') {
           clearInterval(normsPollTimers[key]);
           delete normsPollTimers[key];
@@ -250,32 +246,19 @@ function pollNormStatus(documentId, versionId) {
 }
 
 function indexAllNorms() {
-  var pending = normsData.filter(function (norm) {
-    return norm.status !== 'indexed' && norm.status !== 'indexing';
-  });
+  var pending = normsData.filter(function (norm) { return norm.status !== 'indexed' && norm.status !== 'indexing'; });
   if (!pending.length) {
     showToast('Все документы уже индексированы', 'info');
     return;
   }
-  pending.reduce(function (chain, norm) {
-    return chain.then(function () {
-      indexNorm(norm.id);
-      return new Promise(function (resolve) { setTimeout(resolve, 500); });
-    });
-  }, Promise.resolve());
+  pending.forEach(function (norm) { indexNorm(norm.id); });
 }
 
 function showNormInfo(id) {
   var norm = getNormById(id);
   if (!norm) return;
   var p = norm.processing || {};
-  alert(
-    'Документ: ' + (norm.number || '') + '\n' +
-    'Название: ' + (norm.subtitle || '') + '\n' +
-    'Версия: ' + (norm.version_id || '') + '\n' +
-    'Страниц: ' + (p.pages_count || 0) + '\n' +
-    'Статус: ' + (norm.status || 'pending')
-  );
+  alert('Документ: ' + (norm.number || '') + '\nНазвание: ' + (norm.subtitle || '') + '\nВерсия: ' + (norm.version_id || '') + '\nСтраниц: ' + (p.pages_count || 0) + '\nСтатус: ' + (norm.status || 'pending'));
 }
 
 function deleteNorm(id) {
