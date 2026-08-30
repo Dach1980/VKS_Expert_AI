@@ -100,7 +100,15 @@ class KnowledgeStorage:
 
     def ensure_version_dirs(self, document_id: str, version_id: str | None = None) -> DocumentPaths:
         paths = self.paths(document_id, version_id)
-        for directory in (paths.pages, paths.enriched, paths.chunks, paths.embeddings, paths.parsed.parent, paths.structured.parent, paths.pdf.parent):
+        for directory in (
+            paths.pages,
+            paths.enriched,
+            paths.chunks,
+            paths.embeddings,
+            paths.parsed.parent,
+            paths.structured.parent,
+            paths.pdf.parent,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
         return paths
 
@@ -112,6 +120,21 @@ class KnowledgeStorage:
             raise StorageError("KnowledgeStorage принимает только PDF")
         paths = self.ensure_version_dirs(document_id, version_id)
         shutil.copy2(source_path, paths.pdf)
+        return paths.pdf
+
+    def save_uploaded_pdf(self, document_id: str, upload_file, version_id: str | None = None) -> Path:
+        """Сохранить загруженный FastAPI UploadFile через единый Storage слой."""
+        filename = str(getattr(upload_file, "filename", "") or "")
+        if not filename.lower().endswith(".pdf"):
+            raise StorageError("Поддерживается только загрузка PDF")
+
+        paths = self.ensure_version_dirs(document_id, version_id)
+        try:
+            upload_file.file.seek(0)
+            with paths.pdf.open("wb") as destination:
+                shutil.copyfileobj(upload_file.file, destination)
+        except OSError as error:
+            raise StorageError(f"Не удалось сохранить PDF: {error}") from error
         return paths.pdf
 
     def get_status(self, document_id: str, version_id: str | None = None) -> dict[str, Any]:
