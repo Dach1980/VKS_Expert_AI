@@ -1,183 +1,55 @@
-"""
-VKS Expert AI
-API Schemas v1
-
-Purpose:
-Pydantic models for FastAPI API.
-
-Contains:
-- Request models
-- Response models
-- Source information
-- Evidence information
-"""
-
+"""VKS Expert AI API schemas."""
 
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
-
-# ==========================================================
-# Request models
-# ==========================================================
-
-
 class QuestionRequest(BaseModel):
-    """
-    User question request.
-    """
-
-    question: str = Field(
-        ...,
-        description="Engineering question",
-        examples=[
-            "Как определяется максимальный расчетный расход воды?"
-        ]
-    )
-
-
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of retrieved sources"
-    )
-
-
-
-# ==========================================================
-# Source models
-# ==========================================================
+    question: str = Field(..., description="Engineering question")
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of retrieved sources")
 
 
 class SourceInfo(BaseModel):
-    """
-    Retrieved normative source.
-    """
-
-
-    document: str = Field(
-        ...,
-        description="Document name"
-    )
-
-
-    page: int = Field(
-        ...,
-        description="Page number"
-    )
-
-
-    score: float = Field(
-        ...,
-        description="Similarity score"
-    )
-
-
-
-# ==========================================================
-# Evidence models
-# ==========================================================
+    document: str
+    page: int
+    score: float
 
 
 class EvidenceInfo(BaseModel):
-    """
-    Evidence validation result.
-    """
-
-
-    confidence: float = Field(
-        ...,
-        description="Evidence confidence score"
-    )
-
-
-    accepted: int = Field(
-        ...,
-        description="Accepted evidence fragments"
-    )
-
-
-    rejected: int = Field(
-        ...,
-        description="Rejected evidence fragments"
-    )
-
-
-    sufficient: bool = Field(
-        ...,
-        description="Evidence sufficiency flag"
-    )
-
-
-
-# ==========================================================
-# Response models
-# ==========================================================
+    confidence: float
+    accepted: int
+    rejected: int
+    sufficient: bool
 
 
 class AnswerResponse(BaseModel):
-    """
-    Final VKS Expert AI answer.
-    """
-
-
-    question: str = Field(
-        ...,
-        description="Original question"
-    )
-
-
-    answer: str = Field(
-        ...,
-        description="Technical answer"
-    )
-
-
-    evidence_confidence: Optional[float] = Field(
-        default=None,
-        description="Evidence confidence"
-    )
-
-
-    evidence_sufficient: Optional[bool] = Field(
-        default=None,
-        description="Evidence availability"
-    )
-
-
-    evidence: Optional[EvidenceInfo] = Field(
-        default=None,
-        description="Detailed evidence information"
-    )
-
-
-    sources: List[SourceInfo] = Field(
-        default_factory=list,
-        description="Normative sources"
-    )
-
-
-
-# ==========================================================
-# Health response
-# ==========================================================
+    question: str
+    answer: str
+    evidence_confidence: Optional[float] = None
+    evidence_sufficient: Optional[bool] = None
+    evidence: Optional[EvidenceInfo] = None
+    sources: List[SourceInfo] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
-    """
-    API health status.
-    """
+    status: str = "ok"
+    service: str = "VKS Expert AI"
 
 
-    status: str = Field(
-        default="ok"
-    )
+class NormUploadResponse(BaseModel):
+    success: bool
+    document_id: str
+    version_id: str
+    number: str
+    title: str
+    status: str
+    filename: str
 
 
-    service: str = Field(
-        default="VKS Expert AI"
-    )
-    
+class NormIndexResponse(BaseModel):
+    success: bool
+    document_id: str
+    version_id: str
+    status: str
+    message: str
