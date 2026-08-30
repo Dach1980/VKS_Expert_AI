@@ -64,6 +64,8 @@ class DocumentRegistry:
         version_type="edition",
         effective_from=None,
         file_path=None,
+        parsed_file=None,
+        structured_file=None,
         make_current=True,
     ):
         """Создать документ/версию в Registry и при необходимости сделать её current."""
@@ -82,18 +84,13 @@ class DocumentRegistry:
             self.data.setdefault("documents", []).append(document)
         else:
             if document.get("number") != number:
-                raise RegistryError(
-                    f"Номер документа {document_id} не совпадает с существующим Registry"
-                )
+                raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
             if document.get("title") != title:
-                raise RegistryError(
-                    f"Название документа {document_id} не совпадает с существующим Registry"
-                )
+                raise RegistryError(f"Название документа {document_id} не совпадает с существующим Registry")
 
         versions = document.setdefault("versions", [])
         if version_id is None:
             version_id = f"{document_id}_{date.today().isoformat().replace('-', '')}"
-
         if any(version.get("id") == version_id for version in versions):
             raise RegistryError(f"Версия уже существует: {document_id}/{version_id}")
 
@@ -108,6 +105,8 @@ class DocumentRegistry:
             "status": "current" if make_current else "uploaded",
             "effective_from": effective_from,
             "file": file_path,
+            "parsed_file": parsed_file,
+            "structured_file": structured_file,
         }
         versions.append(version)
         self.save()
@@ -163,9 +162,7 @@ class DocumentRegistry:
                     try:
                         date.fromisoformat(effective_from)
                     except ValueError:
-                        errors.append(
-                            f"{document_id}: некорректная дата effective_from: {effective_from}"
-                        )
+                        errors.append(f"{document_id}: некорректная дата effective_from: {effective_from}")
             if current_count == 0:
                 errors.append(f"{document_id}: нет действующей версии.")
             elif current_count > 1:
