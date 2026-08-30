@@ -172,55 +172,60 @@ class RAGPipeline:
 
         validation_results = []
 
-
         for r in results:
 
-            item = r.get(
-                "item",
-                {}
-            )
-
-            content = item.get(
+            content = r.get(
                 "content",
                 {}
             )
 
+            if isinstance(content, dict):
+
+                text = content.get(
+                    "text",
+                    ""
+                )
+
+            else:
+
+                text = str(content)
+
+                content = {
+                    "text": text
+                }
 
             validation_results.append(
 
                 {
 
                     "text":
-                        content.get(
-                            "text",
-                            ""
-                        ),
-
+                        text,
 
                     "score":
-                        r.get(
-                            "score",
-                            0.0
+                        float(
+                            r.get(
+                                "score",
+                                0.0
+                            )
                         ),
-
 
                     "page":
-                        item.get(
-                            "page"
+                        r.get(
+                            "page",
+                            0
                         ),
-
 
                     "document":
-                        item.get(
-                            "document"
+                        r.get(
+                            "document",
+                            "unknown"
                         ),
-
 
                     "type":
-                        item.get(
-                            "type"
+                        r.get(
+                            "type",
+                            "text"
                         ),
-
 
                     "content":
                         content
