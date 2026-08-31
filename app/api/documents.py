@@ -7,7 +7,6 @@ The module deliberately does not create a second PDF parsing pipeline.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import uuid
 from datetime import datetime
@@ -25,11 +24,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOCUMENTS_ROOT = PROJECT_ROOT / "knowledge" / "project_documents"
 REGISTRY_FILE = DOCUMENTS_ROOT / "documents.json"
 REGISTRY_LOCK = Lock()
-
-
-def _safe_name(value: str) -> str:
-    value = re.sub(r"[^A-Za-zА-Яа-я0-9_.-]+", "_", value).strip("._-")
-    return value or "document"
 
 
 def _read_registry() -> list[dict]:
@@ -72,13 +66,11 @@ def _process_document(document_id: str) -> None:
 
     root = Path(item["root"])
     try:
-        pages = root / "pages"
-        parsed = root / "parsed.json"
         processor = PDFPageProcessor(
             document_id=document_id,
             pdf_path=root / "source.pdf",
-            output_dir=pages,
-            parsed_path=parsed,
+            output_dir=root / "pages",
+            parsed_path=root / "parsed.json",
             document_meta={
                 "number": item["name"],
                 "title": item["name"],
@@ -114,7 +106,10 @@ def list_documents():
 
 
 @router.post("/upload")
-def upload_document(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
     filename = file.filename or ""
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Для проектной документации поддерживается только PDF")
@@ -149,7 +144,7 @@ def upload_document(file: UploadFile = File(...), background_tasks: BackgroundTa
         items.append(item)
         _write_registry(items)
 
-    (background_tasks or BackgroundTasks()).add_task(_process_document, document_id)
+    background_tasks.add_task(_process_document, document_id)
     return {"success": True, **_status(item)}
 
 
