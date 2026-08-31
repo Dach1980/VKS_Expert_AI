@@ -34,6 +34,7 @@ class KnowledgeStorage:
     """Единая файловая модель нормативного документа и его версий."""
 
     SETTINGS_FILE = PROJECT_ROOT / "knowledge" / "registry" / "storage_settings.json"
+    DEFAULT_VECTOR_ROOT = PROJECT_ROOT / "data" / "vectordb"
 
     def __init__(self, project_root: Path | str = PROJECT_ROOT, registry: DocumentRegistry | None = None):
         self.project_root = Path(project_root).resolve()
@@ -66,20 +67,23 @@ class KnowledgeStorage:
         return p if p.is_absolute() else self.project_root / p
 
     def vector_index_root(self) -> Path:
-        """Фактический каталог хранения векторных индексов."""
-        default = self.knowledge_root / "index"
+        """Единственный фактический каталог хранения векторных индексов."""
+        default = self.DEFAULT_VECTOR_ROOT
         try:
             if self.SETTINGS_FILE.exists():
                 data = json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8-sig"))
                 configured = data.get("vector_index_path")
                 if configured:
-                    candidate = self.resolve(configured)
+                    candidate = Path(configured).expanduser()
+                    if not candidate.is_absolute():
+                        candidate = self.project_root / candidate
+                    candidate = candidate.resolve()
                     candidate.mkdir(parents=True, exist_ok=True)
                     return candidate
         except (OSError, json.JSONDecodeError, TypeError):
             pass
         default.mkdir(parents=True, exist_ok=True)
-        return default
+        return default.resolve()
 
     def set_vector_index_root(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser().resolve()
@@ -146,14 +150,7 @@ class KnowledgeStorage:
     def write_index_error(self, document_id, version_id, error):
         p = self._index_error_path(document_id, version_id)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(
-            json.dumps(
-                {"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()},
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        p.write_text(json.dumps({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @staticmethod
     def _walk_strings(value):
@@ -178,7 +175,7 @@ class KnowledgeStorage:
                 continue
             strings.append(text)
             if k in {"document_number", "norm_number", "normative_number", "standard_number", "number", "code", "document", "standard"}:
-                m = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", text, re.I)
+                m = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", text)
                 if m:
                     result.setdefault("number", re.sub(r"\s+", " ", m.group(1)).strip())
             if k in {"document_title", "norm_title", "title", "name", "document_name"} and len(text) > 8 and not re.search(r"\.(?:pdf|json)$", text, re.I):
@@ -191,25 +188,6 @@ class KnowledgeStorage:
                 m = re.search(r"(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})", text)
                 if m:
                     result.setdefault("change_date", m.group(1))
-
-        if not result.get("number"):
-            for text in strings:
-                m = re.search(r"\b((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)\b", text, re.I)
-                if m:
-                    result["number"] = re.sub(r"\s+", " ", m.group(1)).strip()
-                    break
-        if not result.get("change_number"):
-            for text in strings:
-                m = re.search(r"Изменени(?:е|я)\s*(?:№|N|No\.?)?\s*([0-9]+)", text, re.I)
-                if m:
-                    result["change_number"] = m.group(1)
-                    break
-        if not result.get("change_date"):
-            for text in strings:
-                m = re.search(r"Изменени(?:е|я).*?(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})", text, re.I)
-                if m:
-                    result["change_date"] = m.group(1)
-                    break
         return result
 
     @staticmethod
@@ -217,207 +195,71 @@ class KnowledgeStorage:
         if not path.exists():
             return 0
         try:
-            from pypdf import PdfReader
-            return len(PdfReader(str(path)).pages)
+            import pymupdf
+            with pymupdf.open(path) as document:
+                return len(document)
         except Exception:
             try:
-                from PyPDF2 import PdfReader
+                from pypdf import PdfReader
                 return len(PdfReader(str(path)).pages)
             except Exception:
                 return 0
 
-    @staticmethod
-    def _pdf_text(path: Path, max_pages: int = 6) -> str:
-        if not path.exists():
-            return ""
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(str(path))
-        except Exception:
+    def get_version_metadata(self, document_id, version_id=None):
+        version = self.get_version(document_id, version_id)
+        pdf = self.resolve(version.get("file", ""))
+        parsed = self.resolve(version.get("parsed_file", ""))
+        result = {"pages_count": int(version.get("pages_count") or self._pdf_pages(pdf))}
+        if parsed.exists():
             try:
-                from PyPDF2 import PdfReader
-                reader = PdfReader(str(path))
-            except Exception:
-                return ""
-        parts = []
-        for page in reader.pages[:max_pages]:
-            try:
-                text = page.extract_text() or ""
-                if text:
-                    parts.append(text)
-            except Exception:
-                continue
-        return "\n".join(parts)
-
-    @classmethod
-    def _extract_pdf_metadata(cls, path: Path):
-        text = cls._pdf_text(path)
-        result: dict[str, str] = {}
-        if not text:
-            return result
-        # Ищем именно полный номер с годом, например СП 30.13330.2020.
-        number_matches = re.findall(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", text, re.I)
-        if number_matches:
-            result["number"] = re.sub(r"\s+", " ", max(number_matches, key=len)).strip()
-        change = re.search(r"Изменени(?:е|я)\s*(?:№|N|No\.?)?\s*([0-9]+)", text, re.I)
-        if change:
-            result["change_number"] = change.group(1)
-        date_match = re.search(r"(?:Изменени(?:е|я)|Актуализирован|введен(?:а|о)?)?.{0,100}?(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})", text, re.I | re.S)
-        if date_match:
-            result["change_date"] = date_match.group(1)
-        # Заголовок обычно находится рядом с первой строкой полного номера.
-        for line in (x.strip() for x in text.splitlines()):
-            if len(line) < 15 or len(line) > 220:
-                continue
-            if "внутренний водопровод" in line.lower() and "канализац" in line.lower():
-                result.setdefault("title", line)
-                break
+                data = json.loads(parsed.read_text(encoding="utf-8-sig"))
+                result.update(self._extract_parsed_metadata(data))
+            except (OSError, json.JSONDecodeError):
+                pass
         return result
 
-    def get_version_metadata(self, document_id, version_id=None):
-        v = self.get_version(document_id, version_id)
-        p = self.resolve(v.get("parsed_file", ""))
-        pdf = self.resolve(v.get("file", ""))
-        meta: dict[str, Any] = {}
-        candidates = [p]
-        stem = Path(v.get("file", "")).stem
-        candidates += list((self.knowledge_root / "parsed").glob(f"{stem}*.json"))
-        doc_number = str(self.get_document(document_id).get("number", ""))
-        if doc_number:
-            compact = re.sub(r"[^0-9.]", "", doc_number)
-            candidates += list((self.knowledge_root / "parsed").glob(f"*{compact}*.json"))
-        for candidate in candidates:
-            if candidate.exists():
-                try:
-                    parsed_meta = self._extract_parsed_metadata(json.loads(candidate.read_text(encoding="utf-8-sig")))
-                    if parsed_meta:
-                        meta.update(parsed_meta)
-                        break
-                except (OSError, json.JSONDecodeError):
-                    pass
-        # PDF — authoritative fallback for old versions without useful JSON metadata.
-        pdf_meta = self._extract_pdf_metadata(pdf)
-        for key, value in pdf_meta.items():
-            if value and (key == "number" or not meta.get(key)):
-                meta[key] = value
-        for key in ("number", "title", "change_number", "change_date"):
-            if v.get(key) and not meta.get(key):
-                meta[key] = v[key]
-        meta["pages_count"] = int(v.get("pages_count") or self._pdf_pages(pdf))
-        return meta
+    def list_statuses(self):
+        result = []
+        for document in self.registry.get_all_documents():
+            versions = document.get("versions", [])
+            current = next((v for v in versions if v.get("status") == "current"), None)
+            if current is None and versions:
+                current = versions[0]
+            if current is None:
+                continue
+            try:
+                processing = self._version_processing(document["id"], current["id"])
+            except Exception as error:
+                processing = {"error": str(error)}
+            result.append({
+                "document_id": document["id"],
+                "number": document.get("number"),
+                "title": document.get("title"),
+                "version_id": current.get("id"),
+                "effective_from": current.get("effective_from"),
+                "processing": processing,
+                "versions": [self._version_status(document["id"], v) for v in versions],
+            })
+        return result
+
+    def _version_status(self, document_id, version):
+        return {**version, "document_id": document_id, "filename": Path(version.get("file", "")).name, "processing": self._version_processing(document_id, version.get("id"))}
+
+    def _version_processing(self, document_id, version_id):
+        p = self.paths(document_id, version_id)
+        meta = self.get_version_metadata(document_id, version_id)
+        index_file = p.embeddings / "index.faiss"
+        metadata_file = p.embeddings / "metadata.json"
+        error_file = p.index_root / "index_error.json"
+        result = {"pages_count": meta.get("pages_count", 0), "vector_index": index_file.exists(), "vector_metadata": metadata_file.exists()}
+        if error_file.exists():
+            try:
+                result["error"] = json.loads(error_file.read_text(encoding="utf-8")).get("error")
+            except Exception:
+                result["error"] = "Ошибка индексации"
+        return result
 
     def get_status(self, document_id, version_id=None):
+        v = self.get_version(document_id, version_id)
         document = self.get_document(document_id)
-        version = self.get_version(document_id, version_id)
-        p = self.paths(document_id, version.get("id"))
-        meta = self.get_version_metadata(document_id, version.get("id"))
-        page_files = list(p.pages.glob("page_*.json")) if p.pages.exists() else []
-        enriched = list(p.enriched.glob("page_*_enriched.json")) if p.enriched.exists() else []
-        chunks = p.chunks / "all_chunks.json"
-        emb = p.embeddings / "index.faiss"
-        emeta = p.embeddings / "metadata.json"
-        err = p.index_root / "index_error.json"
-        index_error = None
-        if err.exists():
-            try:
-                index_error = json.loads(err.read_text(encoding="utf-8"))
-            except Exception:
-                index_error = {"error": "Не удалось прочитать сведения об ошибке индексации"}
-        return {
-            "document_id": document_id,
-            "number": meta.get("number") or document.get("number"),
-            "title": meta.get("title") or document.get("title"),
-            "version_id": version.get("id"),
-            "version_type": version.get("type"),
-            "status": version.get("status"),
-            "effective_from": version.get("effective_from"),
-            "change_number": meta.get("change_number"),
-            "change_date": meta.get("change_date"),
-            "pages_count": meta.get("pages_count", 0),
-            "paths": {
-                "pdf": str(p.pdf),
-                "parsed": str(p.parsed),
-                "structured": str(p.structured),
-                "pages": str(p.pages),
-                "enriched": str(p.enriched),
-                "chunks": str(p.chunks),
-                "embeddings": str(p.embeddings),
-            },
-            "processing": {
-                "uploaded": p.pdf.exists(),
-                "parsed": p.parsed.exists(),
-                "structured": p.structured.exists(),
-                "pages_indexed": bool(page_files),
-                "pages_count": meta.get("pages_count", 0),
-                "enriched": bool(enriched),
-                "enriched_pages_count": len(enriched),
-                "chunks": chunks.exists(),
-                "vector_index": emb.exists(),
-                "vector_metadata": emeta.exists(),
-                "error": index_error,
-            },
-            "checked_at": datetime.now().isoformat(),
-        }
-
-    @staticmethod
-    def _document_group_key(number):
-        n = re.sub(r"\s+", " ", str(number or "")).strip().lower()
-        m = re.search(r"сп\s*[0-9]+\.[0-9]+", n, re.I)
-        return re.sub(r"\s+", " ", m.group(0)).strip() if m else n
-
-    def list_statuses(self):
-        groups = {}
-        for d in self.registry.get_all_documents():
-            groups.setdefault(self._document_group_key(d.get("number", d.get("id", ""))), []).append(d)
-        result = []
-        for docs in groups.values():
-            enriched_docs = []
-            for d in docs:
-                dc = dict(d)
-                for v in d.get("versions", []):
-                    try:
-                        m = self.get_version_metadata(d["id"], v.get("id"))
-                    except StorageError:
-                        m = {}
-                    if m.get("number"):
-                        dc["number"] = m["number"]
-                    if m.get("title"):
-                        dc["title"] = m["title"]
-                enriched_docs.append(dc)
-            canonical = max(enriched_docs, key=lambda x: len(str(x.get("number", ""))))
-            current_ref = None
-            versions = []
-            for d in enriched_docs:
-                sid = str(d.get("id"))
-                for v in d.get("versions", []):
-                    try:
-                        s = self.get_status(sid, v.get("id"))
-                    except StorageError:
-                        continue
-                    versions.append({
-                        "document_id": sid,
-                        "version_id": v.get("id"),
-                        "version_type": v.get("type"),
-                        "status": v.get("status"),
-                        "effective_from": v.get("effective_from"),
-                        "change_number": s.get("change_number"),
-                        "change_date": s.get("change_date"),
-                        "filename": Path(v.get("file", "")).name,
-                        "processing": s.get("processing", {}),
-                    })
-                    if v.get("status") == "current":
-                        current_ref = (sid, v)
-            if current_ref is None:
-                continue
-            sid, cv = current_ref
-            try:
-                current = self.get_status(sid, cv.get("id"))
-            except StorageError:
-                continue
-            current["number"] = canonical.get("number")
-            current["title"] = canonical.get("title")
-            current["versions"] = versions
-            current["current_change_number"] = current.get("change_number")
-            current["current_change_date"] = current.get("change_date") or current.get("effective_from")
-            result.append(current)
-        return sorted(result, key=lambda x: str(x.get("number") or ""))
+        return {**self._version_status(document_id, v), "document": document}
