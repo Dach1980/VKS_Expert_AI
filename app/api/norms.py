@@ -34,19 +34,29 @@ def _infer_number(filename: str, supplied: str | None) -> str:
     return re.sub(r"\s+", " ", match.group(0)).strip() if match else Path(filename).stem
 
 
+def _number_group_key(value: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    match = re.search(r"(?:сп|гост(?: р)?|снип|тр|фз)\s*[0-9]+\.[0-9]+", normalized, re.IGNORECASE)
+    return re.sub(r"\s+", " ", match.group(0)).strip() if match else normalized
+
+
 def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename: str) -> str | None:
     normalized_number = re.sub(r"\s+", " ", number).strip().lower()
     normalized_filename = _normalize_filename(filename).lower()
-    exact, prefix = [], []
+    target_group = _number_group_key(number)
+    exact, grouped, prefix = [], [], []
     for document in storage.registry.get_all_documents():
+        doc_id = str(document.get("id", ""))
         doc_number = re.sub(r"\s+", " ", str(document.get("number", ""))).strip().lower()
         if doc_number == normalized_number:
             exact.append(document)
+        elif target_group and _number_group_key(doc_number) == target_group:
+            grouped.append(document)
         elif normalized_number and doc_number.startswith(normalized_number + "."):
             prefix.append(document)
-        elif str(document.get("id", "")).lower() in normalized_filename:
+        elif doc_id.lower().replace("_", " ") in normalized_filename:
             prefix.append(document)
-    matches = exact or prefix
+    matches = exact or grouped or prefix
     unique = {document.get("id"): document for document in matches if document.get("id")}
     return next(iter(unique)) if len(unique) == 1 else None
 
@@ -201,20 +211,11 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
             make_current=False,
         )
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
-        # Последняя явно загруженная версия становится действующей. Старые
-        # версии остаются в Registry и физически доступны для индексации.
         storage.registry.activate_version(resolved_document_id, resolved_version_id)
     except StorageError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return NormUploadResponse(
-        success=True,
-        document_id=resolved_document_id,
-        version_id=resolved_version_id,
-        number=resolved_number,
-        title=resolved_title,
-        status="current",
-        filename=saved.name,
-    )
+    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id,
+                              number=resolved_number, title=resolved_title, status="current", filename=saved.name)
 
 
 @router.post("/{document_id}/{version_id}/index", response_model=NormIndexResponse)
