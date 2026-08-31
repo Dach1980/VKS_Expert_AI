@@ -1,4 +1,4 @@
-"""Project Expert AI — document checking API v2."""
+"""Project Expert AI — document checking API v3."""
 from __future__ import annotations
 
 import json
@@ -7,13 +7,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from app.api.documents import DOCUMENTS_ROOT
-from app.knowledge.storage import KnowledgeStorage
+from app.knowledge.storage import KnowledgeStorage, StorageError
 from app.llm.lmstudio_client import LMStudioClient
 from app.rag.retriever import Retriever
 
 router = APIRouter(prefix="/api/checks", tags=["checks"])
 
-DEFAULT_NORM = "SP_30.13330"
+DEFAULT_NORM_NUMBER = "СП 30.13330.2020"
 
 
 def _load_project_text(document_id: str) -> str:
@@ -46,19 +46,69 @@ def _load_project_name(document_id: str) -> str:
     return str(item.get("filename", document_id)) if item else document_id
 
 
-def _normative_context(retriever: Retriever, question: str) -> list[dict]:
+def _resolve_norm(storage: KnowledgeStorage, canonical_number: str) -> tuple[str, dict, dict]:
+    """Find the Registry document by canonical number, then resolve its current version."""
+    target = storage.registry.canonical_number(canonical_number).lower()
+    candidates = []
+    for document in storage.registry.get_all_documents():
+        number = storage.registry.canonical_number(document.get("number", "")).lower()
+        if number == target:
+            candidates.append(document)
+            continue
+        # Backward compatibility with older Registry IDs/numbers that may have
+        # omitted the year while still representing the same SP.
+        group = storage.registry._number_group(document.get("number", ""))
+        target_group = storage.registry._number_group(canonical_number)
+        if group and group == target_group:
+            candidates.append(document)
+
+    if not candidates:
+        raise HTTPException(
+            status_code=409,
+            detail=f"В Registry не найден нормативный документ {canonical_number}.",
+        )
+
+    candidates.sort(key=lambda item: (len(item.get("versions", [])), len(str(item.get("number", "")))), reverse=True)
+    document = candidates[0]
+    document_id = str(document.get("id"))
+
     try:
-        return retriever.search(question, top_k=5)
+        current_version = storage.get_current_version(document_id)
+    except Exception as error:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Для {canonical_number} в Registry нет действующей версии. "
+                "Назначьте одну из версий действующей в разделе «Нормы»."
+            ),
+        ) from error
+
+    return document_id, document, current_version
+
+
+def _normative_context(retriever: Retriever, question: str, normative_number: str) -> list[dict]:
+    try:
+        results = retriever.search(question, top_k=5)
     except FileNotFoundError as error:
         raise HTTPException(
             status_code=409,
             detail=(
-                "Проверка невозможна: индекс действующей версии СП 30.13330.2020 не найден. "
-                "Сначала проиндексируйте действующую версию в разделе «Нормы»."
+                f"Проверка невозможна: индекс действующей версии {normative_number} не найден. "
+                "Сначала нажмите «Индексировать» у действующей версии в разделе «Нормы»."
             ),
         ) from error
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"Не удалось получить нормативный контекст: {error}") from error
+
+    if not results:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Индекс действующей версии {normative_number} существует, но не содержит доступных фрагментов. "
+                "Переиндексируйте эту версию в разделе «Нормы»."
+            ),
+        )
+    return results
 
 
 @router.post("/{document_id}")
@@ -68,22 +118,33 @@ def check_document(document_id: str):
         raise HTTPException(status_code=409, detail="В PDF не найден текст для проверки")
 
     storage = KnowledgeStorage()
-    try:
-        current_norm = storage.get_current_version(DEFAULT_NORM)
-        current_version_id = current_norm.get("id")
-        norm_document = storage.get_document(DEFAULT_NORM)
-    except Exception as error:
-        raise HTTPException(status_code=409, detail="В Registry не найден нормативный документ СП 30.13330.2020.") from error
+    norm_document_id, norm_document, current_version = _resolve_norm(storage, DEFAULT_NORM_NUMBER)
+    current_version_id = str(current_version.get("id"))
+    normative_number = str(norm_document.get("number") or DEFAULT_NORM_NUMBER)
 
     question = "Какие требования СП 30.13330.2020 непосредственно относятся к проектному решению внутреннего водопровода?"
-    normative = _normative_context(Retriever(DEFAULT_NORM, current_version_id, storage), question)
+    try:
+        retriever = Retriever(norm_document_id, current_version_id, storage)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Проверка невозможна: для действующей версии {current_version_id} документа "
+                f"{normative_number} не найден FAISS-индекс. "
+                "Откройте «Нормы» и нажмите «Индексировать» у этой версии."
+            ),
+        ) from error
+    except StorageError as error:
+        raise HTTPException(status_code=409, detail=f"Не удалось определить путь нормативной версии: {error}") from error
+
+    normative = _normative_context(retriever, question, normative_number)
 
     context_parts = []
     for item in normative:
         content = item.get("content", {})
         text = content.get("text", "") if isinstance(content, dict) else str(content)
         if text:
-            context_parts.append(f"СП 30.13330.2020, стр. {item.get('page', '—')}: {text}")
+            context_parts.append(f"{normative_number}, стр. {item.get('page', '—')}: {text}")
     normative_context = "\n\n".join(context_parts)
 
     prompt = f"""
@@ -117,7 +178,11 @@ def check_document(document_id: str):
 
     try:
         answer = LMStudioClient(model="qwen/qwen3.5-9b-mtp").chat(
-            prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=4096, enable_thinking=False
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.1,
+            max_tokens=4096,
+            enable_thinking=False,
         )
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"LM Studio недоступна: {error}") from error
@@ -146,7 +211,7 @@ def check_document(document_id: str):
             "description": str(item.get("description", "")),
             "recommendation": str(item.get("recommendation", "")),
             "sheet": str(item.get("sheet", "")),
-            "norm": str(item.get("norm", norm_document.get("number", "СП 30.13330.2020"))),
+            "norm": str(item.get("norm", normative_number)),
             "severity": item.get("severity", "minor"),
             "page": int(item.get("page", 0) or 0),
             "image": None,
@@ -156,8 +221,9 @@ def check_document(document_id: str):
         "success": True,
         "document_id": document_id,
         "document_name": doc_name,
-        "normative_document": norm_document.get("number", "СП 30.13330.2020"),
+        "normative_document": normative_number,
         "normative_version": current_version_id,
+        "normative_registry_id": norm_document_id,
         "results": normalized,
         "summary": {
             "total": len(normalized),
@@ -167,7 +233,12 @@ def check_document(document_id: str):
             "critical": sum(x["type"] == "violation" and x["severity"] == "critical" for x in normalized),
         },
         "normative_sources": [
-            {"document": item.get("document", "СП 30.13330.2020"), "version": current_version_id, "page": item.get("page", 0), "score": item.get("score", 0.0)}
+            {
+                "document": item.get("document", normative_number),
+                "version": current_version_id,
+                "page": item.get("page", 0),
+                "score": item.get("score", 0.0),
+            }
             for item in normative
         ],
     }
