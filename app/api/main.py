@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.api.norms import router as norms_router
+from app.api.norm_files import router as norm_files_router
 
 
 app = FastAPI(
@@ -36,14 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Keep the general API router for existing endpoints.
 app.include_router(router)
-
-# FastAPI 0.141.x keeps included routers as _IncludedRouter wrappers.
-# Register the already-built norms APIRoute objects directly so that the
-# norms API is present in OpenAPI and dispatched by the application exactly
-# as declared in app/api/norms.py. No second processing architecture is used.
 for route in norms_router.routes:
+    app.router.routes.append(route)
+for route in norm_files_router.routes:
     app.router.routes.append(route)
 
 
