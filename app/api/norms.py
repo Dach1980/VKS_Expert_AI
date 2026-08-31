@@ -1,9 +1,4 @@
-"""Project Expert AI — Norms API.
-
-Provides the frontend with registered normative documents, PDF upload,
-delete, and the existing full indexing pipeline.
-"""
-
+"""Project Expert AI — Norms API."""
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +8,6 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
-
 from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
 from app.knowledge.storage import KnowledgeStorage, StorageError
@@ -37,9 +31,7 @@ def _infer_number(filename: str, supplied: str | None) -> str:
         return supplied.strip()
     normalized = _normalize_filename(filename)
     match = re.search(r"СП\s*[0-9]+(?:\.[0-9]+)+", normalized, re.IGNORECASE)
-    if match:
-        return re.sub(r"\s+", " ", match.group(0)).strip()
-    return Path(filename).stem
+    return re.sub(r"\s+", " ", match.group(0)).strip() if match else Path(filename).stem
 
 
 def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename: str) -> str | None:
@@ -81,14 +73,13 @@ def _sha256_path(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _find_duplicate_version(storage: KnowledgeStorage, document_id: str, upload_hash: str):
-    document = storage.registry.get_document(document_id)
-    if not document:
-        return None
-    for version in document.get("versions", []):
-        file_path = version.get("file")
-        if file_path and _sha256_path(storage.resolve(file_path)) == upload_hash:
-            return version
+def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
+    """Find identical PDF bytes across every registry document, including legacy aliases."""
+    for document in storage.registry.get_all_documents():
+        for version in document.get("versions", []):
+            registered = version.get("file")
+            if registered and _sha256_path(storage.resolve(registered)) == upload_hash:
+                return document, version
     return None
 
 
@@ -115,30 +106,26 @@ def list_norms():
 
 
 @router.post("/upload", response_model=NormUploadResponse)
-def upload_norm(
-    file: UploadFile = File(...), number: str | None = None, title: str | None = None,
-    document_id: str | None = None, version_id: str | None = None, effective_from: str | None = None,
-):
+def upload_norm(file: UploadFile = File(...), number: str | None = None, title: str | None = None,
+                document_id: str | None = None, version_id: str | None = None, effective_from: str | None = None):
     filename = file.filename or ""
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     storage = KnowledgeStorage()
+    duplicate = _find_duplicate_version(storage, _sha256_uploaded(file))
+    if duplicate:
+        document, version = duplicate
+        raise HTTPException(status_code=409, detail=(
+            f"Данный документ уже загружен: {document.get('number', document.get('id'))}. "
+            f"Версия: {version.get('id')}."
+        ))
+
     resolved_number = _infer_number(filename, number)
     resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
     existing_id = _find_existing_document_id(storage, resolved_number, filename)
     if existing_id:
         resolved_document_id = existing_id
-
-    duplicate = _find_duplicate_version(storage, resolved_document_id, _sha256_uploaded(file))
-    if duplicate:
-        existing_doc = storage.registry.get_document(resolved_document_id)
-        raise HTTPException(
-            status_code=409,
-            detail=(f"Данный документ уже загружен: {existing_doc.get('number', resolved_document_id)}. "
-                    f"Версия: {duplicate.get('id')}."),
-        )
-
     existing = storage.registry.get_document(resolved_document_id)
     if existing is not None:
         resolved_number = existing.get("number") or resolved_number
@@ -158,18 +145,14 @@ def upload_norm(
     relative_structured = Path("knowledge") / "structured" / f"{resolved_version_id}.json"
 
     try:
-        storage.registry.register_version(
-            document_id=resolved_document_id, number=resolved_number, title=resolved_title,
+        storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title,
             version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from,
-            file_path=str(relative_pdf).replace("\\", "/"),
-            parsed_file=str(relative_parsed).replace("\\", "/"),
-            structured_file=str(relative_structured).replace("\\", "/"), make_current=False,
-        )
+            file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"),
+            structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
         storage.registry.activate_version(resolved_document_id, resolved_version_id)
     except StorageError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-
     return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id,
                               number=resolved_number, title=resolved_title, status="current", filename=saved.name)
 
@@ -216,12 +199,9 @@ def get_norm(document_id: str, version_id: str | None = None):
     try:
         status = storage.get_status(document_id, version_id)
         document = storage.registry.get_document(document_id)
-        status["versions"] = [
-            {"version_id": version.get("id"), "version_type": version.get("type"),
-             "status": version.get("status"), "effective_from": version.get("effective_from"),
-             "filename": Path(version.get("file", "")).name}
-            for version in document.get("versions", [])
-        ]
+        status["versions"] = [{"version_id": v.get("id"), "version_type": v.get("type"), "status": v.get("status"),
+                                "effective_from": v.get("effective_from"), "filename": Path(v.get("file", "")).name}
+                               for v in document.get("versions", [])]
         return status
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
