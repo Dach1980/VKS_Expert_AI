@@ -3,9 +3,7 @@
 // Реальная интеграция Registry / Storage / processing pipeline.
 // ============================================================
 
-// norms.js загружается как ES-модуль из main.js. Поэтому все
-// функции, которые вызываются HTML onclick / другими модулями,
-// явно публикуются в window.
+const NORMS_API_BASE = 'http://127.0.0.1:8000/api/norms';
 
 var normsPollTimers = {};
 
@@ -123,7 +121,7 @@ function renderNorms() {
 
 async function loadNorms() {
   try {
-    var response = await fetch('/api/norms');
+    var response = await fetch(NORMS_API_BASE);
 
     if (!response.ok) {
       throw new Error('HTTP ' + response.status);
@@ -162,7 +160,7 @@ async function loadNorms() {
     return getNormsData();
   } catch (error) {
     console.error('[Project Expert AI] Не удалось загрузить нормы:', error);
-    showNormToast('Не удалось получить нормативную базу', 'error');
+    showNormToast('Не удалось получить нормативную базу: ' + error.message, 'error');
     return [];
   }
 }
@@ -250,7 +248,7 @@ function uploadNormFile(file) {
   var form = new FormData();
   form.append('file', file, file.name);
 
-  return fetch('/api/norms/upload', {
+  return fetch(NORMS_API_BASE + '/upload', {
     method: 'POST',
     body: form,
   })
@@ -287,7 +285,7 @@ function indexNorm(id) {
   renderNorms();
 
   fetch(
-    '/api/norms/' +
+    NORMS_API_BASE + '/' +
       encodeURIComponent(norm.id) +
       '/' +
       encodeURIComponent(norm.version_id) +
@@ -323,7 +321,7 @@ function pollNormStatus(documentId, versionId) {
 
   normsPollTimers[key] = setInterval(function () {
     fetch(
-      '/api/norms/' +
+      NORMS_API_BASE + '/' +
         encodeURIComponent(documentId) +
         '?version_id=' +
         encodeURIComponent(versionId),
