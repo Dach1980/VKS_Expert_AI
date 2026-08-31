@@ -29,14 +29,7 @@ class SPIndexBuilder:
         PDFPageProcessor(self.document_id, self.version["id"], self.storage).run()
 
     def run_page_enrichment(self):
-        """Create enriched pages before chunking and embedding.
-
-        PageEnricher is the repository's existing normalization stage. The
-        previous builder skipped it, so DocumentChunkBuilder found no input
-        pages in ``enriched`` and EmbeddingBuilder consequently received an
-        empty chunk list. Paths are supplied dynamically for the selected
-        document instead of using the legacy SP_30.13330 hard-coded paths.
-        """
+        """Create enriched pages before chunking and embedding."""
         print("Starting page enrichment...")
         enricher = PageEnricher(
             pages_dir=self.paths.pages,
@@ -65,6 +58,13 @@ class SPIndexBuilder:
         return chunks, builder.save(chunks)
 
     def run_embedding_builder(self):
+        # Ensure the selected version's complete output tree immediately before
+        # embedding. This is intentionally repeated here because indexing is
+        # executed as a background task and must not depend on a directory that
+        # may have been removed by a previous/parallel processing attempt.
+        self.storage.ensure_version_dirs(self.document_id, self.version["id"])
+        self.paths.embeddings.mkdir(parents=True, exist_ok=True)
+        print("Embedding directory:", self.paths.embeddings)
         builder = EmbeddingBuilder(self.document_id, self.version["id"], self.storage)
         builder.run()
 
