@@ -1,4 +1,4 @@
-"""VKS Expert AI — Norms API.
+"""Project Expert AI — Norms API.
 
 Provides the frontend with registered normative documents, PDF upload,
 and the existing full indexing pipeline.
@@ -50,15 +50,8 @@ def list_norms():
         raise HTTPException(status_code=500, detail=str(error)) from error
 
 
-@router.get("/{document_id}")
-def get_norm(document_id: str, version_id: str | None = None):
-    storage = KnowledgeStorage()
-    try:
-        return storage.get_status(document_id, version_id)
-    except StorageError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-
-
+# Static /upload MUST be declared before /{document_id}.
+# Otherwise Starlette can match POST /upload against the dynamic route and return 405.
 @router.post("/upload", response_model=NormUploadResponse)
 def upload_norm(
     file: UploadFile = File(...),
@@ -74,9 +67,7 @@ def upload_norm(
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     resolved_number = _infer_number(filename, number)
-    resolved_document_id = _safe_id(
-        document_id or resolved_number.replace(" ", "_")
-    )
+    resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
     storage = KnowledgeStorage()
     existing = storage.registry.get_document(resolved_document_id)
 
@@ -89,8 +80,13 @@ def upload_norm(
     )
     resolved_effective_from = effective_from or date.today().isoformat()
 
-    if existing is not None and any(v.get("id") == resolved_version_id for v in existing.get("versions", [])):
-        raise HTTPException(status_code=409, detail=f"Версия уже существует: {resolved_document_id}/{resolved_version_id}")
+    if existing is not None and any(
+        v.get("id") == resolved_version_id for v in existing.get("versions", [])
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Версия уже существует: {resolved_document_id}/{resolved_version_id}",
+        )
 
     relative_dir = Path("knowledge") / "regulations" / resolved_document_id
     relative_pdf = relative_dir / f"{resolved_version_id}.pdf"
@@ -146,3 +142,12 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         status="indexing",
         message="Полная индексация запущена",
     )
+
+
+@router.get("/{document_id}")
+def get_norm(document_id: str, version_id: str | None = None):
+    storage = KnowledgeStorage()
+    try:
+        return storage.get_status(document_id, version_id)
+    except StorageError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
