@@ -1,10 +1,11 @@
-"""VKS Expert AI — Embedding Builder v2.
+"""Project Expert AI — Embedding Builder v2.
 
 Строит embeddings и FAISS из document chunks.
 Использует общий KnowledgeStorage и существующий EmbeddingClient.
 """
 
 import json
+import shutil
 
 import faiss
 import numpy as np
@@ -76,7 +77,18 @@ class EmbeddingBuilder:
         vectors_file = output / "vectors.npy"
         metadata_file = output / "metadata.json"
 
-        faiss.write_index(index, str(index_file))
+        # FAISS on Windows may fail when its native writer receives a path
+        # containing Cyrillic characters. Document IDs and version IDs are
+        # allowed to contain Cyrillic, so write the FAISS file through an
+        # ASCII-only temporary path and then move it using Python.
+        temp_index_file = self.storage.project_root / ".faiss_index_tmp"
+        temp_index_file.unlink(missing_ok=True)
+        try:
+            faiss.write_index(index, str(temp_index_file))
+            shutil.move(str(temp_index_file), str(index_file))
+        finally:
+            temp_index_file.unlink(missing_ok=True)
+
         np.save(vectors_file, vectors)
         with metadata_file.open("w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
