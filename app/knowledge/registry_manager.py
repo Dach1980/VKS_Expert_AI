@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from datetime import date
 
@@ -40,53 +41,57 @@ class DocumentRegistry:
                 return document
         return None
 
+    @staticmethod
+    def _number_group(value):
+        normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+        match = re.search(r"(?:сп|гост\s*р?|снип|тр|фз)\s*[0-9]+\.[0-9]+", normalized, re.IGNORECASE)
+        return re.sub(r"\s+", " ", match.group(0)).strip() if match else normalized
+
     def get_current_version(self, document_id):
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
-        current_versions = [
-            version for version in document.get("versions", [])
-            if version.get("status") == "current"
-        ]
+        current_versions = [version for version in document.get("versions", []) if version.get("status") == "current"]
         if not current_versions:
             raise RegistryError(f"Для документа {document_id} не найдена действующая версия.")
         if len(current_versions) > 1:
             raise RegistryError(f"Для документа {document_id} найдено несколько действующих версий.")
         return current_versions[0]
 
-    def register_version(
-        self,
-        document_id,
-        number,
-        title,
-        document_type="СП",
-        version_id=None,
-        version_type="edition",
-        effective_from=None,
-        file_path=None,
-        parsed_file=None,
-        structured_file=None,
-        make_current=True,
-    ):
-        """Создать документ/версию в Registry."""
+    def register_version(self, document_id, number, title, document_type="СП", version_id=None,
+                         version_type="edition", effective_from=None, file_path=None,
+                         parsed_file=None, structured_file=None, make_current=True):
+        """Создать документ/версию в Registry.
+
+        Старые записи вроде «СП 30.13330» допускают каноническое уточнение
+        до «СП 30.13330.2020», если это тот же логический документ.
+        """
         if not document_id or not number or not title:
             raise RegistryError("document_id, number и title обязательны")
 
         document = self.get_document(document_id)
         if document is None:
-            document = {
-                "id": document_id,
-                "number": number,
-                "title": title,
-                "document_type": document_type,
-                "versions": [],
-            }
+            document = {"id": document_id, "number": number, "title": title,
+                        "document_type": document_type, "versions": []}
             self.data.setdefault("documents", []).append(document)
         else:
-            if document.get("number") != number:
-                raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
-            if document.get("title") != title:
-                raise RegistryError(f"Название документа {document_id} не совпадает с существующим Registry")
+            existing_number = document.get("number") or ""
+            if existing_number != number:
+                if self._number_group(existing_number) == self._number_group(number):
+                    # Full number is authoritative when it contains the year/version.
+                    if len(str(number)) >= len(str(existing_number)):
+                        document["number"] = number
+                    else:
+                        number = existing_number
+                else:
+                    raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
+            existing_title = document.get("title") or ""
+            if existing_title != title:
+                # Prefer the more descriptive title discovered from the normative PDF.
+                if len(str(title)) >= len(str(existing_title)):
+                    document["title"] = title
+                else:
+                    title = existing_title
 
         versions = document.setdefault("versions", [])
         if version_id is None:
@@ -116,11 +121,7 @@ class DocumentRegistry:
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
-        target = None
-        for version in document.get("versions", []):
-            if version.get("id") == version_id:
-                target = version
-                break
+        target = next((version for version in document.get("versions", []) if version.get("id") == version_id), None)
         if target is None:
             raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
         for version in document.get("versions", []):
@@ -129,38 +130,24 @@ class DocumentRegistry:
         return target
 
     def delete_version(self, document_id, version_id):
-        """Удалить версию из Registry и вернуть удалённую запись.
-
-        Если удаляется текущая версия и остаются другие версии, самой новой
-        по effective_from становится текущая. Если это была последняя версия,
-        документ также удаляется из Registry.
-        """
+        """Удалить версию; при необходимости назначить самой новой оставшуюся."""
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
-
         versions = document.get("versions", [])
         target = next((v for v in versions if v.get("id") == version_id), None)
         if target is None:
             raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
-
         was_current = target.get("status") == "current"
         versions.remove(target)
-
         document_removed = False
         if not versions:
-            self.data["documents"] = [
-                item for item in self.get_all_documents() if item.get("id") != document_id
-            ]
+            self.data["documents"] = [item for item in self.get_all_documents() if item.get("id") != document_id]
             document_removed = True
         elif was_current:
-            def version_sort_key(version):
-                return version.get("effective_from") or ""
-
-            fallback = max(versions, key=version_sort_key)
+            fallback = max(versions, key=lambda version: version.get("effective_from") or "")
             for version in versions:
                 version["status"] = "current" if version is fallback else "superseded"
-
         self.save()
         return target, document_removed
 
@@ -169,13 +156,8 @@ class DocumentRegistry:
         for document in self.get_all_documents():
             try:
                 current = self.get_current_version(document["id"])
-                result.append({
-                    "id": document["id"],
-                    "number": document["number"],
-                    "title": document["title"],
-                    "document_type": document["document_type"],
-                    "version": current,
-                })
+                result.append({"id": document["id"], "number": document["number"], "title": document["title"],
+                               "document_type": document["document_type"], "version": current})
             except RegistryError:
                 continue
         return result
@@ -202,10 +184,8 @@ class DocumentRegistry:
             if not isinstance(versions, list):
                 errors.append(f"{document_id}: versions должен быть списком.")
                 continue
-            current_count = 0
+            current_count = sum(1 for version in versions if version.get("status") == "current")
             for version in versions:
-                if version.get("status") == "current":
-                    current_count += 1
                 file_path = version.get("file")
                 if file_path and not (PROJECT_ROOT / file_path).exists():
                     errors.append(f"{document_id}: файл не найден:\n  {file_path}")
@@ -235,9 +215,7 @@ def print_registry(registry):
         print(f"{document['number']} — {document['title']}")
         print(f"  ID: {document['id']}")
         for version in document.get("versions", []):
-            print(f"  └─ {version['id']} [{version.get('status')}]")
-            print(f"     файл: {version.get('file')}")
-            print(f"     действует с: {version.get('effective_from')}")
+            print(f"  └─ {version['id']} [{version.get('status')}]\n     файл: {version.get('file')}\n     действует с: {version.get('effective_from')}")
 
 
 def main():
