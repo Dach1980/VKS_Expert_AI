@@ -1,18 +1,19 @@
 """Project Expert AI — Norms API.
 
 Provides the frontend with registered normative documents, PDF upload,
-and the existing full indexing pipeline.
+delete, and the existing full indexing pipeline.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
-from app.api.schemas import NormIndexResponse, NormUploadResponse
+from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
 from app.knowledge.storage import KnowledgeStorage, StorageError
 
@@ -27,13 +28,53 @@ def _safe_id(value: str) -> str:
     return value
 
 
+def _normalize_filename(filename: str) -> str:
+    return re.sub(r"[_-]+", " ", Path(filename).stem).strip()
+
+
 def _infer_number(filename: str, supplied: str | None) -> str:
     if supplied and supplied.strip():
         return supplied.strip()
-    match = re.search(r"СП\s*[0-9]+(?:\.[0-9]+)+", filename, re.IGNORECASE)
+
+    normalized = _normalize_filename(filename)
+    match = re.search(r"СП\s*[0-9]+(?:\.[0-9]+)+", normalized, re.IGNORECASE)
     if match:
         return re.sub(r"\s+", " ", match.group(0)).strip()
     return Path(filename).stem
+
+
+def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename: str) -> str | None:
+    """Find a registry document represented by common SP filename variants.
+
+    For example, ``СП_30.13330_базовая_версия.pdf`` should resolve to the
+    existing ``SP_30.13330`` registry document instead of creating a second
+    document with a filename-derived id.
+    """
+    normalized_number = re.sub(r"\s+", " ", number).strip().lower()
+    normalized_filename = _normalize_filename(filename).lower()
+
+    exact = []
+    prefix = []
+    for document in storage.registry.get_all_documents():
+        doc_number = re.sub(r"\s+", " ", str(document.get("number", ""))).strip().lower()
+        if doc_number == normalized_number:
+            exact.append(document)
+            continue
+
+        # Match an abbreviated SP number from a filename, e.g.
+        # "СП 30.13330" against registry number "СП 30.13330.2020".
+        if normalized_number and doc_number.startswith(normalized_number + "."):
+            prefix.append(document)
+
+        # Also recognize the canonical document id in a filename.
+        if str(document.get("id", "")).lower() in normalized_filename:
+            prefix.append(document)
+
+    matches = exact or prefix
+    unique = {document.get("id"): document for document in matches if document.get("id")}
+    if len(unique) == 1:
+        return next(iter(unique))
+    return None
 
 
 def _index_norm(document_id: str, version_id: str) -> None:
@@ -49,7 +90,7 @@ def _index_norm(document_id: str, version_id: str) -> None:
             version_id=version_id,
             storage=storage,
         ).run()
-    except Exception as error:  # background task must not fail silently
+    except Exception as error:
         storage.write_index_error(document_id, version_id, error)
         print(
             f"[Project Expert AI][Norms] Индексация завершилась ошибкой: "
@@ -67,7 +108,6 @@ def list_norms():
 
 
 # Static /upload MUST be declared before /{document_id}.
-# Otherwise Starlette can match POST /upload against the dynamic route and return 405.
 @router.post("/upload", response_model=NormUploadResponse)
 def upload_norm(
     file: UploadFile = File(...),
@@ -82,18 +122,38 @@ def upload_norm(
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
+    storage = KnowledgeStorage()
     resolved_number = _infer_number(filename, number)
     resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
-    storage = KnowledgeStorage()
+
+    # Reuse an existing registry document when the uploaded filename is a
+    # variant of its official number (e.g. SP_30.13330 vs СП 30.13330.2020).
+    existing_id = _find_existing_document_id(storage, resolved_number, filename)
+    if existing_id:
+        resolved_document_id = existing_id
+
     existing = storage.registry.get_document(resolved_document_id)
 
-    if existing is not None and existing.get("number") != resolved_number:
+    if existing is not None and number and existing.get("number") != resolved_number:
         raise HTTPException(status_code=409, detail="Номер документа не совпадает с существующим Registry")
 
+    if existing is not None:
+        resolved_number = existing.get("number") or resolved_number
+
     resolved_title = (title or (existing.get("title") if existing else None) or resolved_number).strip()
-    resolved_version_id = _safe_id(
-        version_id or f"{resolved_document_id}_{date.today().isoformat().replace('-', '')}"
-    )
+    if existing is not None and title and existing.get("title") != resolved_title:
+        raise HTTPException(status_code=409, detail="Название документа не совпадает с существующим Registry")
+    if existing is not None:
+        resolved_title = existing.get("title") or resolved_title
+
+    if version_id:
+        resolved_version_id = _safe_id(version_id)
+    else:
+        # Multiple uploads of the same norm on one day are valid: use a
+        # timestamp-based version id instead of rejecting the second upload.
+        stamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        resolved_version_id = _safe_id(f"{resolved_document_id}_{stamp}")
+
     resolved_effective_from = effective_from or date.today().isoformat()
 
     if existing is not None and any(
@@ -158,6 +218,49 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         version_id=version_id,
         status="indexing",
         message="Полная индексация запущена",
+    )
+
+
+@router.delete("/{document_id}", response_model=NormDeleteResponse)
+def delete_norm(document_id: str, version_id: str | None = None):
+    """Удалить версию нормы и её производные файлы.
+
+    Если version_id не указан, удаляется текущая версия. После удаления
+    текущей версии Registry автоматически выбирает оставшуюся самую новую.
+    """
+    storage = KnowledgeStorage()
+    try:
+        version = storage.get_version(document_id, version_id)
+        paths = storage.paths(document_id, version.get("id"))
+        target_version_id = version.get("id")
+
+        # Remove files registered for this version first. The index directory
+        # is document-scoped in the current storage architecture.
+        for path in (paths.pdf, paths.parsed, paths.structured):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as error:
+                raise StorageError(f"Не удалось удалить файл {path}: {error}") from error
+
+        if paths.index_root.exists():
+            try:
+                shutil.rmtree(paths.index_root)
+            except OSError as error:
+                raise StorageError(f"Не удалось удалить индекс {paths.index_root}: {error}") from error
+
+        removed_version, document_removed = storage.registry.delete_version(
+            document_id,
+            target_version_id,
+        )
+    except StorageError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    return NormDeleteResponse(
+        success=True,
+        document_id=document_id,
+        version_id=target_version_id,
+        document_removed=document_removed,
+        message="Нормативный документ удалён" if document_removed else "Версия нормативного документа удалена",
     )
 
 
