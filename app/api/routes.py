@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.knowledge_base import router as knowledge_router
+from app.api.documents import router as documents_router
+from app.api.checks import router as checks_router
 from app.api.dependencies import get_rag_pipeline
 from app.rag.rag_pipeline import RAGPipeline
 from app.api.schemas import (
@@ -16,6 +18,8 @@ from app.api.schemas import (
 
 router = APIRouter()
 router.include_router(knowledge_router)
+router.include_router(documents_router)
+router.include_router(checks_router)
 
 
 @router.get("/")
