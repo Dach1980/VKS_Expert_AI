@@ -38,10 +38,29 @@ function showNormInfo(id){var norm=getNormByIdLocal(id);if(!norm)return;var p=no
 async function deleteNorm(id){var norm=getNormByIdLocal(id);if(!norm||!norm.version_id){showNormToast('Версия нормативного документа не найдена','error');return;}var label=norm.number||norm.title||id;if(!window.confirm('Удалить нормативный документ/версию «'+label+'»?\n\nБудут удалены PDF, обработанные файлы и индекс.'))return;var key=id+':'+norm.version_id;if(normsPollTimers[key]){clearInterval(normsPollTimers[key]);delete normsPollTimers[key];}try{var response=await fetch(NORMS_API_BASE+'/'+encodeURIComponent(id)+'?version_id='+encodeURIComponent(norm.version_id),{method:'DELETE'});var data=await response.json();if(!response.ok)throw new Error(data.detail||('HTTP '+response.status));showNormToast('Нормативный документ удалён','success');await loadNorms();}catch(error){console.error('[Project Expert AI] Delete error:',error);showNormToast('Ошибка удаления: '+error.message,'error');}}
 window.renderNorms=renderNorms;window.loadNorms=loadNorms;window.handleNormDropzoneClick=handleNormDropzoneClick;window.handleNormDragOver=handleNormDragOver;window.handleNormDragLeave=handleNormDragLeave;window.handleNormDrop=handleNormDrop;window.handleNormFiles=handleNormFiles;window.uploadNormFile=uploadNormFile;window.indexNorm=indexNorm;window.pollNormStatus=pollNormStatus;window.indexAllNorms=indexAllNorms;window.showNormInfo=showNormInfo;window.deleteNorm=deleteNorm;
 // Legacy HTML callbacks are kept only as a compatibility dispatcher.
-window.handleDropzoneClick=function(type){if(type==='norms')return handleNormDropzoneClick();showNormToast('Загрузка проектной документации будет подключена в модуле «Документация».','info');};
-window.handleDragOver=function(event){var id=event&&event.currentTarget&&event.currentTarget.id;if(id==='normsDropzone')return handleNormDragOver(event);};
-window.handleDragLeave=function(event){var id=event&&event.currentTarget&&event.currentTarget.id;if(id==='normsDropzone')return handleNormDragLeave(event);};
-window.handleDrop=function(event,type){if(type==='norms')return handleNormDrop(event);};
-window.handleFiles=function(files,type){if(type==='norms')return handleNormFiles(files);};
+// Documentation owns the docs dropzone; norms.js must never replace that handler.
+window.handleDropzoneClick=function(type){
+  if(type==='norms') return handleNormDropzoneClick();
+  if(type==='docs' && typeof window.handleDocsDropzoneClick==='function') return window.handleDocsDropzoneClick();
+  showNormToast('Модуль «Документация» ещё не инициализирован.','error');
+};
+window.handleDragOver=function(event){
+  var id=event&&event.currentTarget&&event.currentTarget.id;
+  if(id==='normsDropzone') return handleNormDragOver(event);
+  if(id==='docsDropzone' && typeof window.handleDocDragOver==='function') return window.handleDocDragOver(event);
+};
+window.handleDragLeave=function(event){
+  var id=event&&event.currentTarget&&event.currentTarget.id;
+  if(id==='normsDropzone') return handleNormDragLeave(event);
+  if(id==='docsDropzone' && typeof window.handleDocDragLeave==='function') return window.handleDocDragLeave(event);
+};
+window.handleDrop=function(event,type){
+  if(type==='norms') return handleNormDrop(event);
+  if(type==='docs' && typeof window.handleDocDrop==='function') return window.handleDocDrop(event);
+};
+window.handleFiles=function(files,type){
+  if(type==='norms') return handleNormFiles(files);
+  if(type==='docs' && typeof window.handleDocFiles==='function') return window.handleDocFiles(files);
+};
 console.log('[Project Expert AI] norms.js loaded');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){loadNorms();},{once:true});else loadNorms();
