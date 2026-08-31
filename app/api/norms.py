@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
+from app.knowledge.norm_metadata import extract_version_metadata
 from app.knowledge.storage import KnowledgeStorage, StorageError
 
 router = APIRouter(prefix="/api/norms", tags=["norms"])
@@ -84,13 +85,11 @@ def _sha256_path(path: Path) -> str | None:
 
 
 def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
-    """Find identical PDF bytes in Registry and in the physical regulations tree."""
     for document in storage.registry.get_all_documents():
         for version in document.get("versions", []):
             registered = version.get("file")
             if registered and _sha256_path(storage.resolve(registered)) == upload_hash:
                 return document, version
-
     regulations_root = storage.knowledge_root / "regulations"
     if regulations_root.exists():
         for path in regulations_root.rglob("*.pdf"):
@@ -102,6 +101,52 @@ def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
                         return document, version
             return {"id": path.parent.name, "number": path.parent.name}, {"id": path.stem}
     return None
+
+
+def _version_metadata(storage: KnowledgeStorage, document_id: str, version_id: str) -> dict:
+    version = storage.get_version(document_id, version_id)
+    return extract_version_metadata(
+        storage.resolve(version.get("file", "")),
+        storage.resolve(version.get("parsed_file", "")),
+    )
+
+
+def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
+    """Add canonical metadata from the actual PDF to legacy Registry records."""
+    versions = payload.get("versions", [])
+    enriched_versions = []
+    current_meta = {}
+    for item in versions:
+        source_id = str(item.get("document_id") or payload.get("document_id"))
+        version_id = str(item.get("version_id"))
+        try:
+            meta = _version_metadata(storage, source_id, version_id)
+        except Exception:
+            meta = {}
+        item = dict(item)
+        item["number"] = meta.get("number") or payload.get("number")
+        item["title"] = meta.get("title") or payload.get("title")
+        item["change_number"] = meta.get("change_number") or item.get("change_number")
+        item["change_date"] = meta.get("change_date") or item.get("change_date")
+        item.setdefault("processing", {})
+        item["processing"] = dict(item["processing"])
+        item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
+        item["is_current"] = item.get("status") == "current"
+        enriched_versions.append(item)
+        if item["is_current"]:
+            current_meta = meta
+
+    result = dict(payload)
+    if current_meta:
+        result["number"] = current_meta.get("number") or result.get("number")
+        result["title"] = current_meta.get("title") or result.get("title")
+        result["current_change_number"] = current_meta.get("change_number")
+        result["current_change_date"] = current_meta.get("change_date") or result.get("effective_from")
+        result.setdefault("processing", {})
+        result["processing"] = dict(result["processing"])
+        result["processing"]["pages_count"] = current_meta.get("pages_count") or result["processing"].get("pages_count") or 0
+    result["versions"] = enriched_versions
+    return result
 
 
 def _index_norm(document_id: str, version_id: str) -> None:
@@ -121,19 +166,14 @@ def _index_norm(document_id: str, version_id: str) -> None:
 def list_norms():
     storage = KnowledgeStorage()
     try:
-        return {"documents": storage.list_statuses()}
+        documents = storage.list_statuses()
+        return {"documents": [_enrich_payload(storage, document) for document in documents]}
     except StorageError as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
 
 
 @router.get("/storage")
 def get_norm_storage():
-    """Информация о серверном хранилище векторных индексов.
-
-    Сейчас embedding pipeline использует FAISS. Endpoint намеренно сообщает
-    фактический backend, чтобы интерфейс не называл FAISS ChromaDB раньше
-    миграции в ChromaDB.
-    """
     storage = KnowledgeStorage()
     root = storage.knowledge_root / "index"
     entries = []
@@ -176,17 +216,9 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         resolved_document_id = existing_id
 
     existing = storage.registry.get_document(resolved_document_id)
-    if existing is not None:
-        # Parsed JSON is the authoritative source for the full normative number.
-        try:
-            metadata = storage.get_version_metadata(resolved_document_id)
-        except StorageError:
-            metadata = {}
-        resolved_number = metadata.get("number") or existing.get("number") or resolved_number
-
     resolved_title = (title or (existing.get("title") if existing else None) or resolved_number).strip()
-    if existing is not None:
-        resolved_title = existing.get("title") or resolved_title
+    if existing is not None and existing.get("title"):
+        resolved_title = existing.get("title")
 
     resolved_version_id = _safe_id(version_id) if version_id else _safe_id(
         f"{resolved_document_id}_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
@@ -211,11 +243,23 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
             make_current=False,
         )
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
+        # Extract metadata immediately so the UI does not depend on indexing.
+        meta = extract_version_metadata(saved)
+        document = storage.registry.get_document(resolved_document_id)
+        if document is not None:
+            if meta.get("number"):
+                document["number"] = meta["number"]
+            if meta.get("title"):
+                document["title"] = meta["title"]
+            storage.registry.save()
         storage.registry.activate_version(resolved_document_id, resolved_version_id)
-    except StorageError as error:
+    except (StorageError, OSError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
     return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id,
-                              number=resolved_number, title=resolved_title, status="current", filename=saved.name)
+                              number=meta.get("number") or resolved_number,
+                              title=meta.get("title") or resolved_title,
+                              status="current", filename=saved.name)
 
 
 @router.post("/{document_id}/{version_id}/index", response_model=NormIndexResponse)
@@ -232,7 +276,7 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         raise HTTPException(status_code=404, detail=str(error)) from error
     background_tasks.add_task(_index_norm, document_id, version_id)
     return NormIndexResponse(success=True, document_id=document_id, version_id=version_id,
-                             status="indexing", message="Полная индексация запущена")
+                             status="indexing", message="Индексация выбранной версии запущена")
 
 
 @router.delete("/{document_id}", response_model=NormDeleteResponse)
