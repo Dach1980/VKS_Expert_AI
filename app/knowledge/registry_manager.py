@@ -128,6 +128,42 @@ class DocumentRegistry:
         self.save()
         return target
 
+    def delete_version(self, document_id, version_id):
+        """Удалить версию из Registry и вернуть удалённую запись.
+
+        Если удаляется текущая версия и остаются другие версии, самой новой
+        по effective_from становится текущая. Если это была последняя версия,
+        документ также удаляется из Registry.
+        """
+        document = self.get_document(document_id)
+        if document is None:
+            raise RegistryError(f"Документ не найден: {document_id}")
+
+        versions = document.get("versions", [])
+        target = next((v for v in versions if v.get("id") == version_id), None)
+        if target is None:
+            raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
+
+        was_current = target.get("status") == "current"
+        versions.remove(target)
+
+        document_removed = False
+        if not versions:
+            self.data["documents"] = [
+                item for item in self.get_all_documents() if item.get("id") != document_id
+            ]
+            document_removed = True
+        elif was_current:
+            def version_sort_key(version):
+                return version.get("effective_from") or ""
+
+            fallback = max(versions, key=version_sort_key)
+            for version in versions:
+                version["status"] = "current" if version is fallback else "superseded"
+
+        self.save()
+        return target, document_removed
+
     def list_current_documents(self):
         result = []
         for document in self.get_all_documents():
@@ -219,7 +255,3 @@ def main():
     except RegistryError as error:
         print(f"ОШИБКА: {error}")
         raise SystemExit(1)
-
-
-if __name__ == "__main__":
-    main()
