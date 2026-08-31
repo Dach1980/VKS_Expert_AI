@@ -53,3 +53,11 @@ class NormIndexResponse(BaseModel):
     version_id: str
     status: str
     message: str
+
+
+class NormDeleteResponse(BaseModel):
+    success: bool
+    document_id: str
+    version_id: str
+    document_removed: bool
+    message: str
