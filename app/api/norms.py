@@ -68,14 +68,14 @@ def upload_norm(
     version_id: str | None = None,
     effective_from: str | None = None,
 ):
-    """Загрузить PDF в Registry/Storage как новую действующую версию."""
+    """Загрузить PDF в Registry/Storage как новую версию."""
     filename = file.filename or ""
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     resolved_number = _infer_number(filename, number)
     resolved_document_id = _safe_id(
-        document_id or re.sub(r"\.[Pp][Dd][Ff]$", "", resolved_number.replace(" ", "_"))
+        document_id or resolved_number.replace(" ", "_")
     )
     storage = KnowledgeStorage()
     existing = storage.registry.get_document(resolved_document_id)
@@ -84,7 +84,9 @@ def upload_norm(
         raise HTTPException(status_code=409, detail="Номер документа не совпадает с существующим Registry")
 
     resolved_title = (title or (existing.get("title") if existing else None) or resolved_number).strip()
-    resolved_version_id = _safe_id(version_id or f"{resolved_document_id}_{date.today().isoformat().replace('-', '')}")
+    resolved_version_id = _safe_id(
+        version_id or f"{resolved_document_id}_{date.today().isoformat().replace('-', '')}"
+    )
     resolved_effective_from = effective_from or date.today().isoformat()
 
     if existing is not None and any(v.get("id") == resolved_version_id for v in existing.get("versions", [])):
@@ -106,9 +108,10 @@ def upload_norm(
             file_path=str(relative_pdf).replace("\\", "/"),
             parsed_file=str(relative_parsed).replace("\\", "/"),
             structured_file=str(relative_structured).replace("\\", "/"),
-            make_current=True,
+            make_current=False,
         )
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
+        storage.registry.activate_version(resolved_document_id, resolved_version_id)
     except StorageError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
