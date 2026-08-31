@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -137,6 +138,23 @@ class KnowledgeStorage:
             raise StorageError(f"Не удалось сохранить PDF: {error}") from error
         return paths.pdf
 
+    def _index_error_path(self, document_id: str, version_id: str | None = None) -> Path:
+        return self.paths(document_id, version_id).index_root / "index_error.json"
+
+    def clear_index_error(self, document_id: str, version_id: str | None = None) -> None:
+        self._index_error_path(document_id, version_id).unlink(missing_ok=True)
+
+    def write_index_error(self, document_id: str, version_id: str, error: Exception) -> None:
+        path = self._index_error_path(document_id, version_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "checked_at": datetime.now().isoformat(),
+        }
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+
     def get_status(self, document_id: str, version_id: str | None = None) -> dict[str, Any]:
         document = self.get_document(document_id)
         version = self.get_version(document_id, version_id)
@@ -146,6 +164,14 @@ class KnowledgeStorage:
         chunks_file = paths.chunks / "all_chunks.json"
         embeddings_file = paths.embeddings / "index.faiss"
         metadata_file = paths.embeddings / "metadata.json"
+        error_file = paths.index_root / "index_error.json"
+        index_error = None
+        if error_file.exists():
+            try:
+                with error_file.open("r", encoding="utf-8") as file:
+                    index_error = json.load(file)
+            except (OSError, json.JSONDecodeError):
+                index_error = {"error": "Не удалось прочитать сведения об ошибке индексации"}
         return {
             "document_id": document_id,
             "number": document.get("number"),
@@ -164,6 +190,7 @@ class KnowledgeStorage:
                 "pages_indexed": bool(page_files), "pages_count": len(page_files),
                 "enriched": bool(enriched_files), "enriched_pages_count": len(enriched_files),
                 "chunks": chunks_file.exists(), "vector_index": embeddings_file.exists(), "vector_metadata": metadata_file.exists(),
+                "error": index_error,
             },
             "checked_at": datetime.now().isoformat(),
         }
