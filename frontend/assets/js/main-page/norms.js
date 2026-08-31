@@ -15,7 +15,7 @@ function getNormByIdLocal(id) { return getNormsData().find(function(norm){return
 function renderNorms() {
   var grid=document.getElementById('normsGrid'); if(!grid)return; var norms=getNormsData();
   if(!norms.length){grid.innerHTML='<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нет нормативных документов. Перетащите PDF или нажмите на зону загрузки.</div>';return;}
-  var html=''; norms.forEach(function(norm){var status=norm.status||'pending';var progress=norm.progress==null?normProgress(norm):norm.progress;var p=norm.processing||{};var id=JSON.stringify(norm.id);
+  var html=''; norms.forEach(function(norm){var status=norm.status||'pending';var progress=norm.progress==null?normProgress(norm):norm.progress;var p=norm.processing||{};var id=escapeHtmlSafe(JSON.stringify(norm.id));
     html+='<div class="norm-card"><div class="norm-card-header"><div style="flex:1;"><div class="norm-card-title">'+escapeHtmlSafe(norm.title||norm.number||'')+'</div><div class="norm-card-subtitle">'+escapeHtmlSafe(norm.subtitle||'')+'</div></div></div>';
     html+='<div class="norm-card-meta"><span>📅 '+escapeHtmlSafe(norm.date||norm.effective_from||'')+'</span><span>📄 '+(p.pages_count||0)+' стр.</span><span>📂 '+escapeHtmlSafe((norm.sections||[]).join(', ')||'—')+'</span></div>';
     if(status==='indexing')html+='<div class="progress-bar"><div class="progress-fill" style="width:'+progress+'%"></div></div><div style="margin-top:8px;font-size:12px;color:var(--accent);">Индексация: '+progress+'%</div>';
