@@ -3,7 +3,6 @@ import re
 from pathlib import Path
 from datetime import date
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_FILE = PROJECT_ROOT / "knowledge" / "registry" / "documents.json"
 
@@ -23,21 +22,26 @@ class DocumentRegistry:
             raise RegistryError(f"Файл реестра не найден:\n{self.registry_file}")
         try:
             with open(self.registry_file, "r", encoding="utf-8-sig") as file:
-                return json.load(file)
+                data = json.load(file)
         except json.JSONDecodeError as error:
             raise RegistryError(f"Ошибка JSON в файле реестра:\n{error}") from error
+        if not isinstance(data, dict) or not isinstance(data.get("documents", []), list):
+            raise RegistryError("Некорректная структура Registry: documents должен быть списком")
+        return data
 
     def save(self):
         self.registry_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.registry_file, "w", encoding="utf-8") as file:
+        temp = self.registry_file.with_suffix(".tmp")
+        with open(temp, "w", encoding="utf-8") as file:
             json.dump(self.data, file, ensure_ascii=False, indent=2)
+        temp.replace(self.registry_file)
 
     def get_all_documents(self):
         return self.data.get("documents", [])
 
     def get_document(self, document_id):
         for document in self.get_all_documents():
-            if document["id"] == document_id:
+            if document.get("id") == document_id:
                 return document
         return None
 
@@ -46,6 +50,12 @@ class DocumentRegistry:
         normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
         match = re.search(r"(?:сп|гост\s*р?|снип|тр|фз)\s*[0-9]+\.[0-9]+", normalized, re.IGNORECASE)
         return re.sub(r"\s+", " ", match.group(0)).strip() if match else normalized
+
+    @staticmethod
+    def canonical_number(value):
+        value = re.sub(r"\s+", " ", str(value or "")).strip()
+        match = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", value, re.IGNORECASE)
+        return re.sub(r"\s+", " ", match.group(1)).strip() if match else value
 
     def get_current_version(self, document_id):
         document = self.get_document(document_id)
@@ -60,15 +70,12 @@ class DocumentRegistry:
 
     def register_version(self, document_id, number, title, document_type="СП", version_id=None,
                          version_type="edition", effective_from=None, file_path=None,
-                         parsed_file=None, structured_file=None, make_current=True):
-        """Создать документ/версию в Registry.
-
-        Старые записи вроде «СП 30.13330» допускают каноническое уточнение
-        до «СП 30.13330.2020», если это тот же логический документ.
-        """
+                         parsed_file=None, structured_file=None, make_current=False,
+                         change_number=None, change_date=None, pages_count=None, sha256=None):
         if not document_id or not number or not title:
             raise RegistryError("document_id, number и title обязательны")
 
+        number = self.canonical_number(number)
         document = self.get_document(document_id)
         if document is None:
             document = {"id": document_id, "number": number, "title": title,
@@ -78,7 +85,6 @@ class DocumentRegistry:
             existing_number = document.get("number") or ""
             if existing_number != number:
                 if self._number_group(existing_number) == self._number_group(number):
-                    # Full number is authoritative when it contains the year/version.
                     if len(str(number)) >= len(str(existing_number)):
                         document["number"] = number
                     else:
@@ -86,12 +92,10 @@ class DocumentRegistry:
                 else:
                     raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
             existing_title = document.get("title") or ""
-            if existing_title != title:
-                # Prefer the more descriptive title discovered from the normative PDF.
-                if len(str(title)) >= len(str(existing_title)):
-                    document["title"] = title
-                else:
-                    title = existing_title
+            if existing_title != title and len(str(title)) >= len(str(existing_title)):
+                document["title"] = title
+            else:
+                title = existing_title or title
 
         versions = document.setdefault("versions", [])
         if version_id is None:
@@ -102,35 +106,58 @@ class DocumentRegistry:
         version = {
             "id": version_id,
             "type": version_type,
-            "status": "current" if make_current else "uploaded",
+            "status": "uploaded",
             "effective_from": effective_from,
             "file": file_path,
             "parsed_file": parsed_file,
             "structured_file": structured_file,
         }
+        if change_number is not None:
+            version["change_number"] = str(change_number)
+        if change_date:
+            version["change_date"] = str(change_date)
+        if pages_count is not None:
+            version["pages_count"] = int(pages_count)
+        if sha256:
+            version["sha256"] = str(sha256)
+
         versions.append(version)
         if make_current:
-            for other in versions:
-                if other is not version and other.get("status") == "current":
-                    other["status"] = "superseded"
+            self._activate_in_document(document, version)
         self.save()
         return document, version
 
+    def set_document_metadata(self, document_id, number=None, title=None):
+        document = self.get_document(document_id)
+        if document is None:
+            raise RegistryError(f"Документ не найден: {document_id}")
+        if number:
+            number = self.canonical_number(number)
+            if self._number_group(document.get("number")) != self._number_group(number):
+                raise RegistryError("Канонический номер относится к другому нормативному документу")
+            document["number"] = number
+        if title:
+            document["title"] = title
+        self.save()
+        return document
+
+    @staticmethod
+    def _activate_in_document(document, target):
+        for version in document.get("versions", []):
+            version["status"] = "current" if version is target else "superseded"
+
     def activate_version(self, document_id, version_id):
-        """Сделать существующую версию единственной действующей версией."""
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
         target = next((version for version in document.get("versions", []) if version.get("id") == version_id), None)
         if target is None:
             raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
-        for version in document.get("versions", []):
-            version["status"] = "current" if version is target else "superseded"
+        self._activate_in_document(document, target)
         self.save()
         return target
 
     def delete_version(self, document_id, version_id):
-        """Удалить версию; при необходимости назначить самой новой оставшуюся."""
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
@@ -146,8 +173,7 @@ class DocumentRegistry:
             document_removed = True
         elif was_current:
             fallback = max(versions, key=lambda version: version.get("effective_from") or "")
-            for version in versions:
-                version["status"] = "current" if version is fallback else "superseded"
+            self._activate_in_document(document, fallback)
         self.save()
         return target, document_removed
 
@@ -204,14 +230,10 @@ class DocumentRegistry:
 
 def print_registry(registry):
     print("=" * 60)
-    print("VKS Expert AI — Regulatory Registry")
+    print("Project Expert AI — Regulatory Registry")
     print("=" * 60)
     print(f"\nФайл реестра:\n{registry.registry_file}\n")
-    documents = registry.get_all_documents()
-    if not documents:
-        print("Реестр пуст.")
-        return
-    for document in documents:
+    for document in registry.get_all_documents():
         print(f"{document['number']} — {document['title']}")
         print(f"  ID: {document['id']}")
         for version in document.get("versions", []):
