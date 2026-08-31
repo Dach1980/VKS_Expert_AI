@@ -30,7 +30,7 @@ def _infer_number(filename: str, supplied: str | None) -> str:
     if supplied and supplied.strip():
         return supplied.strip()
     normalized = _normalize_filename(filename)
-    match = re.search(r"СП\s*[0-9]+(?:\.[0-9]+)+", normalized, re.IGNORECASE)
+    match = re.search(r"(?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+", normalized, re.IGNORECASE)
     return re.sub(r"\s+", " ", match.group(0)).strip() if match else Path(filename).stem
 
 
@@ -74,12 +74,23 @@ def _sha256_path(path: Path) -> str | None:
 
 
 def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
-    """Find identical PDF bytes across every registry document, including legacy aliases."""
+    """Find identical PDF bytes in Registry and in the physical regulations tree."""
     for document in storage.registry.get_all_documents():
         for version in document.get("versions", []):
             registered = version.get("file")
             if registered and _sha256_path(storage.resolve(registered)) == upload_hash:
                 return document, version
+
+    regulations_root = storage.knowledge_root / "regulations"
+    if regulations_root.exists():
+        for path in regulations_root.rglob("*.pdf"):
+            if _sha256_path(path) != upload_hash:
+                continue
+            for document in storage.registry.get_all_documents():
+                for version in document.get("versions", []):
+                    if storage.resolve(version.get("file", "")) == path:
+                        return document, version
+            return {"id": path.parent.name, "number": path.parent.name}, {"id": path.stem}
     return None
 
 
@@ -105,6 +116,32 @@ def list_norms():
         raise HTTPException(status_code=500, detail=str(error)) from error
 
 
+@router.get("/storage")
+def get_norm_storage():
+    """Информация о серверном хранилище векторных индексов.
+
+    Сейчас embedding pipeline использует FAISS. Endpoint намеренно сообщает
+    фактический backend, чтобы интерфейс не называл FAISS ChromaDB раньше
+    миграции в ChromaDB.
+    """
+    storage = KnowledgeStorage()
+    root = storage.knowledge_root / "index"
+    entries = []
+    if root.exists():
+        for path in sorted(root.rglob("index.faiss")):
+            try:
+                relative = path.parent.relative_to(storage.project_root)
+            except ValueError:
+                relative = path.parent
+            entries.append({"path": str(relative).replace("\\", "/"), "size_bytes": path.stat().st_size})
+    return {
+        "backend": "FAISS",
+        "path": str(root),
+        "relative_path": str(root.relative_to(storage.project_root)).replace("\\", "/"),
+        "indexes": entries,
+    }
+
+
 @router.post("/upload", response_model=NormUploadResponse)
 def upload_norm(file: UploadFile = File(...), number: str | None = None, title: str | None = None,
                 document_id: str | None = None, version_id: str | None = None, effective_from: str | None = None):
@@ -113,7 +150,8 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     storage = KnowledgeStorage()
-    duplicate = _find_duplicate_version(storage, _sha256_uploaded(file))
+    upload_hash = _sha256_uploaded(file)
+    duplicate = _find_duplicate_version(storage, upload_hash)
     if duplicate:
         document, version = duplicate
         raise HTTPException(status_code=409, detail=(
@@ -126,12 +164,17 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     existing_id = _find_existing_document_id(storage, resolved_number, filename)
     if existing_id:
         resolved_document_id = existing_id
+
     existing = storage.registry.get_document(resolved_document_id)
     if existing is not None:
-        resolved_number = existing.get("number") or resolved_number
+        # Parsed JSON is the authoritative source for the full normative number.
+        try:
+            metadata = storage.get_version_metadata(resolved_document_id)
+        except StorageError:
+            metadata = {}
+        resolved_number = metadata.get("number") or existing.get("number") or resolved_number
+
     resolved_title = (title or (existing.get("title") if existing else None) or resolved_number).strip()
-    if existing is not None and title and existing.get("title") != resolved_title:
-        raise HTTPException(status_code=409, detail="Название документа не совпадает с существующим Registry")
     if existing is not None:
         resolved_title = existing.get("title") or resolved_title
 
@@ -145,16 +188,33 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     relative_structured = Path("knowledge") / "structured" / f"{resolved_version_id}.json"
 
     try:
-        storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title,
-            version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from,
-            file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"),
-            structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
+        storage.registry.register_version(
+            document_id=resolved_document_id,
+            number=resolved_number,
+            title=resolved_title,
+            version_id=resolved_version_id,
+            version_type="edition",
+            effective_from=resolved_effective_from,
+            file_path=str(relative_pdf).replace("\\", "/"),
+            parsed_file=str(relative_parsed).replace("\\", "/"),
+            structured_file=str(relative_structured).replace("\\", "/"),
+            make_current=False,
+        )
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
+        # Последняя явно загруженная версия становится действующей. Старые
+        # версии остаются в Registry и физически доступны для индексации.
         storage.registry.activate_version(resolved_document_id, resolved_version_id)
     except StorageError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id,
-                              number=resolved_number, title=resolved_title, status="current", filename=saved.name)
+    return NormUploadResponse(
+        success=True,
+        document_id=resolved_document_id,
+        version_id=resolved_version_id,
+        number=resolved_number,
+        title=resolved_title,
+        status="current",
+        filename=saved.name,
+    )
 
 
 @router.post("/{document_id}/{version_id}/index", response_model=NormIndexResponse)
@@ -199,9 +259,20 @@ def get_norm(document_id: str, version_id: str | None = None):
     try:
         status = storage.get_status(document_id, version_id)
         document = storage.registry.get_document(document_id)
-        status["versions"] = [{"version_id": v.get("id"), "version_type": v.get("type"), "status": v.get("status"),
-                                "effective_from": v.get("effective_from"), "filename": Path(v.get("file", "")).name}
-                               for v in document.get("versions", [])]
+        status["versions"] = []
+        for version in document.get("versions", []):
+            version_status = storage.get_status(document_id, version.get("id"))
+            status["versions"].append({
+                "document_id": document_id,
+                "version_id": version.get("id"),
+                "version_type": version.get("type"),
+                "status": version.get("status"),
+                "effective_from": version.get("effective_from"),
+                "change_number": version_status.get("change_number"),
+                "change_date": version_status.get("change_date"),
+                "filename": Path(version.get("file", "")).name,
+                "processing": version_status.get("processing", {}),
+            })
         return status
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
