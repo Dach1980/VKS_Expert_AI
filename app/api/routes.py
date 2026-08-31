@@ -1,9 +1,8 @@
-"""VKS Expert AI — API Routes."""
+"""Project Expert AI — API Routes."""
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.knowledge_base import router as knowledge_router
-from app.api.norms import router as norms_router
 from app.api.dependencies import get_rag_pipeline
 from app.rag.rag_pipeline import RAGPipeline
 from app.api.schemas import (
@@ -17,13 +16,12 @@ from app.api.schemas import (
 
 router = APIRouter()
 router.include_router(knowledge_router)
-router.include_router(norms_router)
 
 
 @router.get("/")
 def root():
     return {
-        "service": "VKS Expert AI",
+        "service": "Project Expert AI",
         "status": "running",
         "version": "phase3-api-v1",
     }
