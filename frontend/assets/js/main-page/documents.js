@@ -15,7 +15,7 @@ function renderDocs() {
   if (selectAllLabel) selectAllLabel.textContent = 'Выбрать все' + (docsData.length ? ' (' + docsData.length + ')' : '');
 
   if (!docsData.length) {
-    list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нет документов. Перетащите PDF или нажмите на зону загрузки.</div>';
+    list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нет проектной документации. Перетащите PDF или нажмите на зону загрузки.</div>';
     return;
   }
 
@@ -63,9 +63,9 @@ function handleDocsDropzoneClick() {
   input.click();
 }
 
-function handleDocDragOver(event) { event.preventDefault(); event.currentTarget.classList.add('dragover'); }
-function handleDocDragLeave(event) { event.preventDefault(); event.currentTarget.classList.remove('dragover'); }
-function handleDocDrop(event) { event.preventDefault(); event.currentTarget.classList.remove('dragover'); if (event.dataTransfer.files.length) handleDocFiles(event.dataTransfer.files); }
+function handleDocDragOver(event) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add('dragover'); }
+function handleDocDragLeave(event) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove('dragover'); }
+function handleDocDrop(event) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove('dragover'); if (event.dataTransfer.files.length) handleDocFiles(event.dataTransfer.files); }
 
 function handleDocFiles(files) {
   Array.from(files).forEach(uploadDocFile);
@@ -157,12 +157,25 @@ function checkSelectedDocs() {
   Promise.all(selected.map(function(d) { return checkDocument(d.id); }));
 }
 
+// Bind the documentation dropzone directly. This deliberately replaces the
+// legacy inline onclick/on* dispatcher so norms.js can never intercept docs.
+function bindDocsDropzone() {
+  var dropzone = document.getElementById('docsDropzone');
+  if (!dropzone || dropzone.dataset.docsBound === '1') return;
+  dropzone.dataset.docsBound = '1';
+  dropzone.onclick = handleDocsDropzoneClick;
+  dropzone.ondragover = handleDocDragOver;
+  dropzone.ondragleave = handleDocDragLeave;
+  dropzone.ondrop = handleDocDrop;
+}
+
 // Explicit public handlers used by the main-page dropzone.
 window.handleDocsDropzoneClick = handleDocsDropzoneClick;
 window.handleDocDragOver = handleDocDragOver;
 window.handleDocDragLeave = handleDocDragLeave;
 window.handleDocDrop = handleDocDrop;
 window.handleDocFiles = handleDocFiles;
+window.bindDocsDropzone = bindDocsDropzone;
 
 // Legacy dropzone callbacks used by index.html.
 window.handleDropzoneClick = function(type) {
@@ -196,4 +209,13 @@ window.deleteDoc = deleteDoc;
 window.toggleDocCheck = toggleDocCheck;
 window.toggleSelectAllDocs = toggleSelectAllDocs;
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadDocs, { once: true }); else loadDocs();
+function initializeDocumentsModule() {
+  bindDocsDropzone();
+  loadDocs();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeDocumentsModule, { once: true });
+} else {
+  initializeDocumentsModule();
+}
