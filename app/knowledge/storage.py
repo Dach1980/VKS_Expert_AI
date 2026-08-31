@@ -11,13 +11,10 @@ from typing import Any
 
 from app.knowledge.registry_manager import DocumentRegistry, RegistryError
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
 
 class StorageError(Exception):
     """Ошибка работы с KnowledgeStorage."""
-
 
 @dataclass(frozen=True)
 class DocumentPaths:
@@ -30,10 +27,8 @@ class DocumentPaths:
     chunks: Path
     embeddings: Path
 
-
 class KnowledgeStorage:
     """Единая точка доступа к путям нормативных документов."""
-
     def __init__(self, project_root: Path | str = PROJECT_ROOT, registry: DocumentRegistry | None = None) -> None:
         self.project_root = Path(project_root).resolve()
         self.knowledge_root = self.project_root / "knowledge"
@@ -72,44 +67,29 @@ class KnowledgeStorage:
             parsed=self.resolve(version.get("parsed_file", "")),
             structured=self.resolve(version.get("structured_file", "")),
             index_root=index_root,
-            pages=index_root / "pages",
-            enriched=index_root / "enriched",
-            chunks=index_root / "document_chunks",
-            embeddings=index_root / "embeddings",
+            pages=index_root / "pages", enriched=index_root / "enriched",
+            chunks=index_root / "document_chunks", embeddings=index_root / "embeddings",
         )
 
     def pdf_path(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).pdf
-
     def parsed_path(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).parsed
-
     def structured_path(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).structured
-
     def pages_dir(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).pages
-
     def enriched_dir(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).enriched
-
     def chunks_dir(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).chunks
-
     def embeddings_dir(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).embeddings
 
     def ensure_version_dirs(self, document_id: str, version_id: str | None = None) -> DocumentPaths:
         paths = self.paths(document_id, version_id)
-        for directory in (
-            paths.pages,
-            paths.enriched,
-            paths.chunks,
-            paths.embeddings,
-            paths.parsed.parent,
-            paths.structured.parent,
-            paths.pdf.parent,
-        ):
+        for directory in (paths.pages, paths.enriched, paths.chunks, paths.embeddings,
+                          paths.parsed.parent, paths.structured.parent, paths.pdf.parent):
             directory.mkdir(parents=True, exist_ok=True)
         return paths
 
@@ -124,11 +104,9 @@ class KnowledgeStorage:
         return paths.pdf
 
     def save_uploaded_pdf(self, document_id: str, upload_file, version_id: str | None = None) -> Path:
-        """Сохранить загруженный FastAPI UploadFile через единый Storage слой."""
         filename = str(getattr(upload_file, "filename", "") or "")
         if not filename.lower().endswith(".pdf"):
             raise StorageError("Поддерживается только загрузка PDF")
-
         paths = self.ensure_version_dirs(document_id, version_id)
         try:
             upload_file.file.seek(0)
@@ -140,20 +118,12 @@ class KnowledgeStorage:
 
     def _index_error_path(self, document_id: str, version_id: str | None = None) -> Path:
         return self.paths(document_id, version_id).index_root / "index_error.json"
-
     def clear_index_error(self, document_id: str, version_id: str | None = None) -> None:
         self._index_error_path(document_id, version_id).unlink(missing_ok=True)
-
     def write_index_error(self, document_id: str, version_id: str, error: Exception) -> None:
-        path = self._index_error_path(document_id, version_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "error": str(error),
-            "error_type": type(error).__name__,
-            "checked_at": datetime.now().isoformat(),
-        }
+        path = self._index_error_path(document_id, version_id); path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
+            json.dump({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, file, ensure_ascii=False, indent=2)
 
     def get_status(self, document_id: str, version_id: str | None = None) -> dict[str, Any]:
         document = self.get_document(document_id)
@@ -168,32 +138,33 @@ class KnowledgeStorage:
         index_error = None
         if error_file.exists():
             try:
-                with error_file.open("r", encoding="utf-8") as file:
-                    index_error = json.load(file)
-            except (OSError, json.JSONDecodeError):
-                index_error = {"error": "Не удалось прочитать сведения об ошибке индексации"}
+                with error_file.open("r", encoding="utf-8") as file: index_error = json.load(file)
+            except (OSError, json.JSONDecodeError): index_error = {"error": "Не удалось прочитать сведения об ошибке индексации"}
         return {
-            "document_id": document_id,
-            "number": document.get("number"),
-            "title": document.get("title"),
-            "version_id": version.get("id"),
-            "version_type": version.get("type"),
-            "status": version.get("status"),
+            "document_id": document_id, "number": document.get("number"), "title": document.get("title"),
+            "version_id": version.get("id"), "version_type": version.get("type"), "status": version.get("status"),
             "effective_from": version.get("effective_from"),
-            "paths": {
-                "pdf": str(paths.pdf), "parsed": str(paths.parsed), "structured": str(paths.structured),
-                "pages": str(paths.pages), "enriched": str(paths.enriched), "chunks": str(paths.chunks),
-                "embeddings": str(paths.embeddings),
-            },
-            "processing": {
-                "uploaded": paths.pdf.exists(), "parsed": paths.parsed.exists(), "structured": paths.structured.exists(),
-                "pages_indexed": bool(page_files), "pages_count": len(page_files),
-                "enriched": bool(enriched_files), "enriched_pages_count": len(enriched_files),
-                "chunks": chunks_file.exists(), "vector_index": embeddings_file.exists(), "vector_metadata": metadata_file.exists(),
-                "error": index_error,
-            },
+            "paths": {"pdf": str(paths.pdf), "parsed": str(paths.parsed), "structured": str(paths.structured),
+                      "pages": str(paths.pages), "enriched": str(paths.enriched), "chunks": str(paths.chunks), "embeddings": str(paths.embeddings)},
+            "processing": {"uploaded": paths.pdf.exists(), "parsed": paths.parsed.exists(), "structured": paths.structured.exists(),
+                           "pages_indexed": bool(page_files), "pages_count": len(page_files), "enriched": bool(enriched_files),
+                           "enriched_pages_count": len(enriched_files), "chunks": chunks_file.exists(), "vector_index": embeddings_file.exists(),
+                           "vector_metadata": metadata_file.exists(), "error": index_error},
             "checked_at": datetime.now().isoformat(),
         }
 
     def list_statuses(self) -> list[dict[str, Any]]:
-        return [self.get_status(document["id"]) for document in self.registry.get_all_documents()]
+        result = []
+        for document in self.registry.get_all_documents():
+            try:
+                current = self.get_status(document["id"])
+            except StorageError:
+                continue
+            current["versions"] = [
+                {"version_id": version.get("id"), "version_type": version.get("type"),
+                 "status": version.get("status"), "effective_from": version.get("effective_from"),
+                 "filename": Path(version.get("file", "")).name}
+                for version in document.get("versions", [])
+            ]
+            result.append(current)
+        return result
