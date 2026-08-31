@@ -44,12 +44,7 @@ def _infer_number(filename: str, supplied: str | None) -> str:
 
 
 def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename: str) -> str | None:
-    """Find a registry document represented by common SP filename variants.
-
-    For example, ``СП_30.13330_базовая_версия.pdf`` should resolve to the
-    existing ``SP_30.13330`` registry document instead of creating a second
-    document with a filename-derived id.
-    """
+    """Find a registry document represented by common SP filename variants."""
     normalized_number = re.sub(r"\s+", " ", number).strip().lower()
     normalized_filename = _normalize_filename(filename).lower()
 
@@ -60,13 +55,8 @@ def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename:
         if doc_number == normalized_number:
             exact.append(document)
             continue
-
-        # Match an abbreviated SP number from a filename, e.g.
-        # "СП 30.13330" against registry number "СП 30.13330.2020".
         if normalized_number and doc_number.startswith(normalized_number + "."):
             prefix.append(document)
-
-        # Also recognize the canonical document id in a filename.
         if str(document.get("id", "")).lower() in normalized_filename:
             prefix.append(document)
 
@@ -74,6 +64,17 @@ def _find_existing_document_id(storage: KnowledgeStorage, number: str, filename:
     unique = {document.get("id"): document for document in matches if document.get("id")}
     if len(unique) == 1:
         return next(iter(unique))
+    return None
+
+
+def _find_duplicate_filename(storage: KnowledgeStorage, filename: str) -> tuple[str, str] | None:
+    """Return document/version containing the same uploaded filename."""
+    target = Path(filename).name.casefold()
+    for document in storage.registry.get_all_documents():
+        for version in document.get("versions", []):
+            registered = version.get("file")
+            if registered and Path(str(registered)).name.casefold() == target:
+                return str(document.get("id", "")), str(version.get("id", ""))
     return None
 
 
@@ -123,11 +124,20 @@ def upload_norm(
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     storage = KnowledgeStorage()
+    duplicate = _find_duplicate_filename(storage, filename)
+    if duplicate:
+        duplicate_document_id, duplicate_version_id = duplicate
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Данный документ уже загружен: {filename}. "
+                f"Версия: {duplicate_document_id}/{duplicate_version_id}"
+            ),
+        )
+
     resolved_number = _infer_number(filename, number)
     resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
 
-    # Reuse an existing registry document when the uploaded filename is a
-    # variant of its official number (e.g. SP_30.13330 vs СП 30.13330.2020).
     existing_id = _find_existing_document_id(storage, resolved_number, filename)
     if existing_id:
         resolved_document_id = existing_id
@@ -149,8 +159,6 @@ def upload_norm(
     if version_id:
         resolved_version_id = _safe_id(version_id)
     else:
-        # Multiple uploads of the same norm on one day are valid: use a
-        # timestamp-based version id instead of rejecting the second upload.
         stamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         resolved_version_id = _safe_id(f"{resolved_document_id}_{stamp}")
 
@@ -223,19 +231,13 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
 
 @router.delete("/{document_id}", response_model=NormDeleteResponse)
 def delete_norm(document_id: str, version_id: str | None = None):
-    """Удалить версию нормы и её производные файлы.
-
-    Если version_id не указан, удаляется текущая версия. После удаления
-    текущей версии Registry автоматически выбирает оставшуюся самую новую.
-    """
+    """Удалить версию нормы и её производные файлы."""
     storage = KnowledgeStorage()
     try:
         version = storage.get_version(document_id, version_id)
         paths = storage.paths(document_id, version.get("id"))
         target_version_id = version.get("id")
 
-        # Remove files registered for this version first. The index directory
-        # is document-scoped in the current storage architecture.
         for path in (paths.pdf, paths.parsed, paths.structured):
             try:
                 path.unlink(missing_ok=True)
