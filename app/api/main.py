@@ -1,6 +1,6 @@
 """
 Project Expert AI
-FastAPI Main v3
+FastAPI Main v4
 
 Application entry point.
 """
@@ -39,10 +39,12 @@ app.add_middleware(
 # Keep the general API router for existing endpoints.
 app.include_router(router)
 
-# Register norms directly on the application so the complete
-# /api/norms route table is explicit and independently testable.
-# This avoids relying on nested router inclusion for the upload route.
-app.include_router(norms_router)
+# FastAPI 0.141.x keeps included routers as _IncludedRouter wrappers.
+# Register the already-built norms APIRoute objects directly so that the
+# norms API is present in OpenAPI and dispatched by the application exactly
+# as declared in app/api/norms.py. No second processing architecture is used.
+for route in norms_router.routes:
+    app.router.routes.append(route)
 
 
 @app.on_event("startup")
