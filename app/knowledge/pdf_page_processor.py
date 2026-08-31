@@ -1,11 +1,16 @@
-"""Project Expert AI — PDF Page Processor v2.
+"""Project Expert AI — PDF Page Processor v3.
 
-Извлекает страницы PDF и одновременно формирует агрегированный
-parsed JSON, необходимый существующему SPIndexBuilder.
+Извлекает страницы PDF и формирует parsed JSON. Процессор сохраняет
+совместимость с нормативным SPIndexBuilder и дополнительно умеет работать
+в standalone-режиме для проектной документации.
 """
+
+from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import pymupdf
 
@@ -15,14 +20,48 @@ from app.knowledge.storage import KnowledgeStorage
 class PDFPageProcessor:
     """Извлекает страницы PDF и сохраняет parsed representation."""
 
-    def __init__(self, document_id="SP_30.13330", version_id=None, storage=None):
+    def __init__(
+        self,
+        document_id="SP_30.13330",
+        version_id=None,
+        storage=None,
+        pdf_path: Path | str | None = None,
+        output_dir: Path | str | None = None,
+        parsed_path: Path | str | None = None,
+        document_meta: dict[str, Any] | None = None,
+    ):
         self.document_id = document_id
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
-        self.paths = self.storage.paths(document_id, version_id)
-        self.pdf_path = self.paths.pdf
-        self.output_dir = self.paths.pages
-        self.parsed_path = self.paths.parsed
+        self.standalone = pdf_path is not None
+        self.document_meta = document_meta or {}
+
+        if self.standalone:
+            self.pdf_path = Path(pdf_path).resolve()
+            self.output_dir = Path(output_dir).resolve()
+            self.parsed_path = Path(parsed_path).resolve()
+        else:
+            self.paths = self.storage.paths(document_id, version_id)
+            self.pdf_path = self.paths.pdf
+            self.output_dir = self.paths.pages
+            self.parsed_path = self.paths.parsed
+
+    def _document_number(self) -> str:
+        if self.document_meta.get("number"):
+            return str(self.document_meta["number"])
+        return self.storage.get_document(self.document_id)["number"]
+
+    def _document_title(self) -> str:
+        if self.document_meta.get("title"):
+            return str(self.document_meta["title"])
+        return self.storage.get_document(self.document_id).get("title", "")
+
+    def _version_id(self) -> str | None:
+        if self.document_meta.get("version_id"):
+            return str(self.document_meta["version_id"])
+        if self.version_id is None:
+            return None
+        return self.storage.get_version(self.document_id, self.version_id).get("id")
 
     def open_pdf(self):
         print("Opening PDF...")
@@ -47,13 +86,13 @@ class PDFPageProcessor:
 
         return {
             "document": {
-                "number": self.storage.get_document(self.document_id)["number"],
-                "title": self.storage.get_document(self.document_id).get("title", ""),
+                "number": self._document_number(),
+                "title": self._document_title(),
                 "source_file": str(self.pdf_path),
                 "pages": 0,
             },
             "document_id": self.document_id,
-            "version": self.storage.get_version(self.document_id, self.version_id).get("id"),
+            "version": self._version_id(),
             "page": number,
             "geometry": {"width": rect.width, "height": rect.height},
             "source": {"pdf": str(self.pdf_path), "pipeline": ["PyMuPDF", "PDFPageProcessor"]},
@@ -70,19 +109,17 @@ class PDFPageProcessor:
         return filename
 
     def save_parsed(self, pages, total):
-        """Собрать страницы в формат, который ожидает Structure Parser."""
         self.parsed_path.parent.mkdir(parents=True, exist_ok=True)
-        document = self.storage.get_document(self.document_id)
         data = {
             "schema_version": "1.0",
             "document": {
-                "number": document.get("number"),
-                "title": document.get("title"),
+                "number": self._document_number(),
+                "title": self._document_title(),
                 "source_file": str(self.pdf_path),
                 "pages": total,
             },
             "document_id": self.document_id,
-            "version": self.storage.get_version(self.document_id, self.version_id).get("id"),
+            "version": self._version_id(),
             "pages": pages,
             "created": datetime.now().isoformat(),
         }
@@ -92,7 +129,9 @@ class PDFPageProcessor:
         return self.parsed_path
 
     def run(self):
-        self.storage.ensure_version_dirs(self.document_id, self.version_id)
+        if not self.standalone:
+            self.storage.ensure_version_dirs(self.document_id, self.version_id)
+
         doc = self.open_pdf()
         pages = []
         try:
@@ -107,6 +146,7 @@ class PDFPageProcessor:
                 print(f"Saved: page_{page_number:03}.json")
         finally:
             doc.close()
+
         self.save_parsed(pages, total)
         print("\nPDF processing completed")
         return pages
