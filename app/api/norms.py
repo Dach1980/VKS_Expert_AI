@@ -38,13 +38,11 @@ def _infer_number(filename: str, supplied: str | None) -> str:
 
 def _index_norm(document_id: str, version_id: str) -> None:
     """Background task: run the repository's existing complete SP pipeline."""
-    builder = SPIndexBuilder(document_id=document_id, version_id=version_id)
-    builder.run()
+    SPIndexBuilder(document_id=document_id, version_id=version_id).run()
 
 
 @router.get("")
 def list_norms():
-    """Список нормативных документов из Registry + фактический статус Storage."""
     storage = KnowledgeStorage()
     try:
         return {"documents": storage.list_statuses()}
@@ -54,7 +52,6 @@ def list_norms():
 
 @router.get("/{document_id}")
 def get_norm(document_id: str, version_id: str | None = None):
-    """Информация и статус конкретной версии нормативного документа."""
     storage = KnowledgeStorage()
     try:
         return storage.get_status(document_id, version_id)
@@ -77,13 +74,19 @@ def upload_norm(
         raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
 
     resolved_number = _infer_number(filename, number)
-    resolved_document_id = _safe_id(document_id or re.sub(r"\.[Pp][Dd][Ff]$", "", resolved_number.replace(" ", "_")))
-    resolved_title = (title or resolved_number).strip()
+    resolved_document_id = _safe_id(
+        document_id or re.sub(r"\.[Pp][Dd][Ff]$", "", resolved_number.replace(" ", "_"))
+    )
+    storage = KnowledgeStorage()
+    existing = storage.registry.get_document(resolved_document_id)
+
+    if existing is not None and existing.get("number") != resolved_number:
+        raise HTTPException(status_code=409, detail="Номер документа не совпадает с существующим Registry")
+
+    resolved_title = (title or (existing.get("title") if existing else None) or resolved_number).strip()
     resolved_version_id = _safe_id(version_id or f"{resolved_document_id}_{date.today().isoformat().replace('-', '')}")
     resolved_effective_from = effective_from or date.today().isoformat()
 
-    storage = KnowledgeStorage()
-    existing = storage.registry.get_document(resolved_document_id)
     if existing is not None and any(v.get("id") == resolved_version_id for v in existing.get("versions", [])):
         raise HTTPException(status_code=409, detail=f"Версия уже существует: {resolved_document_id}/{resolved_version_id}")
 
@@ -106,7 +109,7 @@ def upload_norm(
             make_current=True,
         )
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
-    except (StorageError, ValueError) as error:
+    except StorageError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     return NormUploadResponse(
@@ -121,11 +124,7 @@ def upload_norm(
 
 
 @router.post("/{document_id}/{version_id}/index", response_model=NormIndexResponse)
-def index_norm(
-    document_id: str,
-    version_id: str,
-    background_tasks: BackgroundTasks,
-):
+def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTasks):
     """Запустить существующий полный SPIndexBuilder в фоне."""
     storage = KnowledgeStorage()
     try:
