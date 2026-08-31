@@ -1,36 +1,29 @@
 // ===== SETTINGS =====
-var DEFAULT_SETTINGS = {theme:'light',notifications:true,autoSave:true,language:'ru',defaultSection:'ВК'};
+var DEFAULT_SETTINGS = {theme:'light',notifications:true,autoSave:true,language:'ru',defaultSection:'ВК',vectorIndexPath:'knowledge/index'};
 const NORMS_STORAGE_API='http://127.0.0.1:8000/api/norms/storage';
 function getSettings(){if(typeof appSettings!=='undefined'&&appSettings)return appSettings;return DEFAULT_SETTINGS;}
 function renderSettings(){var s=getSettings();var t=document.getElementById('settingTheme'),n=document.getElementById('settingNotifications'),a=document.getElementById('settingAutoSave'),l=document.getElementById('settingLanguage'),d=document.getElementById('settingDefaultSection');if(t)t.value=s.theme||'light';if(n)n.checked=s.notifications!==false;if(a)a.checked=s.autoSave!==false;if(l)l.value=s.language||'ru';if(d)d.value=s.defaultSection||'ВК';renderStorageSettings();}
 function saveSettings(){if(typeof appSettings==='undefined')return;var t=document.getElementById('settingTheme'),n=document.getElementById('settingNotifications'),a=document.getElementById('settingAutoSave'),l=document.getElementById('settingLanguage'),d=document.getElementById('settingDefaultSection');if(t)appSettings.theme=t.value;if(n)appSettings.notifications=n.checked;if(a)appSettings.autoSave=a.checked;if(l)appSettings.language=l.value;if(d)appSettings.defaultSection=d.value;applySettings();if(typeof showToast==='function')showToast('Настройки сохранены','success');}
 function applySettings(){var s=getSettings();document.documentElement.setAttribute('data-theme',s.theme==='dark'?'dark':'light');document.documentElement.setAttribute('lang',s.language||'ru');}
 function resetSettings(){if(typeof appSettings==='undefined')return;Object.assign(appSettings,DEFAULT_SETTINGS);renderSettings();applySettings();if(typeof showToast==='function')showToast('Настройки сброшены','info');}
-
 function renderStorageSettings(){
-  var fields=[{id:'dbPath',value:'data/database.db'},{id:'docsPath',value:'knowledge/regulations + data/documents'},{id:'cachePath',value:'knowledge/index'}];
+  var s=getSettings(),selected=s.vectorIndexPath||'knowledge/index';
+  var fields=[{id:'dbPath',value:'data/database.db'},{id:'docsPath',value:'knowledge/regulations + data/documents'},{id:'cachePath',value:selected}];
   fields.forEach(function(f){var input=document.getElementById(f.id);if(!input)return;input.value=f.value;input.readOnly=true;input.title='Путь управляется сервером Project Expert AI';});
   ['dbPath','docsPath','cachePath'].forEach(function(id){var input=document.getElementById(id);if(!input||!input.parentElement)return;var button=input.parentElement.querySelector('button');if(button){button.disabled=false;button.textContent='Обзор';button.onclick=function(){selectFolder(id);};button.title='Просмотреть и выбрать серверную папку';}});
   document.querySelectorAll('button').forEach(function(button){var onclick=button.getAttribute('onclick')||'';if(onclick.indexOf('saveStoragePaths')!==-1||onclick.indexOf('resetStoragePaths')!==-1)button.style.display='none';});
 }
 function closeStorageBrowser(){var modal=document.getElementById('storageBrowserModal');if(modal)modal.remove();}
 function escapeStorageHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#039;');}
-function selectStoragePath(path,requestedId){
-  var input=document.getElementById(requestedId);if(input)input.value=path;
-  closeStorageBrowser();
-  if(typeof showToast==='function')showToast('Выбрана папка: '+path,'success');
-}
+function selectStoragePath(path,requestedId){var input=document.getElementById(requestedId);if(input)input.value=path;if(typeof appSettings!=='undefined')appSettings.vectorIndexPath=path;closeStorageBrowser();if(typeof showToast==='function')showToast('Выбрана папка: '+path,'success');}
 function showStorageBrowser(data,requestedId){
   closeStorageBrowser();var modal=document.createElement('div');modal.id='storageBrowserModal';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
   var indexes=Array.isArray(data.indexes)?data.indexes:[];
   var options='<div class="storage-choice" data-path="'+escapeStorageHtml(data.relative_path||'knowledge/index')+'" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border-color);cursor:pointer;"><input type="radio" name="storageChoice" checked><div><strong>'+escapeStorageHtml(data.relative_path||'knowledge/index')+'</strong><div style="color:var(--text-secondary);font-size:11px;margin-top:3px;">Корень векторного хранилища</div></div></div>';
   options+=indexes.map(function(item){return '<div class="storage-choice" data-path="'+escapeStorageHtml(item.path)+'" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border-color);cursor:pointer;"><input type="radio" name="storageChoice"><div style="min-width:0;"><strong>'+escapeStorageHtml(item.path)+'</strong><div style="color:var(--text-secondary);font-size:11px;margin-top:3px;">index.faiss · '+(item.size_bytes/1024/1024).toFixed(2)+' МБ</div></div></div>';}).join('');
   modal.innerHTML='<div style="width:min(760px,100%);max-height:80vh;overflow:auto;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.2);"><div style="display:flex;justify-content:space-between;align-items:center;gap:16px;"><div><div style="font-size:17px;font-weight:700;">Выбор папки векторной базы</div><div style="margin-top:4px;color:var(--text-secondary);font-size:12px;">Выберите корень или папку конкретного индексированного документа.</div></div><button class="btn btn-secondary btn-sm" id="storageCloseBtn">Закрыть</button></div><div id="storageChoiceList" style="margin-top:14px;">'+options+'</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;"><button class="btn btn-secondary btn-sm" id="storageCancelBtn">Отмена</button><button class="btn btn-primary btn-sm" id="storageSelectBtn">Выбрать</button></div></div>';
-  document.body.appendChild(modal);
-  modal.querySelectorAll('.storage-choice').forEach(function(row){row.addEventListener('click',function(){modal.querySelectorAll('.storage-choice input').forEach(function(r){r.checked=false;});var radio=row.querySelector('input');if(radio)radio.checked=true;});});
-  function close(){closeStorageBrowser();}modal.querySelector('#storageCloseBtn').onclick=close;modal.querySelector('#storageCancelBtn').onclick=close;
-  modal.querySelector('#storageSelectBtn').onclick=function(){var checked=modal.querySelector('.storage-choice input:checked');var row=checked?checked.closest('.storage-choice'):null;selectStoragePath(row?row.getAttribute('data-path'):(data.relative_path||'knowledge/index'),requestedId);};
-  modal.addEventListener('click',function(e){if(e.target===modal)close();});
+  document.body.appendChild(modal);modal.querySelectorAll('.storage-choice').forEach(function(row){row.addEventListener('click',function(){modal.querySelectorAll('.storage-choice input').forEach(function(r){r.checked=false;});var radio=row.querySelector('input');if(radio)radio.checked=true;});});
+  function close(){closeStorageBrowser();}modal.querySelector('#storageCloseBtn').onclick=close;modal.querySelector('#storageCancelBtn').onclick=close;modal.querySelector('#storageSelectBtn').onclick=function(){var checked=modal.querySelector('.storage-choice input:checked'),row=checked?checked.closest('.storage-choice'):null;selectStoragePath(row?row.getAttribute('data-path'):(data.relative_path||'knowledge/index'),requestedId);};modal.addEventListener('click',function(e){if(e.target===modal)close();});
 }
 async function selectFolder(requestedId){try{var r=await fetch(NORMS_STORAGE_API);var data=await r.json();if(!r.ok)throw new Error(data.detail||('HTTP '+r.status));showStorageBrowser(data,requestedId);}catch(e){if(typeof showToast==='function')showToast('Не удалось открыть серверное хранилище: '+e.message,'error');}}
 function saveStoragePaths(){if(typeof showToast==='function')showToast('Пути хранения управляются backend.','info');}
