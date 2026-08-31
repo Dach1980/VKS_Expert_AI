@@ -157,12 +157,34 @@ function checkSelectedDocs() {
   Promise.all(selected.map(function(d) { return checkDocument(d.id); }));
 }
 
+// Explicit public handlers used by the main-page dropzone.
+window.handleDocsDropzoneClick = handleDocsDropzoneClick;
+window.handleDocDragOver = handleDocDragOver;
+window.handleDocDragLeave = handleDocDragLeave;
+window.handleDocDrop = handleDocDrop;
+window.handleDocFiles = handleDocFiles;
+
 // Legacy dropzone callbacks used by index.html.
-window.handleDropzoneClick = function(type) { if (type === 'docs') return handleDocsDropzoneClick(); if (type === 'norms' && window.handleNormDropzoneClick) return window.handleNormDropzoneClick(); };
-window.handleDragOver = function(event) { if (event.currentTarget && event.currentTarget.id === 'docsDropzone') return handleDocDragOver(event); if (window.handleNormDragOver) return window.handleNormDragOver(event); };
-window.handleDragLeave = function(event) { if (event.currentTarget && event.currentTarget.id === 'docsDropzone') return handleDocDragLeave(event); if (window.handleNormDragLeave) return window.handleNormDragLeave(event); };
-window.handleDrop = function(event, type) { if (type === 'docs') return handleDocDrop(event); if (type === 'norms' && window.handleNormDrop) return window.handleNormDrop(event); };
-window.handleFiles = function(files, type) { if (type === 'docs') return handleDocFiles(files); if (type === 'norms' && window.handleNormFiles) return window.handleNormFiles(files); };
+window.handleDropzoneClick = function(type) {
+  if (type === 'docs') return handleDocsDropzoneClick();
+  if (type === 'norms' && window.handleNormDropzoneClick) return window.handleNormDropzoneClick();
+};
+window.handleDragOver = function(event) {
+  if (event.currentTarget && event.currentTarget.id === 'docsDropzone') return handleDocDragOver(event);
+  if (window.handleNormDragOver) return window.handleNormDragOver(event);
+};
+window.handleDragLeave = function(event) {
+  if (event.currentTarget && event.currentTarget.id === 'docsDropzone') return handleDocDragLeave(event);
+  if (window.handleNormDragLeave) return window.handleNormDragLeave(event);
+};
+window.handleDrop = function(event, type) {
+  if (type === 'docs') return handleDocDrop(event);
+  if (type === 'norms' && window.handleNormDrop) return window.handleNormDrop(event);
+};
+window.handleFiles = function(files, type) {
+  if (type === 'docs') return handleDocFiles(files);
+  if (type === 'norms' && window.handleNormFiles) return window.handleNormFiles(files);
+};
 
 window.loadDocs = loadDocs;
 window.renderDocs = renderDocs;
