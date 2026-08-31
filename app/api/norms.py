@@ -37,8 +37,24 @@ def _infer_number(filename: str, supplied: str | None) -> str:
 
 
 def _index_norm(document_id: str, version_id: str) -> None:
-    """Background task: run the repository's existing complete SP pipeline."""
-    SPIndexBuilder(document_id=document_id, version_id=version_id).run()
+    """Run the repository's existing complete SP pipeline and persist failures."""
+    storage = KnowledgeStorage()
+    paths = storage.paths(document_id, version_id)
+    error_file = paths.index_root / "index_error.json"
+    error_file.unlink(missing_ok=True)
+
+    try:
+        SPIndexBuilder(
+            document_id=document_id,
+            version_id=version_id,
+            storage=storage,
+        ).run()
+    except Exception as error:  # background task must not fail silently
+        storage.write_index_error(document_id, version_id, error)
+        print(
+            f"[Project Expert AI][Norms] Индексация завершилась ошибкой: "
+            f"{document_id}/{version_id}: {error}"
+        )
 
 
 @router.get("")
@@ -131,6 +147,7 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         paths = storage.paths(document_id, version_id)
         if not paths.pdf.exists():
             raise StorageError(f"PDF не найден: {paths.pdf}")
+        storage.clear_index_error(document_id, version_id)
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
