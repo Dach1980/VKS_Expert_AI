@@ -91,8 +91,21 @@ def _extract_from_json(path: Path) -> dict[str, str]:
 def _extract_from_filename(path: Path | None) -> dict[str, str]:
     if not path:
         return {}
-    number = _extract_number(path.stem.replace('_', ' '))
-    return {'number': number} if number else {}
+    stem = path.stem.replace('_', ' ').replace('-', ' ')
+    result: dict[str, str] = {}
+    number = _extract_number(stem)
+    if number:
+        result['number'] = number
+    # Filename is authoritative for explicitly named base/amendment files.
+    base = re.search(r'(?i)\bбазов(?:ая|ая версия|ую)\b|\bбез\s+изменений\b', stem)
+    if base:
+        result['version_type'] = 'base'
+        result['change_number'] = ''
+    amendment = re.search(r'(?i)\b(?:изм(?:енение|енения)?|изменени[ея]|amendment)\s*№?\s*(\d+)\b', stem)
+    if amendment:
+        result['version_type'] = 'amendment'
+        result['change_number'] = amendment.group(1)
+    return result
 
 
 def _discover_sibling_json(parsed_path: Path | None) -> list[Path]:
@@ -109,11 +122,9 @@ def _discover_sibling_json(parsed_path: Path | None) -> list[Path]:
 def extract_version_metadata(pdf_path: Path | str, parsed_path: Path | str | None = None) -> dict[str, Any]:
     pdf_path = Path(pdf_path)
     parsed_path = Path(parsed_path) if parsed_path else None
+    filename_meta = _extract_from_filename(pdf_path)
     result = _extract_from_json(parsed_path) if parsed_path else {}
 
-    # Для уже загруженного СП30 parsed JSON может иметь имя вида
-    # SP_30.13330.2020.semantic.json, тогда как Registry у версии указывает
-    # на version_id.json. Ищем такой канонический JSON рядом.
     if not result.get('number'):
         for candidate in _discover_sibling_json(parsed_path):
             candidate_meta = _extract_from_json(candidate)
@@ -126,9 +137,7 @@ def extract_version_metadata(pdf_path: Path | str, parsed_path: Path | str | Non
                 break
 
     if not result.get('number'):
-        result.update({k: v for k, v in _extract_from_filename(parsed_path).items() if k not in result})
-    if not result.get('number'):
-        result.update({k: v for k, v in _extract_from_filename(pdf_path).items() if k not in result})
+        result.update({k: v for k, v in filename_meta.items() if k not in result})
 
     page_count = 0
     if pdf_path.exists():
@@ -149,5 +158,11 @@ def extract_version_metadata(pdf_path: Path | str, parsed_path: Path | str | Non
                     result.setdefault(key, value)
             except Exception:
                 pass
+
+    # Explicit filename semantics override text: a file named "базовая_версия"
+    # is the base edition even if its source PDF contains references to later changes.
+    if filename_meta.get('version_type'):
+        result['version_type'] = filename_meta['version_type']
+        result['change_number'] = filename_meta.get('change_number', '')
     result['pages_count'] = page_count
     return result
