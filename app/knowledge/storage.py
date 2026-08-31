@@ -67,7 +67,6 @@ class KnowledgeStorage:
         return p if p.is_absolute() else self.project_root / p
 
     def vector_index_root(self) -> Path:
-        """Единственный фактический каталог хранения векторных индексов."""
         default = self.DEFAULT_VECTOR_ROOT
         try:
             if self.SETTINGS_FILE.exists():
@@ -89,10 +88,7 @@ class KnowledgeStorage:
         candidate = Path(path).expanduser().resolve()
         candidate.mkdir(parents=True, exist_ok=True)
         self.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        self.SETTINGS_FILE.write_text(
-            json.dumps({"vector_index_path": str(candidate)}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self.SETTINGS_FILE.write_text(json.dumps({"vector_index_path": str(candidate)}, ensure_ascii=False, indent=2), encoding="utf-8")
         return candidate
 
     def get_vector_index_root(self) -> Path:
@@ -101,22 +97,40 @@ class KnowledgeStorage:
     def paths(self, document_id, version_id=None):
         v = self.get_version(document_id, version_id)
         root = self.vector_index_root() / document_id / v.get("id", "")
-        return DocumentPaths(
-            self.resolve(v.get("file", "")),
-            self.resolve(v.get("parsed_file", "")),
-            self.resolve(v.get("structured_file", "")),
-            root,
-            root / "pages",
-            root / "enriched",
-            root / "document_chunks",
-            root / "embeddings",
-        )
+        return DocumentPaths(self.resolve(v.get("file", "")), self.resolve(v.get("parsed_file", "")), self.resolve(v.get("structured_file", "")), root, root / "pages", root / "enriched", root / "document_chunks", root / "embeddings")
 
     def ensure_version_dirs(self, document_id, version_id=None):
         p = self.paths(document_id, version_id)
         for d in (p.pages, p.enriched, p.chunks, p.embeddings, p.parsed.parent, p.structured.parent, p.pdf.parent):
             d.mkdir(parents=True, exist_ok=True)
         return p
+
+    @staticmethod
+    def _classify_uploaded_filename(filename: str) -> tuple[str | None, str | None]:
+        stem = Path(filename).stem.replace("_", " ").replace("-", " ")
+        if re.search(r"(?i)\bбазов(?:ая|ая версия)\b|\bбез\s+изменений\b", stem):
+            return "base", None
+        match = re.search(r"(?i)\b(?:изм(?:енение|енения)?|изменени[ея]|amendment)\s*№?\s*(\d+)\b", stem)
+        if match:
+            return "amendment", match.group(1)
+        return None, None
+
+    def _apply_filename_version_metadata(self, document_id, version_id, filename):
+        version_type, change_number = self._classify_uploaded_filename(filename)
+        if not version_type:
+            return
+        document = self.registry.get_document(document_id)
+        if not document:
+            return
+        version = next((v for v in document.get("versions", []) if v.get("id") == version_id), None)
+        if not version:
+            return
+        version["type"] = version_type
+        if version_type == "base":
+            version.pop("change_number", None)
+        elif change_number:
+            version["change_number"] = change_number
+        self.registry.save()
 
     def save_pdf(self, document_id, source, version_id=None):
         source = Path(source)
@@ -126,6 +140,7 @@ class KnowledgeStorage:
             raise StorageError("KnowledgeStorage принимает только PDF")
         p = self.ensure_version_dirs(document_id, version_id)
         shutil.copy2(source, p.pdf)
+        self._apply_filename_version_metadata(document_id, version_id, source.name)
         return p.pdf
 
     def save_uploaded_pdf(self, document_id, upload_file, version_id=None):
@@ -139,6 +154,7 @@ class KnowledgeStorage:
                 shutil.copyfileobj(upload_file.file, dst)
         except OSError as e:
             raise StorageError(f"Не удалось сохранить PDF: {e}") from e
+        self._apply_filename_version_metadata(document_id, version_id, filename)
         return p.pdf
 
     def _index_error_path(self, document_id, version_id=None):
@@ -165,7 +181,6 @@ class KnowledgeStorage:
     @classmethod
     def _extract_parsed_metadata(cls, data):
         result: dict[str, str] = {}
-        strings: list[str] = []
         for key, value in cls._walk_strings(data):
             k = key.lower().strip()
             if not isinstance(value, str):
@@ -173,7 +188,6 @@ class KnowledgeStorage:
             text = value.strip()
             if not text:
                 continue
-            strings.append(text)
             if k in {"document_number", "norm_number", "normative_number", "standard_number", "number", "code", "document", "standard"}:
                 m = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", text)
                 if m:
@@ -212,8 +226,7 @@ class KnowledgeStorage:
         result = {"pages_count": int(version.get("pages_count") or self._pdf_pages(pdf))}
         if parsed.exists():
             try:
-                data = json.loads(parsed.read_text(encoding="utf-8-sig"))
-                result.update(self._extract_parsed_metadata(data))
+                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig"))))
             except (OSError, json.JSONDecodeError):
                 pass
         return result
@@ -222,24 +235,11 @@ class KnowledgeStorage:
         result = []
         for document in self.registry.get_all_documents():
             versions = document.get("versions", [])
-            current = next((v for v in versions if v.get("status") == "current"), None)
-            if current is None and versions:
-                current = versions[0]
+            current = next((v for v in versions if v.get("status") == "current"), None) or (versions[0] if versions else None)
             if current is None:
                 continue
-            try:
-                processing = self._version_processing(document["id"], current["id"])
-            except Exception as error:
-                processing = {"error": str(error)}
-            result.append({
-                "document_id": document["id"],
-                "number": document.get("number"),
-                "title": document.get("title"),
-                "version_id": current.get("id"),
-                "effective_from": current.get("effective_from"),
-                "processing": processing,
-                "versions": [self._version_status(document["id"], v) for v in versions],
-            })
+            processing = self._version_processing(document["id"], current["id"])
+            result.append({"document_id": document["id"], "number": document.get("number"), "title": document.get("title"), "version_id": current.get("id"), "effective_from": current.get("effective_from"), "processing": processing, "versions": [self._version_status(document["id"], v) for v in versions]})
         return result
 
     def _version_status(self, document_id, version):
