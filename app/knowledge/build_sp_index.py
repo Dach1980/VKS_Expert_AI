@@ -2,9 +2,11 @@
 
 import json
 from datetime import datetime
+from pathlib import Path
 
 from app.knowledge.storage import KnowledgeStorage
 from app.knowledge.pdf_page_processor import PDFPageProcessor
+from app.knowledge.page_enricher import PageEnricher
 from app.knowledge.structure_parser import save_structure, build_structure
 from app.knowledge.document_chunk_builder import DocumentChunkBuilder
 from app.knowledge.embedding_builder import EmbeddingBuilder
@@ -25,6 +27,27 @@ class SPIndexBuilder:
 
     def run_page_processor(self):
         PDFPageProcessor(self.document_id, self.version["id"], self.storage).run()
+
+    def run_page_enrichment(self):
+        """Create enriched pages before chunking and embedding.
+
+        PageEnricher is the repository's existing normalization stage. The
+        previous builder skipped it, so DocumentChunkBuilder found no input
+        pages in ``enriched`` and EmbeddingBuilder consequently received an
+        empty chunk list. Paths are supplied dynamically for the selected
+        document instead of using the legacy SP_30.13330 hard-coded paths.
+        """
+        print("Starting page enrichment...")
+        enricher = PageEnricher(
+            pages_dir=self.paths.pages,
+            formulas_dir=self.storage.knowledge_root / "work" / "formulas",
+            output_dir=self.paths.enriched,
+        )
+        pages = sorted(self.paths.pages.glob("page_*.json"))
+        print("Pages found for enrichment:", len(pages))
+        for page_file in pages:
+            enricher.enrich_page(page_file)
+        print("Page enrichment completed:", len(pages))
 
     def run_structure_parser(self):
         if not self.paths.parsed.exists():
@@ -80,13 +103,15 @@ class SPIndexBuilder:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         print("Saved summary:", file)
 
-    def run(self, build_pages=True, build_structure_stage=True, build_chunks=True, build_embeddings=True):
+    def run(self, build_pages=True, build_structure_stage=True, build_enrichment=True, build_chunks=True, build_embeddings=True):
         self.check_pdf()
         self.storage.ensure_version_dirs(self.document_id, self.version["id"])
         if build_pages:
             self.run_page_processor()
         if build_structure_stage:
             self.run_structure_parser()
+        if build_enrichment:
+            self.run_page_enrichment()
         if build_chunks:
             self.run_chunk_builder()
         if build_embeddings:
