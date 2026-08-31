@@ -68,7 +68,7 @@ class DocumentRegistry:
         structured_file=None,
         make_current=True,
     ):
-        """Создать документ/версию в Registry и при необходимости сделать её current."""
+        """Создать документ/версию в Registry."""
         if not document_id or not number or not title:
             raise RegistryError("document_id, number и title обязательны")
 
@@ -94,11 +94,6 @@ class DocumentRegistry:
         if any(version.get("id") == version_id for version in versions):
             raise RegistryError(f"Версия уже существует: {document_id}/{version_id}")
 
-        if make_current:
-            for version in versions:
-                if version.get("status") == "current":
-                    version["status"] = "superseded"
-
         version = {
             "id": version_id,
             "type": version_type,
@@ -109,8 +104,29 @@ class DocumentRegistry:
             "structured_file": structured_file,
         }
         versions.append(version)
+        if make_current:
+            for other in versions:
+                if other is not version and other.get("status") == "current":
+                    other["status"] = "superseded"
         self.save()
         return document, version
+
+    def activate_version(self, document_id, version_id):
+        """Сделать существующую версию единственной действующей версией."""
+        document = self.get_document(document_id)
+        if document is None:
+            raise RegistryError(f"Документ не найден: {document_id}")
+        target = None
+        for version in document.get("versions", []):
+            if version.get("id") == version_id:
+                target = version
+                break
+        if target is None:
+            raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
+        for version in document.get("versions", []):
+            version["status"] = "current" if version is target else "superseded"
+        self.save()
+        return target
 
     def list_current_documents(self):
         result = []
