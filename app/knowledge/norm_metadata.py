@@ -10,16 +10,12 @@ def _normalize_number(value: str) -> str:
     value = str(value or '').replace('\u00a0', ' ')
     value = re.sub(r'(?i)\b(СП|ГОСТ\s*Р?|СНиП|ТР|ФЗ)\s*[-_ ]*', lambda m: re.sub(r'\s+', ' ', m.group(1)).strip() + ' ', value)
     value = re.sub(r'\s*([._])\s*', r'\1', value)
-    value = re.sub(r'\s+', ' ', value).strip()
-    return value
+    return re.sub(r'\s+', ' ', value).strip()
 
 
 def _extract_number(text: str) -> str | None:
-    # Допускаем OCR-варианты: СП 30.13330 . 2020 / СП_30_13330_2020.
     match = re.search(r'(?i)\b(СП|ГОСТ\s*Р?|СНиП|ТР|ФЗ)\s*[-_ ]*([0-9]{1,5}(?:\s*[._]\s*[0-9]{1,6}){1,5})', text or '')
-    if not match:
-        return None
-    return _normalize_number(f'{match.group(1)} {match.group(2)}')
+    return _normalize_number(f'{match.group(1)} {match.group(2)}') if match else None
 
 
 def _walk_strings(value: Any):
@@ -68,9 +64,19 @@ def _extract_from_json(path: Path) -> dict[str, str]:
     return result
 
 
+def _extract_from_filename(path: Path | None) -> dict[str, str]:
+    if not path: return {}
+    # Старые версии уже имеют parsed-файлы вида SP_30.13330.2020.semantic.json.
+    # Это надёжный источник канонического номера, если сам parsed JSON не содержит metadata.
+    return {'number': number} if (number := _extract_number(path.stem.replace('_', ' '))) else {}
+
+
 def extract_version_metadata(pdf_path: Path | str, parsed_path: Path | str | None = None) -> dict[str, Any]:
     pdf_path = Path(pdf_path); parsed_path = Path(parsed_path) if parsed_path else None
-    result = _extract_from_json(parsed_path) if parsed_path else {}; page_count = 0
+    result = _extract_from_json(parsed_path) if parsed_path else {}
+    if not result.get('number'): result.update({k:v for k,v in _extract_from_filename(parsed_path).items() if k not in result})
+    if not result.get('number'): result.update({k:v for k,v in _extract_from_filename(pdf_path).items() if k not in result})
+    page_count = 0
     if pdf_path.exists():
         try:
             import pymupdf
