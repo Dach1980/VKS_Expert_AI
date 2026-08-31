@@ -1,10 +1,9 @@
-"""VKS Expert AI — Structure Parser v1 using KnowledgeStorage."""
+"""VKS Expert AI — Structure Parser v2 using version-aware KnowledgeStorage."""
 
 import json
 import re
 
 from app.knowledge.storage import KnowledgeStorage
-
 
 EXPECTED_SECTIONS = {
     1: "Область применения", 2: "Нормативные ссылки",
@@ -24,7 +23,6 @@ EXPECTED_SECTIONS = {
     25: "Порядок проведения монтажа и сдачи в эксплуатацию внутренних систем",
     26: "Требования энергетической эффективности внутренних систем водоснабжения и",
 }
-
 SECTION_PATTERN = re.compile(r"^(\d{1,2})\s+(.+)$")
 CLAUSE_PATTERN = re.compile(r"^(\d+(?:\.\d+)+)\s+(.+)$")
 APPENDIX_PATTERN = re.compile(r"^Приложение\s+([А-ЯЁA-Z])(?:\s+(.*))?$", re.IGNORECASE)
@@ -80,7 +78,6 @@ def build_structure(data):
     state = "preamble"
     found_sections = set()
     document = data["document"]
-
     for page in data.get("pages", []):
         page_number = page["page"]
         for block in page.get("blocks", []):
@@ -88,7 +85,6 @@ def build_structure(data):
                 line = normalize_text(raw_line)
                 if not line:
                     continue
-
                 appendix = detect_appendix(line)
                 if appendix:
                     state = "appendix"
@@ -96,7 +92,6 @@ def build_structure(data):
                     current_section = {"type": "appendix", "number": appendix["number"], "title": appendix["title"], "page_start": page_number, "page_end": page_number, "blocks": []}
                     sections.append(current_section)
                     continue
-
                 section = detect_section(line)
                 if section:
                     number = section["number"]
@@ -111,7 +106,6 @@ def build_structure(data):
                         found_sections.add(number)
                         current_clause = None
                         continue
-
                 clause = detect_clause(line)
                 if clause and state == "main" and current_section and current_section.get("type") == "section":
                     prefix = f'{current_section["number"]}.'
@@ -120,16 +114,14 @@ def build_structure(data):
                         current_section["clauses"].append(current_clause)
                         current_section["page_end"] = page_number
                         continue
-
                 if current_clause and state == "main":
                     add_block_to_clause(current_clause, block, page_number, line)
                     current_section["page_end"] = page_number
-
     return sections
 
 
 def save_structure(data, sections, storage, document_id, version_id=None):
-    output = storage.structured_path(document_id, version_id)
+    output = storage.paths(document_id, version_id).structured
     output.parent.mkdir(parents=True, exist_ok=True)
     result = {"schema_version": "1.0", "document": {"number": data["document"].get("number"), "title": data["document"].get("title"), "source_file": data["document"].get("source_file"), "pages": data["document"].get("pages")}, "sections": sections}
     with output.open("w", encoding="utf-8", newline="") as file:
@@ -141,7 +133,7 @@ def main():
     storage = KnowledgeStorage()
     document_id = "SP_30.13330"
     version = storage.get_current_version(document_id)
-    input_path = storage.parsed_path(document_id, version["id"])
+    input_path = storage.paths(document_id, version["id"]).parsed
     if not input_path.exists():
         raise FileNotFoundError(f"Parsed JSON not found: {input_path}")
     with input_path.open("r", encoding="utf-8-sig") as file:
