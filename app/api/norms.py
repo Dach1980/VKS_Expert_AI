@@ -11,7 +11,6 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
 from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
-from app.knowledge.norm_metadata import extract_version_metadata
 from app.knowledge.registry_manager import RegistryError
 from app.knowledge.storage import KnowledgeStorage, StorageError
 
@@ -101,7 +100,6 @@ def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
 
 
 def _version_metadata(storage: KnowledgeStorage, document_id: str, version_id: str) -> dict:
-    version = storage.get_version(document_id, version_id)
     return storage.get_version_metadata(document_id, version_id)
 
 
@@ -118,8 +116,8 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         item = dict(source)
         item["number"] = item.get("number") or meta.get("number") or payload.get("number")
         item["title"] = item.get("title") or meta.get("title") or payload.get("title")
-        item["change_number"] = item.get("change_number") if item.get("change_number") is not None else meta.get("change_number")
-        item["change_date"] = item.get("change_date") or meta.get("change_date")
+        item["change_number"] = meta.get("change_number") if meta.get("change_number") is not None else item.get("change_number")
+        item["change_date"] = meta.get("change_date") or item.get("change_date")
         item.setdefault("processing", {})
         item["processing"] = dict(item["processing"])
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
@@ -138,6 +136,9 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         result.setdefault("processing", {})
         result["processing"] = dict(result["processing"])
         result["processing"]["pages_count"] = current_meta.get("pages_count") or result["processing"].get("pages_count") or 0
+    else:
+        result["current_change_number"] = None
+        result["current_change_date"] = None
     result["versions"] = versions
     return result
 
@@ -155,6 +156,10 @@ def _index_norm(document_id: str, version_id: str) -> None:
         storage.write_index_error(document_id, version_id, error)
         print(f"[Project Expert AI][Norms] Индексация завершилась ошибкой: {document_id}/{version_id}: {error}")
     finally:
+        try:
+            storage.refresh_version_metadata_from_parsed(document_id, version_id)
+        except Exception as error:
+            print(f"[Project Expert AI][Norms] Не удалось обновить метаданные версии: {document_id}/{version_id}: {error}")
         storage.finish_indexing(document_id, version_id)
 
 
@@ -227,21 +232,14 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     relative_parsed = Path("knowledge") / "parsed" / f"{resolved_version_id}.json"
     relative_structured = Path("knowledge") / "structured" / f"{resolved_version_id}.json"
     try:
+        # A new upload is NEVER made current automatically. Only the explicit
+        # /activate action may assign the current edition.
         storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title, version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from, file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"), structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
         filename_meta = storage._classify_uploaded_filename(filename)
-        meta = extract_version_metadata(saved, storage.resolve(relative_parsed))
         document = storage.registry.get_document(resolved_document_id)
         version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
 
-        if meta.get("number"):
-            document["number"] = meta["number"]
-        if meta.get("title"):
-            document["title"] = meta["title"]
-
-        # Only an explicit filename may classify a newly uploaded file as base
-        # or amendment. Otherwise the change number is deliberately left unset;
-        # the authoritative number can later come from that version's parsed JSON.
         version_type, filename_change = filename_meta
         if version_type == "base":
             version["type"] = "base"
@@ -249,34 +247,23 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
             version.pop("change_date", None)
         elif version_type == "amendment":
             version["type"] = "amendment"
-            version["change_number"] = filename_change
+            if filename_change:
+                version["change_number"] = filename_change
         else:
             version["type"] = "edition"
+            # Do not inspect arbitrary PDF text here: it can contain references
+            # to later amendments and would incorrectly label every edition.
             version.pop("change_number", None)
             version.pop("change_date", None)
 
-        # Do not infer a change number from the PDF's visible text during upload:
-        # the same base PDF can mention later amendments. Parsed JSON belonging to
-        # this exact version is authoritative when it exists.
-        if version_type != "base" and not filename_change:
-            parsed_change = meta.get("change_number") if storage.resolve(relative_parsed).exists() else None
-            if parsed_change:
-                version["change_number"] = str(parsed_change)
-                version["type"] = "amendment"
-            parsed_date = meta.get("change_date") if storage.resolve(relative_parsed).exists() else None
-            if parsed_date:
-                version["change_date"] = str(parsed_date)
-                if not effective_from:
-                    version["effective_from"] = str(parsed_date)
-
-        version["pages_count"] = int(meta.get("pages_count") or 0)
+        version["pages_count"] = storage._pdf_pages(saved)
         version["sha256"] = upload_hash
         version["original_filename"] = filename
         storage.registry.save()
     except (StorageError, OSError, StopIteration, RegistryError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=meta.get("number") or resolved_number, title=meta.get("title") or resolved_title, status="uploaded", filename=filename)
+    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=resolved_number, title=resolved_title, status="uploaded", filename=filename)
 
 
 @router.post("/{document_id}/{version_id}/activate", response_model=NormIndexResponse)
@@ -314,6 +301,10 @@ def _index_norm_after_start(document_id: str, version_id: str) -> None:
         storage.write_index_error(document_id, version_id, error)
         print(f"[Project Expert AI][Norms] Индексация завершилась ошибкой: {document_id}/{version_id}: {error}")
     finally:
+        try:
+            storage.refresh_version_metadata_from_parsed(document_id, version_id)
+        except Exception as error:
+            print(f"[Project Expert AI][Norms] Не удалось обновить метаданные версии: {document_id}/{version_id}: {error}")
         storage.finish_indexing(document_id, version_id)
 
 
