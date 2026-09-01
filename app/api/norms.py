@@ -1,4 +1,4 @@
-"""Project Expert AI — Norms API v2."""
+"""Project Expert AI — Norms API v3."""
 from __future__ import annotations
 
 import hashlib
@@ -108,18 +108,21 @@ def _version_metadata(storage: KnowledgeStorage, document_id: str, version_id: s
 def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
     versions = []
     current_meta = {}
-    for item in payload.get("versions", []):
-        source_id = str(item.get("document_id") or payload.get("document_id"))
-        version_id = str(item.get("version_id"))
+    for source in payload.get("versions", []):
+        source_id = str(source.get("document_id") or payload.get("document_id"))
+        version_id = str(source.get("version_id"))
         try:
             meta = _version_metadata(storage, source_id, version_id)
         except Exception:
             meta = {}
-        item = dict(item)
-        item["number"] = meta.get("number") or payload.get("number")
-        item["title"] = meta.get("title") or payload.get("title")
-        item["change_number"] = meta.get("change_number") or item.get("change_number")
-        item["change_date"] = meta.get("change_date") or item.get("change_date")
+        item = dict(source)
+        item["number"] = item.get("number") or meta.get("number") or payload.get("number")
+        item["title"] = item.get("title") or meta.get("title") or payload.get("title")
+        # Registry metadata is authoritative once a version has been uploaded.
+        # This prevents text inside a base edition referring to a later amendment
+        # from relabelling that version.
+        item["change_number"] = item.get("change_number") if item.get("change_number") is not None else meta.get("change_number")
+        item["change_date"] = item.get("change_date") or meta.get("change_date")
         item.setdefault("processing", {})
         item["processing"] = dict(item["processing"])
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
@@ -127,6 +130,7 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         versions.append(item)
         if item["is_current"]:
             current_meta = meta
+
     result = dict(payload)
     if current_meta:
         result["number"] = current_meta.get("number") or result.get("number")
@@ -145,12 +149,15 @@ def _index_norm(document_id: str, version_id: str) -> None:
     paths = storage.paths(document_id, version_id)
     paths.index_root.mkdir(parents=True, exist_ok=True)
     paths.embeddings.mkdir(parents=True, exist_ok=True)
-    (paths.index_root / "index_error.json").unlink(missing_ok=True)
+    storage.clear_index_error(document_id, version_id)
+    storage.start_indexing(document_id, version_id)
     try:
         SPIndexBuilder(document_id=document_id, version_id=version_id, storage=storage).run()
     except Exception as error:
         storage.write_index_error(document_id, version_id, error)
         print(f"[Project Expert AI][Norms] Индексация завершилась ошибкой: {document_id}/{version_id}: {error}")
+    finally:
+        storage.finish_indexing(document_id, version_id)
 
 
 @router.get("")
@@ -183,19 +190,13 @@ def pick_norm_storage_folder():
     storage = KnowledgeStorage()
     initial = str(storage.get_vector_index_root())
     selected = {"path": ""}
-
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     try:
-        selected["path"] = filedialog.askdirectory(
-            title="Выберите папку для хранения векторных индексов Project Expert AI",
-            initialdir=initial if Path(initial).exists() else str(Path.home()),
-            mustexist=True,
-        )
+        selected["path"] = filedialog.askdirectory(title="Выберите папку для хранения векторных индексов Project Expert AI", initialdir=initial if Path(initial).exists() else str(Path.home()), mustexist=True)
     finally:
         root.destroy()
-
     if not selected["path"]:
         return {"selected": False, "path": initial}
     path = storage.set_vector_index_root(selected["path"])
@@ -212,7 +213,8 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     duplicate = _find_duplicate_version(storage, upload_hash)
     if duplicate:
         document, version = duplicate
-        raise HTTPException(status_code=409, detail=f"Данный документ уже загружен: {document.get('number', document.get('id'))}. Версия: {version.get('id')}.")
+        original = version.get("original_filename") or version.get("id")
+        raise HTTPException(status_code=409, detail=f"Данный файл уже загружен: «{original}». Документ: {document.get('number', document.get('id'))}. Версия: {version.get('id')}.")
 
     resolved_number = _infer_number(filename, number)
     resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
@@ -233,19 +235,30 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         meta = extract_version_metadata(saved, storage.resolve(relative_parsed))
         document = storage.registry.get_document(resolved_document_id)
         version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
+
         if meta.get("number"):
             document["number"] = meta["number"]
         if meta.get("title"):
             document["title"] = meta["title"]
-        if meta.get("change_number"):
+
+        # Explicit filename classification is authoritative. If the filename did
+        # not specify a version, only then may PDF metadata supply a change number.
+        if version.get("type") == "base":
+            version.pop("change_number", None)
+            version.pop("change_date", None)
+        elif version.get("change_number"):
+            pass
+        elif meta.get("change_number"):
             version["change_number"] = str(meta["change_number"])
             version["type"] = "amendment"
-        if meta.get("change_date"):
+
+        if not version.get("change_date") and meta.get("change_date") and version.get("type") != "base":
             version["change_date"] = str(meta["change_date"])
             if not effective_from:
                 version["effective_from"] = str(meta["change_date"])
         version["pages_count"] = int(meta.get("pages_count") or 0)
         version["sha256"] = upload_hash
+        version["original_filename"] = filename
         storage.registry.save()
         if not any(v.get("status") == "current" for v in document.get("versions", []) if v.get("id") != resolved_version_id):
             storage.registry.activate_version(resolved_document_id, resolved_version_id)
@@ -253,7 +266,7 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     status = "current" if storage.registry.get_current_version(resolved_document_id).get("id") == resolved_version_id else "uploaded"
-    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=meta.get("number") or resolved_number, title=meta.get("title") or resolved_title, status=status, filename=saved.name)
+    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=meta.get("number") or resolved_number, title=meta.get("title") or resolved_title, status=status, filename=filename)
 
 
 @router.post("/{document_id}/{version_id}/activate", response_model=NormIndexResponse)
@@ -276,10 +289,25 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
             raise StorageError(f"PDF не найден: {paths.pdf}")
         storage.clear_index_error(document_id, version_id)
         storage.ensure_version_dirs(document_id, version_id)
+        storage.start_indexing(document_id, version_id)
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    background_tasks.add_task(_index_norm, document_id, version_id)
+    # The marker is created before the background task starts, so the UI can
+    # immediately display "Происходит индексация".
+    background_tasks.add_task(_index_norm_after_start, document_id, version_id)
     return NormIndexResponse(success=True, document_id=document_id, version_id=version_id, status="indexing", message="Индексация выбранной версии запущена")
+
+
+def _index_norm_after_start(document_id: str, version_id: str) -> None:
+    storage = KnowledgeStorage()
+    paths = storage.paths(document_id, version_id)
+    try:
+        SPIndexBuilder(document_id=document_id, version_id=version_id, storage=storage).run()
+    except Exception as error:
+        storage.write_index_error(document_id, version_id, error)
+        print(f"[Project Expert AI][Norms] Индексация завершилась ошибкой: {document_id}/{version_id}: {error}")
+    finally:
+        storage.finish_indexing(document_id, version_id)
 
 
 @router.delete("/{document_id}", response_model=NormDeleteResponse)
@@ -308,7 +336,17 @@ def get_norm(document_id: str, version_id: str | None = None):
         status["versions"] = []
         for version in document.get("versions", []):
             version_status = storage.get_status(document_id, version.get("id"))
-            status["versions"].append({"document_id": document_id, "version_id": version.get("id"), "version_type": version.get("type"), "status": version.get("status"), "effective_from": version.get("effective_from"), "change_number": version_status.get("change_number"), "change_date": version_status.get("change_date"), "filename": Path(version.get("file", "")).name, "processing": version_status.get("processing", {})})
+            status["versions"].append({
+                "document_id": document_id,
+                "version_id": version.get("id"),
+                "version_type": version.get("type"),
+                "status": version.get("status"),
+                "effective_from": version.get("effective_from"),
+                "change_number": version_status.get("change_number"),
+                "change_date": version_status.get("change_date"),
+                "filename": version.get("original_filename") or Path(version.get("file", "")).name,
+                "processing": version_status.get("processing", {}),
+            })
         return status
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
