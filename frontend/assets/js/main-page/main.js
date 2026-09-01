@@ -1,20 +1,21 @@
 // ============================================================
 // VKS Expert AI
-// main.js v8
+// main.js v9
 // ============================================================
 // Главная точка входа приложения.
 // ES-модули не публикуют свои функции в window автоматически, поэтому
 // навигация реализуется здесь через DOM-события, а совместимость с
 // существующими inline onclick сохраняется через window.navigateTo/switchSection.
 
-import './state.js?v=20260901-8';
-import './utils.js?v=20260901-8';
-import './dashboard.js?v=20260901-8';
-import './norms.js?v=20260901-8';
-import './documents.js?v=20260901-8';
-import './checks.js?v=20260901-8';
-import './reports.js?v=20260901-8';
-import './settings.js?v=20260901-8';
+import './state.js?v=20260901-9';
+import './utils.js?v=20260901-9';
+import './dashboard.js?v=20260901-9';
+import './norms.js?v=20260901-9';
+import './norms-metadata-fix.js?v=20260901-9';
+import './documents.js?v=20260901-9';
+import './checks.js?v=20260901-9';
+import './reports.js?v=20260901-9';
+import './settings.js?v=20260901-9';
 
 const SECTION_LABELS = {
   dashboard: 'Dashboard', norms: 'Нормы', docs: 'Документация', checks: 'Проверки', reports: 'Отчёты', settings: 'Настройки',
@@ -47,9 +48,9 @@ function initNavigation() {
 }
 function installFavicon() {
   const existing = document.querySelector('link[rel="icon"]');
-  if (existing) { existing.href = './favicon.svg?v=20260901-3'; return; }
-  const link = document.createElement('link'); link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = './favicon.svg?v=20260901-3'; document.head.appendChild(link);
+  if (existing) { existing.href = './favicon.svg?v=20260901-4'; return; }
+  const link = document.createElement('link'); link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = './favicon.svg?v=20260901-4'; document.head.appendChild(link);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { initNavigation(); installFavicon(); }, { once: true });
 else { initNavigation(); installFavicon(); }
-console.log('[VKS Expert AI] Main page modules loaded — main.js v8');
+console.log('[VKS Expert AI] Main page modules loaded — main.js v9');
