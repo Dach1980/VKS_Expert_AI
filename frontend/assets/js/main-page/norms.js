@@ -6,13 +6,17 @@ function setNormsData(v) { window.normsData = Array.isArray(v) ? v : []; }
 function getNormByIdLocal(id) { return getNormsData().find(function (n) { return String(n.id) === String(id); }); }
 function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#039;'); }
 function toast(m, t) { if (typeof window.showToast === 'function') window.showToast(m, t || 'info'); else console.log('[Norms]', m); }
+function changeNumberFromFilename(filename) {
+  var stem = String(filename || '').replace(/[_-]+/g, ' ');
+  var match = stem.match(/(?:\bизм\.?|\bизменени(?:е|я)|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
+  return match ? match[1] : null;
+}
 function versionLabel(v) {
   var suffix = v.status === 'current' ? ' · действующая' : ' · архивная';
-  var type = String(v.type || v.version_type || '').toLowerCase();
-  var fn = String(v.original_filename || v.filename || '').toLowerCase();
-  if (type === 'base' || fn.indexOf('базовая_версия') >= 0 || fn.indexOf('базовая версия') >= 0 || fn.indexOf('без изменений') >= 0) return 'Без изменений (базовая версия)' + suffix;
-  if (v.change_number !== undefined && v.change_number !== null && String(v.change_number).trim() !== '') return 'Изменение №' + esc(v.change_number) + suffix;
-  return 'Редакция' + suffix;
+  var filename = String(v.original_filename || v.filename || '');
+  var change = changeNumberFromFilename(filename);
+  if (change !== null) return 'Изменение №' + esc(change) + suffix;
+  return 'Без изменений' + suffix;
 }
 function indexed(v) { var p = v && v.processing || {}; return !!(p.vector_index && p.vector_metadata); }
 function indexing(v) { return !!(v && v.processing && v.processing.indexing); }
@@ -23,9 +27,8 @@ function searchIcon() { return '<svg width="14" height="14" viewBox="0 0 24 24" 
 function renderVersionActions(n, v, sid, vid) {
   var state = indexing(v) ? '<span class="status-badge info">Происходит индексация</span>' : indexed(v) ? '<span class="status-badge success">Индексировано</span>' : '<button type="button" class="btn btn-primary btn-sm norm-version-index" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Индексировать</button>';
   var active = v.status === 'current' ? '<span class="status-badge success">Действующая редакция</span>' : '<button type="button" class="btn btn-secondary btn-sm norm-version-activate" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Сделать действующей</button>';
-  var info = '<button type="button" class="btn btn-secondary btn-sm norm-version-info" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Информация</button>';
   var del = '<button type="button" class="btn btn-danger btn-sm norm-version-delete" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Удалить</button>';
-  return state + active + info + del;
+  return state + active + del;
 }
 function renderNormVersions(n) {
   var vs = Array.isArray(n.versions) ? n.versions.slice() : [];
@@ -46,7 +49,9 @@ function renderNorms() {
   ns.forEach(function (n) {
     var p = n.processing || {}, cv = (n.versions || []).find(function (v) { return v.status === 'current'; });
     var pages = cv ? ((cv.processing || {}).pages_count || cv.pages_count || 0) : p.pages_count || 0;
-    var change = cv ? (cv.change_number !== undefined && cv.change_number !== null && String(cv.change_number).trim() !== '' ? ' — Изменение №' + esc(cv.change_number) : '') : '';
+    var currentFilename = cv ? (cv.original_filename || cv.filename || '') : '';
+    var currentChange = changeNumberFromFilename(currentFilename);
+    var change = cv ? (currentChange !== null ? ' — Изменение №' + esc(currentChange) : ' — Без изменений') : '';
     var status = cv ? (indexing(cv) ? '<span class="status-badge info">Происходит индексация</span>' : indexed(cv) ? '<span class="status-badge success">Индексировано</span>' : '<span class="status-badge info">Ожидает индексации</span>') : '<span class="status-badge info">Действующая редакция не выбрана</span>';
     h += '<div class="norm-card" data-norm-card="' + esc(n.id) + '"><div class="norm-card-header" data-card-toggle="' + esc(n.id) + '"><div style="flex:1;min-width:0"><div class="norm-card-title">' + esc(n.number || n.id) + change + '</div><div class="norm-card-subtitle">' + esc(n.title || n.number || '') + '</div></div></div><div class="norm-card-meta"><span>📄 ' + pages + ' стр.</span><span>📦 ' + ((n.versions || []).length) + ' верс.</span></div><div style="margin-top:8px">' + status + '</div><div class="norm-card-actions"><button type="button" class="btn btn-secondary btn-sm norm-documents" data-id="' + esc(n.id) + '">Загруженные документы</button></div>' + renderNormVersions(n) + '</div>';
   });
@@ -55,7 +60,6 @@ function renderNorms() {
   grid.querySelectorAll('.norm-documents').forEach(function (b) { b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); toggleNormVersions(b.dataset.id); }; });
   grid.querySelectorAll('.norm-version-index').forEach(function (b) { b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); indexNormVersion(b.dataset.card, b.dataset.source, b.dataset.version); }; });
   grid.querySelectorAll('.norm-version-activate').forEach(function (b) { b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); activateNormVersion(b.dataset.card, b.dataset.source, b.dataset.version); }; });
-  grid.querySelectorAll('.norm-version-info').forEach(function (b) { b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); showNormVersionInfo(b.dataset.card, b.dataset.source, b.dataset.version); }; });
   grid.querySelectorAll('.norm-version-delete').forEach(function (b) { b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); deleteNormVersion(b.dataset.card, b.dataset.source, b.dataset.version); }; });
 }
 async function loadNorms(expandIds) {
@@ -88,7 +92,6 @@ function pollNormStatus(cardId, sourceId, versionId) {
   normsPollTimers[key] = setInterval(async function () { try { var r = await fetch(NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '?version_id=' + encodeURIComponent(versionId)); var d = await r.json(); var n = getNormByIdLocal(cardId); if (!n) { clearInterval(normsPollTimers[key]); delete normsPollTimers[key]; return; } var v = findVersion(n, sourceId, versionId); if (v) v.processing = d.processing || {}; if (v && v.processing && v.processing.error) { clearInterval(normsPollTimers[key]); delete normsPollTimers[key]; toast('Индексация завершилась с ошибкой: ' + v.processing.error, 'error'); } else if (v && indexed(v)) { clearInterval(normsPollTimers[key]); delete normsPollTimers[key]; toast('Индексация выбранной версии завершена', 'success'); } renderNorms(); var panel = document.getElementById('normVersions-' + cardId); if (panel) panel.style.display = 'block'; } catch (e) { console.warn('[Norms] status', e); } }, 1500);
 }
 function indexAllNorms() { getNormsData().forEach(function (n) { if (n.version_id) { var v = findVersion(n, n.id, n.version_id); if (v && !indexing(v) && !indexed(v)) indexNorm(n.id); } }); }
-function showNormVersionInfo(cardId, sourceId, versionId) { var n = getNormByIdLocal(cardId), v = findVersion(n, sourceId, versionId); if (v) alert('Документ: ' + n.number + '\nВерсия: ' + versionLabel(v).replace(/<[^>]*>/g, '') + '\nДата: ' + (v.change_date || v.effective_from || '') + '\nФайл: ' + (v.original_filename || v.filename || versionId) + '\nСтраниц: ' + ((v.processing || {}).pages_count || v.pages_count || 0)); }
 async function deleteNormVersion(cardId, sourceId, versionId) {
   var n = getNormByIdLocal(cardId), v = findVersion(n, sourceId, versionId); if (!n || !v) return;
   var name = v.original_filename || v.filename || versionId;
@@ -108,4 +111,4 @@ async function uploadNormFile(file) {
   var f = new FormData(); f.append('file', file, file.name);
   try { var r = await fetch(NORMS_API_BASE + '/upload', { method: 'POST', body: f }); var d = {}; try { d = await r.json(); } catch (e) {} if (!r.ok) { var err = new Error(d.detail || ('HTTP ' + r.status)); err.status = r.status; throw err; } toast('Версия загружена: ' + (d.filename || file.name), 'success'); return d; } catch (e) { toast(e.status === 409 ? ('Файл уже загружен: ' + e.message) : 'Ошибка загрузки «' + file.name + '»: ' + e.message, 'error'); throw e; }
 }
-window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop; window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.indexNorm = indexNorm; window.indexNormVersion = indexNormVersion; window.activateNormVersion = activateNormVersion; window.pollNormStatus = pollNormStatus; window.indexAllNorms = indexAllNorms; window.showNormVersionInfo = showNormVersionInfo; window.deleteNorm = deleteNorm; window.deleteNormVersion = deleteNormVersion;
+window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop; window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.indexNorm = indexNorm; window.indexNormVersion = indexNormVersion; window.activateNormVersion = activateNormVersion; window.pollNormStatus = pollNormStatus; window.indexAllNorms = indexAllNorms; window.deleteNorm = deleteNorm; window.deleteNormVersion = deleteNormVersion;
