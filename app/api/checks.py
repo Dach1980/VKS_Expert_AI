@@ -1,7 +1,8 @@
-"""Project Expert AI — document checking API v3."""
+"""Project Expert AI — document checking API v4."""
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -50,13 +51,13 @@ def _resolve_norm(storage: KnowledgeStorage, canonical_number: str) -> tuple[str
     """Find the Registry document by canonical number, then resolve its current version."""
     target = storage.registry.canonical_number(canonical_number).lower()
     candidates = []
+    target_group = storage.registry._number_group(canonical_number)
     for document in storage.registry.get_all_documents():
         number = storage.registry.canonical_number(document.get("number", "")).lower()
         if number == target:
             candidates.append(document)
             continue
         group = storage.registry._number_group(document.get("number", ""))
-        target_group = storage.registry._number_group(canonical_number)
         if group and group == target_group:
             candidates.append(document)
 
@@ -70,7 +71,10 @@ def _resolve_norm(storage: KnowledgeStorage, canonical_number: str) -> tuple[str
     try:
         current_version = storage.get_current_version(document_id)
     except Exception as error:
-        raise HTTPException(status_code=409, detail=(f"Для {canonical_number} в Registry нет действующей версии. Назначьте одну из версий действующей в разделе «Нормы».")) from error
+        raise HTTPException(
+            status_code=409,
+            detail=f"Для {canonical_number} в Registry нет действующей версии. Назначьте одну из версий действующей в разделе «Нормы».",
+        ) from error
 
     return document_id, document, current_version
 
@@ -79,12 +83,18 @@ def _normative_context(retriever: Retriever, question: str, normative_number: st
     try:
         results = retriever.search(question, top_k=5)
     except FileNotFoundError as error:
-        raise HTTPException(status_code=409, detail=(f"Проверка невозможна: индекс действующей версии {normative_number} не найден. Сначала нажмите «Индексировать» у действующей версии в разделе «Нормы».")) from error
+        raise HTTPException(
+            status_code=409,
+            detail=f"Проверка невозможна: индекс действующей версии {normative_number} не найден. Сначала нажмите «Индексировать» у действующей версии в разделе «Нормы».",
+        ) from error
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"Не удалось получить нормативный контекст: {error}") from error
 
     if not results:
-        raise HTTPException(status_code=409, detail=(f"Индекс действующей версии {normative_number} существует, но не содержит доступных фрагментов. Переиндексируйте эту версию в разделе «Нормы»."))
+        raise HTTPException(
+            status_code=409,
+            detail=f"Индекс действующей версии {normative_number} существует, но не содержит доступных фрагментов. Переиндексируйте эту версию в разделе «Нормы».",
+        )
     return results
 
 
@@ -99,14 +109,19 @@ def check_document(document_id: str):
     current_version_id = str(current_version.get("id"))
     normative_number = str(norm_document.get("number") or DEFAULT_NORM_NUMBER)
 
-    question = "Какие требования СП 30.13330.2020 непосредственно относятся к проектному решению внутреннего водопровода?"
     try:
         retriever = Retriever(norm_document_id, current_version_id, storage)
     except FileNotFoundError as error:
-        raise HTTPException(status_code=409, detail=(f"Проверка невозможна: для действующей версии {current_version_id} документа {normative_number} не найден FAISS-индекс. Откройте «Нормы» и нажмите «Индексировать» у этой версии.")) from error
+        raise HTTPException(
+            status_code=409,
+            detail=f"Проверка невозможна: для действующей версии {current_version_id} документа {normative_number} не найден FAISS-индекс. Откройте «Нормы» и нажмите «Индексировать» у этой версии.",
+        ) from error
     except StorageError as error:
         raise HTTPException(status_code=409, detail=f"Не удалось определить путь нормативной версии: {error}") from error
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f"Не удалось загрузить нормативный индекс: {error}") from error
 
+    question = "Какие требования СП 30.13330.2020 непосредственно относятся к проектному решению внутреннего водопровода?"
     normative = _normative_context(retriever, question, normative_number)
     context_parts = []
     for item in normative:
@@ -148,9 +163,17 @@ def check_document(document_id: str):
 """
 
     try:
-        answer = LMStudioClient(model="qwen/qwen3.5-9b-mtp").chat(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=4096, enable_thinking=False)
+        # Let LM Studio select the currently available model instead of relying
+        # on a hard-coded model identifier that may differ between installations.
+        answer = LMStudioClient(model=None).chat(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.1,
+            max_tokens=4096,
+            enable_thinking=False,
+        )
     except Exception as error:
-        raise HTTPException(status_code=503, detail=f"LM Studio недоступна: {error}") from error
+        raise HTTPException(status_code=503, detail=f"LM Studio недоступна или модель не загружена: {error}") from error
 
     try:
         raw = answer.strip()
@@ -190,7 +213,7 @@ def check_document(document_id: str):
         "success": True,
         "document_id": document_id,
         "document_name": doc_name,
-        "checked_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
         "normative_document": normative_number,
         "normative_version": current_version_id,
         "normative_registry_id": norm_document_id,
