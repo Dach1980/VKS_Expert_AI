@@ -1,4 +1,4 @@
-"""Project Expert AI — KnowledgeStorage v2."""
+"""Project Expert AI — KnowledgeStorage v3."""
 from __future__ import annotations
 
 import json
@@ -97,7 +97,16 @@ class KnowledgeStorage:
     def paths(self, document_id, version_id=None):
         v = self.get_version(document_id, version_id)
         root = self.vector_index_root() / document_id / v.get("id", "")
-        return DocumentPaths(self.resolve(v.get("file", "")), self.resolve(v.get("parsed_file", "")), self.resolve(v.get("structured_file", "")), root, root / "pages", root / "enriched", root / "document_chunks", root / "embeddings")
+        return DocumentPaths(
+            self.resolve(v.get("file", "")),
+            self.resolve(v.get("parsed_file", "")),
+            self.resolve(v.get("structured_file", "")),
+            root,
+            root / "pages",
+            root / "enriched",
+            root / "document_chunks",
+            root / "embeddings",
+        )
 
     def ensure_version_dirs(self, document_id, version_id=None):
         p = self.paths(document_id, version_id)
@@ -117,19 +126,21 @@ class KnowledgeStorage:
 
     def _apply_filename_version_metadata(self, document_id, version_id, filename):
         version_type, change_number = self._classify_uploaded_filename(filename)
-        if not version_type:
-            return
         document = self.registry.get_document(document_id)
         if not document:
             return
         version = next((v for v in document.get("versions", []) if v.get("id") == version_id), None)
         if not version:
             return
-        version["type"] = version_type
+        version["original_filename"] = filename
         if version_type == "base":
+            version["type"] = "base"
             version.pop("change_number", None)
-        elif change_number:
-            version["change_number"] = change_number
+            version.pop("change_date", None)
+        elif version_type == "amendment":
+            version["type"] = "amendment"
+            if change_number:
+                version["change_number"] = change_number
         self.registry.save()
 
     def save_pdf(self, document_id, source, version_id=None):
@@ -160,13 +171,30 @@ class KnowledgeStorage:
     def _index_error_path(self, document_id, version_id=None):
         return self.paths(document_id, version_id).index_root / "index_error.json"
 
+    def _indexing_marker_path(self, document_id, version_id=None):
+        return self.paths(document_id, version_id).index_root / "indexing.json"
+
+    def start_indexing(self, document_id, version_id):
+        p = self._indexing_marker_path(document_id, version_id)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            json.dumps({"started_at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def finish_indexing(self, document_id, version_id):
+        self._indexing_marker_path(document_id, version_id).unlink(missing_ok=True)
+
     def clear_index_error(self, document_id, version_id=None):
         self._index_error_path(document_id, version_id).unlink(missing_ok=True)
 
     def write_index_error(self, document_id, version_id, error):
         p = self._index_error_path(document_id, version_id)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, ensure_ascii=False, indent=2), encoding="utf-8")
+        p.write_text(
+            json.dumps({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     @staticmethod
     def _walk_strings(value):
@@ -224,9 +252,17 @@ class KnowledgeStorage:
         pdf = self.resolve(version.get("file", ""))
         parsed = self.resolve(version.get("parsed_file", ""))
         result = {"pages_count": int(version.get("pages_count") or self._pdf_pages(pdf))}
+        if version.get("change_number") is not None:
+            result["change_number"] = str(version.get("change_number"))
+        if version.get("change_date"):
+            result["change_date"] = str(version.get("change_date"))
+        if version.get("type"):
+            result["version_type"] = version.get("type")
         if parsed.exists():
             try:
-                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig"))))
+                parsed_meta = self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig")))
+                for key, value in parsed_meta.items():
+                    result.setdefault(key, value)
             except (OSError, json.JSONDecodeError):
                 pass
         return result
@@ -239,11 +275,25 @@ class KnowledgeStorage:
             if current is None:
                 continue
             processing = self._version_processing(document["id"], current["id"])
-            result.append({"document_id": document["id"], "number": document.get("number"), "title": document.get("title"), "version_id": current.get("id"), "effective_from": current.get("effective_from"), "processing": processing, "versions": [self._version_status(document["id"], v) for v in versions]})
+            result.append({
+                "document_id": document["id"],
+                "number": document.get("number"),
+                "title": document.get("title"),
+                "version_id": current.get("id"),
+                "effective_from": current.get("effective_from"),
+                "processing": processing,
+                "versions": [self._version_status(document["id"], v) for v in versions],
+            })
         return result
 
     def _version_status(self, document_id, version):
-        return {**version, "document_id": document_id, "filename": Path(version.get("file", "")).name, "processing": self._version_processing(document_id, version.get("id"))}
+        filename = version.get("original_filename") or Path(version.get("file", "")).name
+        return {
+            **version,
+            "document_id": document_id,
+            "filename": filename,
+            "processing": self._version_processing(document_id, version.get("id")),
+        }
 
     def _version_processing(self, document_id, version_id):
         p = self.paths(document_id, version_id)
@@ -251,7 +301,13 @@ class KnowledgeStorage:
         index_file = p.embeddings / "index.faiss"
         metadata_file = p.embeddings / "metadata.json"
         error_file = p.index_root / "index_error.json"
-        result = {"pages_count": meta.get("pages_count", 0), "vector_index": index_file.exists(), "vector_metadata": metadata_file.exists()}
+        indexing_file = p.index_root / "indexing.json"
+        result = {
+            "pages_count": meta.get("pages_count", 0),
+            "vector_index": index_file.exists(),
+            "vector_metadata": metadata_file.exists(),
+            "indexing": indexing_file.exists(),
+        }
         if error_file.exists():
             try:
                 result["error"] = json.loads(error_file.read_text(encoding="utf-8")).get("error")
