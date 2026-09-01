@@ -1,6 +1,6 @@
 """
 VKS Expert AI
-LM Studio Client v1.9
+LM Studio Client v2.0
 
 Communication with LM Studio local server.
 """
@@ -22,9 +22,14 @@ PREFERRED_CHAT_MODELS = (
 
 
 class LMStudioClient:
-    """Client for LM Studio OpenAI-compatible API."""
+    """Client for LM Studio OpenAI-compatible API.
 
-    def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: int = 300):
+    timeout=None is intentional: long local-document checks must not be
+    terminated by an arbitrary wall-clock limit. The API exposes checks as
+    background jobs, so the browser no longer waits for the model request.
+    """
+
+    def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: Optional[float] = None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
@@ -60,7 +65,6 @@ class LMStudioClient:
 
     @staticmethod
     def _extract_json_array(text: str) -> str:
-        """Accept fenced/prose-wrapped JSON while preserving a strict array result."""
         raw = str(text or "").strip()
         if raw.startswith("```"):
             raw = raw.replace("```json", "", 1).replace("```", "", 1).strip()
@@ -87,7 +91,6 @@ class LMStudioClient:
     def chat(self, prompt: str, system_prompt: str = None, temperature: float = 0.1, max_tokens: int = 2048, enable_thinking: bool = False) -> str:
         if self.model is None:
             self.model = self._select_chat_model(self.get_models())
-
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -99,41 +102,22 @@ class LMStudioClient:
             "max_tokens": max_tokens,
             "extra_body": {"chat_template_kwargs": {"enable_thinking": enable_thinking}},
         }
-
-        # LM Studio supports structured JSON output through /v1/chat/completions.
-        # Use a compact schema for the document-check response. A 4B model can
-        # then spend its limited output budget on the actual findings instead of
-        # deciding how to format the response.
         if "JSON-массив" in prompt or "JSON-массив" in str(system_prompt or ""):
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "document_check_results",
-                    "strict": True,
-                    "schema": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "type": {"type": "string", "enum": ["violation", "compliant", "unchecked"]},
-                                "title": {"type": "string"},
-                                "description": {"type": "string"},
-                                "recommendation": {"type": "string"},
-                                "sheet": {"type": "string"},
-                                "norm": {"type": "string"},
-                                "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
-                                "page": {"type": "integer"},
-                                "bbox": {"type": ["array", "null"]},
-                            },
-                            "required": ["type", "title", "description", "recommendation", "sheet", "norm", "severity", "page", "bbox"],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
+                    "name": "document_check_results", "strict": True,
+                    "schema": {"type": "array", "items": {"type": "object", "properties": {
+                        "type": {"type": "string", "enum": ["violation", "compliant", "unchecked"]},
+                        "title": {"type": "string"}, "description": {"type": "string"}, "recommendation": {"type": "string"},
+                        "sheet": {"type": "string"}, "norm": {"type": "string"},
+                        "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+                        "page": {"type": "integer"}, "bbox": {"type": ["array", "null"]},
+                    }, "required": ["type", "title", "description", "recommendation", "sheet", "norm", "severity", "page", "bbox"], "additionalProperties": False}}
+                }
             }
-
         print("\nLM STUDIO REQUEST:")
-        print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking, "structured_json": "response_format" in payload})
+        print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking, "structured_json": "response_format" in payload, "timeout": self.timeout})
         response = requests.post(f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
@@ -157,9 +141,7 @@ def demo():
     answer = client.chat(
         "Объясни назначение СП 30.13330.2020 для проектирования внутренних систем водоснабжения.",
         system_prompt="Ты инженерный AI-ассистент VKS Expert AI. Отвечай только на русском языке. Не показывай внутренние рассуждения модели.",
-        temperature=0.1,
-        max_tokens=2048,
-        enable_thinking=False,
+        temperature=0.1, max_tokens=2048, enable_thinking=False,
     )
     print("\nANSWER:\n", answer)
 
