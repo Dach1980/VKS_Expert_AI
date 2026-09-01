@@ -172,8 +172,11 @@ class DocumentRegistry:
             self.data["documents"] = [item for item in self.get_all_documents() if item.get("id") != document_id]
             document_removed = True
         elif was_current:
-            fallback = max(versions, key=lambda version: version.get("effective_from") or "")
-            self._activate_in_document(document, fallback)
+            # Do not silently choose another edition. The user must explicitly
+            # designate the next current version in the UI.
+            for version in versions:
+                if version.get("status") == "current":
+                    version["status"] = "superseded"
         self.save()
         return target, document_removed
 
@@ -221,9 +224,7 @@ class DocumentRegistry:
                         date.fromisoformat(effective_from)
                     except ValueError:
                         errors.append(f"{document_id}: некорректная дата effective_from: {effective_from}")
-            if current_count == 0:
-                errors.append(f"{document_id}: нет действующей версии.")
-            elif current_count > 1:
+            if current_count > 1:
                 errors.append(f"{document_id}: несколько действующих версий.")
         return errors
 
