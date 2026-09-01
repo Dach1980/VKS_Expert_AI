@@ -49,16 +49,21 @@ function createReport() {
     compliant: compliant.length,
     unchecked: unchecked.length,
     totalChecks: checks.length,
-    checks: checks.map(function(c) { return Object.assign({}, c); })
+    checks: checks.map(function(c) { return Object.assign({}, c); }),
+    results: checks.map(function(c) { return Object.assign({}, c); }),
+    summary: { total: checks.length, violations: violations.length, compliant: compliant.length, unchecked: unchecked.length, critical: checks.filter(function(c){return c.type==='violation'&&c.severity==='critical'}).length }
   };
 
   if (typeof reportsData === 'undefined') return;
   reportsData.unshift(report);
   currentReport = report;
   renderReports();
+  try { localStorage.setItem('projectExpertAI.reports', JSON.stringify(reportsData)); } catch (e) {}
   if (typeof updateBadges === 'function') updateBadges();
   showToast('Отчёт подготовлен. Его можно скачать в PDF или Word.', 'success');
 }
+
+function generateReport() { createReport(); }
 
 function viewReport(id) {
   if (typeof reportsData === 'undefined') return;
@@ -112,6 +117,7 @@ function deleteReport(id) {
   if (typeof reportsData === 'undefined') return;
   var report = reportsData.find(function(r) { return r.id === id; });
   reportsData = reportsData.filter(function(r) { return r.id !== id; });
+  try { localStorage.setItem('projectExpertAI.reports', JSON.stringify(reportsData)); } catch (e) {}
   if (typeof currentReport !== 'undefined' && currentReport && currentReport.id === id) currentReport = null;
   renderReports();
   if (typeof updateBadges === 'function') updateBadges();
@@ -120,6 +126,7 @@ function deleteReport(id) {
 
 window.renderReports = renderReports;
 window.createReport = createReport;
+window.generateReport = generateReport;
 window.viewReport = viewReport;
 window.downloadReport = downloadReport;
 window.deleteReport = deleteReport;
