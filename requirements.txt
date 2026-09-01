@@ -92,6 +92,6 @@ Wand==0.6.13
 wcwidth==0.8.2
 webdataset==0.2.111
 xxhash==3.6.0
-yarl==1.24.0
+yarl==1.24.5
 python-docx==1.2.0
 reportlab==4.4.10
