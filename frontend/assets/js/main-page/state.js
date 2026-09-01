@@ -61,9 +61,21 @@ var appStats = {
   totalCritical: checksData.filter(function (x) { return x.type === 'violation' && x.severity === 'critical'; }).length,
 };
 
-function getDocumentById(id) { return docsData.find(function (doc) { return String(doc.id) === String(id); }); }
-function getNormById(id) { return normsData.find(function (norm) { return String(norm.id) === String(id); }); }
-function getCheckById(id) { return checksData.find(function (check) { return String(check.id) === String(id); }); }
-function getNextCheckId() { if (!checksData.length) return 1; return Math.max.apply(null, checksData.map(function (x) { return Number(x.id) || 0; })) + 1; }
+// Public runtime state. Renderers are ES modules, therefore they must use the
+// window object instead of relying on another script's lexical scope.
+window.docsData = docsData;
+window.normsData = normsData;
+window.checksData = checksData;
+window.appStats = appStats;
+window.currentReport = currentReport;
+window.reportsData = reportsData;
+window.settingsData = settingsData;
+window.indexingState = indexingState;
+window.checkingState = checkingState;
+
+function getDocumentById(id) { return window.docsData.find(function (doc) { return String(doc.id) === String(id); }); }
+function getNormById(id) { return window.normsData.find(function (norm) { return String(norm.id) === String(id); }); }
+function getCheckById(id) { return window.checksData.find(function (check) { return String(check.id) === String(id); }); }
+function getNextCheckId() { if (!window.checksData.length) return 1; return Math.max.apply(null, window.checksData.map(function (x) { return Number(x.id) || 0; })) + 1; }
 
 console.log('[VKS Expert AI] state.js загружен — только реальные результаты проверок');
