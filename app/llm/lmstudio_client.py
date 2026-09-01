@@ -1,17 +1,8 @@
 """
 VKS Expert AI
-LM Studio Client v1.7
+LM Studio Client v1.8
 
-Purpose:
 Communication with LM Studio local server.
-
-Features:
-- OpenAI compatible API
-- Qwen3.5 thinking mode control
-- reasoning_content protection
-- deterministic selection of a chat model (never an embedding model)
-- RAG ready
-- Production-safe output filtering
 """
 
 from typing import Optional
@@ -19,10 +10,12 @@ import requests
 
 
 PREFERRED_CHAT_MODELS = (
+    "qwen3-vl-4b-instruct",
+    "qwen/qwen3-vl-4b-instruct",
+    "qwen3.5-4b-mtp",
     "qwen3.5-9b-mtp",
     "qwen/qwen3.5-9b",
     "qwen3.5-9b",
-    "qwen3.5-4b-mtp",
     "qwen/qwen3.5-4b",
 )
 
@@ -30,25 +23,18 @@ PREFERRED_CHAT_MODELS = (
 class LMStudioClient:
     """Client for LM Studio OpenAI-compatible API."""
 
-    def __init__(
-        self,
-        base_url: str = "http://localhost:1234/v1",
-        model: Optional[str] = None,
-        timeout: int = 300,
-    ):
+    def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: int = 300):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
 
     def get_models(self):
-        """Get available models from LM Studio."""
         response = requests.get(f"{self.base_url}/models", timeout=self.timeout)
         response.raise_for_status()
         return response.json()
 
     @staticmethod
     def _select_chat_model(models: dict) -> str:
-        """Select an LLM model and never accidentally select the embedding model."""
         available = [
             str(item.get("id", ""))
             for item in models.get("data", [])
@@ -61,9 +47,6 @@ class LMStudioClient:
             if preferred in available:
                 return preferred
 
-        # Fallback: prefer a Qwen/chat-looking model and explicitly exclude
-        # embedding models. This keeps /v1/models ordering from deciding which
-        # model receives the checking prompt.
         candidates = [
             model for model in available
             if "embedding" not in model.lower()
@@ -75,61 +58,34 @@ class LMStudioClient:
         candidates = [model for model in available if "embedding" not in model.lower()]
         if candidates:
             return candidates[0]
-
         raise RuntimeError("No chat-capable model available; only embedding models are loaded")
 
-    def chat(
-        self,
-        prompt: str,
-        system_prompt: str = None,
-        temperature: float = 0.1,
-        max_tokens: int = 2048,
-        enable_thinking: bool = False,
-    ) -> str:
-        """Send a chat request to a selected LM Studio chat model."""
+    def chat(self, prompt: str, system_prompt: str = None, temperature: float = 0.1, max_tokens: int = 2048, enable_thinking: bool = False) -> str:
         if self.model is None:
-            models = self.get_models()
-            self.model = self._select_chat_model(models)
+            self.model = self._select_chat_model(self.get_models())
 
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-
         payload = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "extra_body": {
-                "chat_template_kwargs": {
-                    "enable_thinking": enable_thinking
-                }
-            },
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": enable_thinking}},
         }
 
         print("\nLM STUDIO REQUEST:")
-        print({
-            "model": self.model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "thinking": enable_thinking,
-        })
-
-        response = requests.post(
-            f"{self.base_url}/chat/completions",
-            json=payload,
-            timeout=self.timeout,
-        )
+        print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking})
+        response = requests.post(f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         message = data["choices"][0]["message"]
         content = message.get("content", "") or ""
         reasoning = message.get("reasoning_content", "") or ""
-
         if reasoning.strip():
             print("WARNING: reasoning_content received from model")
-
         if content.strip():
             return content.strip()
         if reasoning.strip():
@@ -138,7 +94,7 @@ class LMStudioClient:
 
 
 def demo():
-    client = LMStudioClient(model="qwen3.5-4b-mtp")
+    client = LMStudioClient(model="qwen3-vl-4b-instruct")
     print("Available models:")
     for model in client.get_models().get("data", []):
         print("-", model["id"])
