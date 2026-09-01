@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from app.checking.first_pass import run_first_pass_api
+from app.checking.resilient import run_resilient_check
 
 _jobs: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
@@ -17,6 +17,7 @@ _STAGE_LABELS = {
     "preparing": "Подготовка документа",
     "visual": "Визуальный анализ страниц",
     "normative": "Нормативная проверка через RAG",
+    "retry": "Повторная попытка страницы",
     "completed": "Формирование отчёта",
     "error": "Ошибка проверки",
 }
@@ -32,19 +33,14 @@ def _update(job_id: str, **fields: Any) -> None:
         job["stage_label"] = _STAGE_LABELS.get(stage, stage)
         started = job.get("started_monotonic")
         total_pages = int(job.get("total_pages", 0) or 0)
-        current_page = int(job.get("current_page", 0) or 0)
         completed_pages = int(job.get("pages_completed", 0) or 0)
         if started:
             elapsed = max(0.0, time.monotonic() - started)
             job["elapsed_seconds"] = round(elapsed)
-            # ETA is based on pages that have actually completed. A page can
-            # spend a long time inside VL/RAG, so current_page alone must not
-            # be treated as completed work.
             if total_pages > 0 and completed_pages > 0 and completed_pages < total_pages:
                 seconds_per_page = elapsed / completed_pages
-                remaining_pages = total_pages - completed_pages
                 job["average_seconds_per_page"] = round(seconds_per_page, 1)
-                job["estimated_remaining_seconds"] = round(seconds_per_page * remaining_pages)
+                job["estimated_remaining_seconds"] = round(seconds_per_page * (total_pages - completed_pages))
             elif total_pages > 0 and completed_pages >= total_pages:
                 job["average_seconds_per_page"] = round(elapsed / total_pages, 1)
                 job["estimated_remaining_seconds"] = 0
@@ -53,10 +49,8 @@ def _update(job_id: str, **fields: Any) -> None:
 
 
 def _progress(job_id: str, data: dict[str, Any]) -> None:
-    message = str(data.get("message", ""))
-    page_completed = bool(data.get("page_completed")) or "завершена" in message.lower()
     fields = dict(data)
-    if page_completed:
+    if data.get("page_completed"):
         current = int(data.get("current_page", 0) or 0)
         with _lock:
             job = _jobs.get(job_id)
@@ -68,7 +62,7 @@ def _progress(job_id: str, data: dict[str, Any]) -> None:
 def _worker(job_id: str, document_id: str) -> None:
     _update(job_id, status="running", started_at=datetime.now().isoformat(timespec="seconds"), started_monotonic=time.monotonic())
     try:
-        report = run_first_pass_api(document_id, progress_callback=lambda data: _progress(job_id, data))
+        report = run_resilient_check(document_id, progress_callback=lambda data: _progress(job_id, data))
         scope = report.get("check_scope") or {}
         pages_checked = int(scope.get("pages_checked", report.get("summary", {}).get("pages", 0)) or 0)
         pages_available = int(scope.get("pages_available", pages_checked) or pages_checked)
@@ -79,11 +73,12 @@ def _worker(job_id: str, document_id: str) -> None:
             stage="completed",
             message="Проверка завершена. Отчёт готов.",
             result=report,
-            current_page=pages_checked,
-            total_pages=pages_checked,
+            current_page=pages_available,
+            total_pages=pages_available,
             pages_completed=pages_checked,
             pages_checked=pages_checked,
             pages_available=pages_available,
+            failed_pages=scope.get("failed_pages", []),
             report_url=f"/api/reports/{document_id}",
             report_pdf_url="/api/reports/pdf",
             report_docx_url="/api/reports/docx",
