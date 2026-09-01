@@ -1,4 +1,4 @@
-"""Project Expert AI — Norms API v3."""
+"""Project Expert AI — Norms API v4."""
 from __future__ import annotations
 
 import hashlib
@@ -102,7 +102,7 @@ def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
 
 def _version_metadata(storage: KnowledgeStorage, document_id: str, version_id: str) -> dict:
     version = storage.get_version(document_id, version_id)
-    return extract_version_metadata(storage.resolve(version.get("file", "")), storage.resolve(version.get("parsed_file", "")))
+    return storage.get_version_metadata(document_id, version_id)
 
 
 def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
@@ -110,7 +110,7 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
     current_meta = {}
     for source in payload.get("versions", []):
         source_id = str(source.get("document_id") or payload.get("document_id"))
-        version_id = str(source.get("version_id"))
+        version_id = str(source.get("version_id") or source.get("id"))
         try:
             meta = _version_metadata(storage, source_id, version_id)
         except Exception:
@@ -118,15 +118,13 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         item = dict(source)
         item["number"] = item.get("number") or meta.get("number") or payload.get("number")
         item["title"] = item.get("title") or meta.get("title") or payload.get("title")
-        # Registry metadata is authoritative once a version has been uploaded.
-        # This prevents text inside a base edition referring to a later amendment
-        # from relabelling that version.
         item["change_number"] = item.get("change_number") if item.get("change_number") is not None else meta.get("change_number")
         item["change_date"] = item.get("change_date") or meta.get("change_date")
         item.setdefault("processing", {})
         item["processing"] = dict(item["processing"])
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
         item["is_current"] = item.get("status") == "current"
+        item["original_filename"] = item.get("original_filename") or item.get("filename") or Path(item.get("file", "")).name
         versions.append(item)
         if item["is_current"]:
             current_meta = meta
@@ -189,17 +187,16 @@ def pick_norm_storage_folder():
         raise HTTPException(status_code=500, detail=f"Tkinter недоступен: {error}") from error
     storage = KnowledgeStorage()
     initial = str(storage.get_vector_index_root())
-    selected = {"path": ""}
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     try:
-        selected["path"] = filedialog.askdirectory(title="Выберите папку для хранения векторных индексов Project Expert AI", initialdir=initial if Path(initial).exists() else str(Path.home()), mustexist=True)
+        selected = filedialog.askdirectory(title="Выберите папку для хранения векторных индексов Project Expert AI", initialdir=initial if Path(initial).exists() else str(Path.home()), mustexist=True)
     finally:
         root.destroy()
-    if not selected["path"]:
+    if not selected:
         return {"selected": False, "path": initial}
-    path = storage.set_vector_index_root(selected["path"])
+    path = storage.set_vector_index_root(selected)
     return {"selected": True, "path": str(path), "backend": "FAISS"}
 
 
@@ -213,7 +210,7 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     duplicate = _find_duplicate_version(storage, upload_hash)
     if duplicate:
         document, version = duplicate
-        original = version.get("original_filename") or version.get("id")
+        original = version.get("original_filename") or Path(version.get("file", "")).name or version.get("id")
         raise HTTPException(status_code=409, detail=f"Данный файл уже загружен: «{original}». Документ: {document.get('number', document.get('id'))}. Версия: {version.get('id')}.")
 
     resolved_number = _infer_number(filename, number)
@@ -232,6 +229,7 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     try:
         storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title, version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from, file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"), structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
+        filename_meta = storage._classify_uploaded_filename(filename)
         meta = extract_version_metadata(saved, storage.resolve(relative_parsed))
         document = storage.registry.get_document(resolved_document_id)
         version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
@@ -241,32 +239,44 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         if meta.get("title"):
             document["title"] = meta["title"]
 
-        # Explicit filename classification is authoritative. If the filename did
-        # not specify a version, only then may PDF metadata supply a change number.
-        if version.get("type") == "base":
+        # Only an explicit filename may classify a newly uploaded file as base
+        # or amendment. Otherwise the change number is deliberately left unset;
+        # the authoritative number can later come from that version's parsed JSON.
+        version_type, filename_change = filename_meta
+        if version_type == "base":
+            version["type"] = "base"
             version.pop("change_number", None)
             version.pop("change_date", None)
-        elif version.get("change_number"):
-            pass
-        elif meta.get("change_number"):
-            version["change_number"] = str(meta["change_number"])
+        elif version_type == "amendment":
             version["type"] = "amendment"
+            version["change_number"] = filename_change
+        else:
+            version["type"] = "edition"
+            version.pop("change_number", None)
+            version.pop("change_date", None)
 
-        if not version.get("change_date") and meta.get("change_date") and version.get("type") != "base":
-            version["change_date"] = str(meta["change_date"])
-            if not effective_from:
-                version["effective_from"] = str(meta["change_date"])
+        # Do not infer a change number from the PDF's visible text during upload:
+        # the same base PDF can mention later amendments. Parsed JSON belonging to
+        # this exact version is authoritative when it exists.
+        if version_type != "base" and not filename_change:
+            parsed_change = meta.get("change_number") if storage.resolve(relative_parsed).exists() else None
+            if parsed_change:
+                version["change_number"] = str(parsed_change)
+                version["type"] = "amendment"
+            parsed_date = meta.get("change_date") if storage.resolve(relative_parsed).exists() else None
+            if parsed_date:
+                version["change_date"] = str(parsed_date)
+                if not effective_from:
+                    version["effective_from"] = str(parsed_date)
+
         version["pages_count"] = int(meta.get("pages_count") or 0)
         version["sha256"] = upload_hash
         version["original_filename"] = filename
         storage.registry.save()
-        if not any(v.get("status") == "current" for v in document.get("versions", []) if v.get("id") != resolved_version_id):
-            storage.registry.activate_version(resolved_document_id, resolved_version_id)
     except (StorageError, OSError, StopIteration, RegistryError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    status = "current" if storage.registry.get_current_version(resolved_document_id).get("id") == resolved_version_id else "uploaded"
-    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=meta.get("number") or resolved_number, title=meta.get("title") or resolved_title, status=status, filename=filename)
+    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=meta.get("number") or resolved_number, title=meta.get("title") or resolved_title, status="uploaded", filename=filename)
 
 
 @router.post("/{document_id}/{version_id}/activate", response_model=NormIndexResponse)
@@ -292,15 +302,12 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         storage.start_indexing(document_id, version_id)
     except StorageError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    # The marker is created before the background task starts, so the UI can
-    # immediately display "Происходит индексация".
     background_tasks.add_task(_index_norm_after_start, document_id, version_id)
     return NormIndexResponse(success=True, document_id=document_id, version_id=version_id, status="indexing", message="Индексация выбранной версии запущена")
 
 
 def _index_norm_after_start(document_id: str, version_id: str) -> None:
     storage = KnowledgeStorage()
-    paths = storage.paths(document_id, version_id)
     try:
         SPIndexBuilder(document_id=document_id, version_id=version_id, storage=storage).run()
     except Exception as error:
@@ -314,6 +321,8 @@ def _index_norm_after_start(document_id: str, version_id: str) -> None:
 def delete_norm(document_id: str, version_id: str | None = None):
     storage = KnowledgeStorage()
     try:
+        if version_id is None:
+            raise StorageError("Не указана версия для удаления")
         version = storage.get_version(document_id, version_id)
         paths = storage.paths(document_id, version.get("id"))
         target_version_id = version.get("id")
