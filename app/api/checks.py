@@ -55,18 +55,13 @@ def _resolve_norm(storage: KnowledgeStorage, canonical_number: str) -> tuple[str
         if number == target:
             candidates.append(document)
             continue
-        # Backward compatibility with older Registry IDs/numbers that may have
-        # omitted the year while still representing the same SP.
         group = storage.registry._number_group(document.get("number", ""))
         target_group = storage.registry._number_group(canonical_number)
         if group and group == target_group:
             candidates.append(document)
 
     if not candidates:
-        raise HTTPException(
-            status_code=409,
-            detail=f"В Registry не найден нормативный документ {canonical_number}.",
-        )
+        raise HTTPException(status_code=409, detail=f"В Registry не найден нормативный документ {canonical_number}.")
 
     candidates.sort(key=lambda item: (len(item.get("versions", [])), len(str(item.get("number", "")))), reverse=True)
     document = candidates[0]
@@ -75,13 +70,7 @@ def _resolve_norm(storage: KnowledgeStorage, canonical_number: str) -> tuple[str
     try:
         current_version = storage.get_current_version(document_id)
     except Exception as error:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Для {canonical_number} в Registry нет действующей версии. "
-                "Назначьте одну из версий действующей в разделе «Нормы»."
-            ),
-        ) from error
+        raise HTTPException(status_code=409, detail=(f"Для {canonical_number} в Registry нет действующей версии. Назначьте одну из версий действующей в разделе «Нормы».")) from error
 
     return document_id, document, current_version
 
@@ -90,24 +79,12 @@ def _normative_context(retriever: Retriever, question: str, normative_number: st
     try:
         results = retriever.search(question, top_k=5)
     except FileNotFoundError as error:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Проверка невозможна: индекс действующей версии {normative_number} не найден. "
-                "Сначала нажмите «Индексировать» у действующей версии в разделе «Нормы»."
-            ),
-        ) from error
+        raise HTTPException(status_code=409, detail=(f"Проверка невозможна: индекс действующей версии {normative_number} не найден. Сначала нажмите «Индексировать» у действующей версии в разделе «Нормы».")) from error
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"Не удалось получить нормативный контекст: {error}") from error
 
     if not results:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Индекс действующей версии {normative_number} существует, но не содержит доступных фрагментов. "
-                "Переиндексируйте эту версию в разделе «Нормы»."
-            ),
-        )
+        raise HTTPException(status_code=409, detail=(f"Индекс действующей версии {normative_number} существует, но не содержит доступных фрагментов. Переиндексируйте эту версию в разделе «Нормы»."))
     return results
 
 
@@ -126,19 +103,11 @@ def check_document(document_id: str):
     try:
         retriever = Retriever(norm_document_id, current_version_id, storage)
     except FileNotFoundError as error:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Проверка невозможна: для действующей версии {current_version_id} документа "
-                f"{normative_number} не найден FAISS-индекс. "
-                "Откройте «Нормы» и нажмите «Индексировать» у этой версии."
-            ),
-        ) from error
+        raise HTTPException(status_code=409, detail=(f"Проверка невозможна: для действующей версии {current_version_id} документа {normative_number} не найден FAISS-индекс. Откройте «Нормы» и нажмите «Индексировать» у этой версии.")) from error
     except StorageError as error:
         raise HTTPException(status_code=409, detail=f"Не удалось определить путь нормативной версии: {error}") from error
 
     normative = _normative_context(retriever, question, normative_number)
-
     context_parts = []
     for item in normative:
         content = item.get("content", {})
@@ -159,8 +128,9 @@ def check_document(document_id: str):
 - norm: нормативный источник или пустая строка
 - severity: critical | major | minor
 - page: номер страницы PDF или 0
+- bbox: массив [x1, y1, x2, y2] в координатах исходной страницы PDF только если ты можешь надёжно определить место несоответствия; иначе null
 
-Не выдумывай сведения. Если доказательств недостаточно, используй unchecked.
+Не выдумывай сведения. Если доказательств недостаточно, используй unchecked. Никогда не придумывай bbox.
 
 НОРМАТИВНЫЙ КОНТЕКСТ:
 {normative_context}
@@ -173,17 +143,12 @@ def check_document(document_id: str):
 Отвечай только на русском языке.
 Используй только предоставленные проектные данные и нормативный контекст.
 Не придумывай номера листов, пункты СП, размеры и требования.
+Если координаты места нарушения не представлены или не могут быть определены надёжно, возвращай bbox: null.
 Результат должен быть только валидным JSON-массивом без Markdown.
 """
 
     try:
-        answer = LMStudioClient(model="qwen/qwen3.5-9b-mtp").chat(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.1,
-            max_tokens=4096,
-            enable_thinking=False,
-        )
+        answer = LMStudioClient(model="qwen/qwen3.5-9b-mtp").chat(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=4096, enable_thinking=False)
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"LM Studio недоступна: {error}") from error
 
@@ -202,6 +167,9 @@ def check_document(document_id: str):
     for index, item in enumerate(results, start=1):
         if not isinstance(item, dict):
             continue
+        bbox = item.get("bbox")
+        if not (isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(v, (int, float)) for v in bbox)):
+            bbox = None
         normalized.append({
             "id": index,
             "type": item.get("type", "unchecked"),
@@ -214,6 +182,7 @@ def check_document(document_id: str):
             "norm": str(item.get("norm", normative_number)),
             "severity": item.get("severity", "minor"),
             "page": int(item.get("page", 0) or 0),
+            "bbox": bbox,
             "image": None,
         })
 
@@ -221,6 +190,7 @@ def check_document(document_id: str):
         "success": True,
         "document_id": document_id,
         "document_name": doc_name,
+        "checked_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
         "normative_document": normative_number,
         "normative_version": current_version_id,
         "normative_registry_id": norm_document_id,
@@ -233,12 +203,7 @@ def check_document(document_id: str):
             "critical": sum(x["type"] == "violation" and x["severity"] == "critical" for x in normalized),
         },
         "normative_sources": [
-            {
-                "document": item.get("document", normative_number),
-                "version": current_version_id,
-                "page": item.get("page", 0),
-                "score": item.get("score", 0.0),
-            }
+            {"document": item.get("document", normative_number), "version": current_version_id, "page": item.get("page", 0), "score": item.get("score", 0.0)}
             for item in normative
         ],
     }
