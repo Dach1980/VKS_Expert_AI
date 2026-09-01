@@ -1,4 +1,4 @@
-"""Project Expert AI — document checking API v4."""
+"""Project Expert AI — document checking API v5."""
 from __future__ import annotations
 
 import json
@@ -15,6 +15,14 @@ from app.rag.retriever import Retriever
 router = APIRouter(prefix="/api/checks", tags=["checks"])
 
 DEFAULT_NORM_NUMBER = "СП 30.13330.2020"
+
+# LM Studio may have a deliberately small loaded context (the current local
+# setup reports 8192 tokens). The checker therefore keeps the first-pass prompt
+# bounded instead of sending an entire project PDF to the LLM in one request.
+# A later checking stage can process the remaining pages in separate passes.
+PROJECT_PROMPT_CHAR_LIMIT = 5000
+NORMATIVE_PROMPT_CHAR_LIMIT = 2500
+CHECK_MAX_OUTPUT_TOKENS = 1024
 
 
 def _load_project_text(document_id: str) -> str:
@@ -98,6 +106,14 @@ def _normative_context(retriever: Retriever, question: str, normative_number: st
     return results
 
 
+def _clip_text(text: str, limit: int) -> str:
+    """Keep an explicit character budget for small local LLM contexts."""
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "\n[Контекст сокращён для текущего окна модели.]"
+
+
 @router.post("/{document_id}")
 def check_document(document_id: str):
     project_text = _load_project_text(document_id)
@@ -129,10 +145,13 @@ def check_document(document_id: str):
         text = content.get("text", "") if isinstance(content, dict) else str(content)
         if text:
             context_parts.append(f"{normative_number}, стр. {item.get('page', '—')}: {text}")
-    normative_context = "\n\n".join(context_parts)
+    normative_context = _clip_text("\n\n".join(context_parts), NORMATIVE_PROMPT_CHAR_LIMIT)
+    project_context = _clip_text(project_text, PROJECT_PROMPT_CHAR_LIMIT)
 
     prompt = f"""
 Проведи предварительный инженерный нормоконтроль проектной документации.
+
+Это первый проход по документу. Анализируй только переданный фрагмент проекта и нормативный контекст.
 
 Верни только JSON-массив объектов. Каждый объект должен содержать:
 - type: violation | compliant | unchecked
@@ -143,15 +162,15 @@ def check_document(document_id: str):
 - norm: нормативный источник или пустая строка
 - severity: critical | major | minor
 - page: номер страницы PDF или 0
-- bbox: массив [x1, y1, x2, y2] в координатах исходной страницы PDF только если ты можешь надёжно определить место несоответствия; иначе null
+- bbox: массив [x1, y1, x2, y2] только если координаты надёжно известны; иначе null
 
 Не выдумывай сведения. Если доказательств недостаточно, используй unchecked. Никогда не придумывай bbox.
 
 НОРМАТИВНЫЙ КОНТЕКСТ:
 {normative_context}
 
-ПРОЕКТНАЯ ДОКУМЕНТАЦИЯ:
-{project_text[:45000]}
+ФРАГМЕНТ ПРОЕКТНОЙ ДОКУМЕНТАЦИИ:
+{project_context}
 """
     system_prompt = """
 Ты инженерный AI-ассистент Project Expert AI.
@@ -163,13 +182,13 @@ def check_document(document_id: str):
 """
 
     try:
-        # Let LM Studio select the currently available model instead of relying
-        # on a hard-coded model identifier that may differ between installations.
+        # model=None now deterministically selects an LLM from /v1/models and
+        # never the embedding model used by the RAG retriever.
         answer = LMStudioClient(model=None).chat(
             prompt=prompt,
             system_prompt=system_prompt,
             temperature=0.1,
-            max_tokens=4096,
+            max_tokens=CHECK_MAX_OUTPUT_TOKENS,
             enable_thinking=False,
         )
     except Exception as error:
