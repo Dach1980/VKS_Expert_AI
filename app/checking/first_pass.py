@@ -93,7 +93,6 @@ def _strict_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
         evidence_text = str(candidate.get("evidence_text") or "").strip()
         bbox = candidate.get("bbox")
         confidence = float(candidate.get("confidence") or 0)
-        # A candidate must point to an actual visible fact, not merely name a field.
         if not evidence_text or not title or confidence < 0.55:
             continue
         if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
@@ -161,7 +160,7 @@ def run_first_pass_api(
     """Run strict page -> VL -> RAG -> compliance -> evidence -> report JSON."""
     def progress(**data: Any) -> None:
         if progress_callback:
-            progress(data)
+            progress_callback(data)
 
     root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
     pdf_path = root / "source.pdf"
@@ -229,13 +228,14 @@ def run_first_pass_api(
                 "confidence": decision.get("confidence", candidate.get("confidence")), "normative_sources": norm_results,
             })
         completed_percent = 2 + int(page_index / max(total_pages, 1) * 96)
-        progress(stage="visual", percent=min(98, completed_percent), current_page=page_index, total_pages=total_pages, message=f"Страница {page_index} из {total_pages} завершена. Подтверждённых кандидатов: {len(candidates)}.")
+        progress(stage="visual", percent=min(98, completed_percent), current_page=page_index, total_pages=total_pages, page_completed=True, message=f"Страница {page_index} из {total_pages} завершена. Подтверждённых кандидатов: {len(candidates)}.")
 
     violations = [x for x in findings if x["type"] == "violation"]
     report = {
         "template": "reference_normcontrol_report_ios_3.1", "document_id": document_id, "document_name": pdf_path.name,
         "checked_at": datetime.now().isoformat(timespec="seconds"), "normative_document": normative_number,
         "normative_version": version_id, "normative_registry_id": norm_id, "results": findings,
+        "check_scope": {"pages_checked": total_pages, "pages_available": total_pages, "limited": False, "max_pages": None},
         "summary": {"pages": len(pages), "total": len(findings), "violations": len(violations),
                     "critical": sum(x["severity"] == "critical" for x in violations),
                     "major": sum(x["severity"] == "major" for x in violations), "minor": sum(x["severity"] == "minor" for x in violations),
@@ -243,6 +243,6 @@ def run_first_pass_api(
     }
     report_path = evidence_dir / "report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    progress(stage="completed", percent=100, current_page=total_pages, total_pages=total_pages, message="Проверка завершена. Формирую отчёт…")
+    progress(stage="completed", percent=100, current_page=total_pages, total_pages=total_pages, page_completed=True, message="Проверка завершена. Формирую отчёт…")
     report["report_json"] = str(report_path)
     return report
