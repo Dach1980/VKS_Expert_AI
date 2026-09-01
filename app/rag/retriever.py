@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 
 import faiss
 import numpy as np
@@ -52,7 +54,18 @@ class Retriever:
             raise FileNotFoundError(f"Индекс нормативной версии не найден: {self.index_file}")
         if not self.metadata_file.exists():
             raise FileNotFoundError(f"Метаданные нормативного индекса не найдены: {self.metadata_file}")
-        self.index = faiss.read_index(str(self.index_file))
+
+        # FAISS on Windows can fail to open an existing index when any parent
+        # directory contains Cyrillic characters. The project deliberately
+        # allows Cyrillic document/version IDs, so copy the file through Python
+        # to an ASCII-only temporary path before asking FAISS to read it.
+        temp_index_file = self.storage.project_root / f".faiss_read_{os.getpid()}_{id(self)}.index"
+        try:
+            shutil.copy2(self.index_file, temp_index_file)
+            self.index = faiss.read_index(str(temp_index_file))
+        finally:
+            temp_index_file.unlink(missing_ok=True)
+
         self.metadata = json.loads(self.metadata_file.read_text(encoding="utf-8-sig"))
         self.client = EmbeddingClient()
 
