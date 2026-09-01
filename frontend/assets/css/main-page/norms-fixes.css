@@ -1,28 +1,45 @@
-/* Norms version list: keep file names readable and the PDF viewer icon beside them. */
+/* Norms version list: the document information occupies the full card width. */
 .norm-version-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 10px;
+  padding: 12px 0;
+  align-items: stretch;
 }
 
 .norm-version-info-block {
+  width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.norm-version-info-block strong {
+  display: block;
+  line-height: 1.45;
 }
 
 .norm-version-filename {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-width: 0;
+  margin-top: 4px;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
+  line-height: 1.45;
 }
 
 .norm-version-file-date {
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .norm-version-file-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -30,6 +47,7 @@
 }
 
 .norm-version-view {
+  order: 0;
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
@@ -52,13 +70,26 @@
   display: block;
 }
 
+.norm-version-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.norm-version-actions .btn {
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .norm-version-row {
-    grid-template-columns: 1fr;
-    align-items: start;
+    width: 100%;
   }
 
-  .norm-version-actions {
-    justify-content: flex-start;
+  .norm-version-filename {
+    max-width: 100%;
   }
 }
