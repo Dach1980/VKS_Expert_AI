@@ -1,11 +1,12 @@
 """
 VKS Expert AI
-LM Studio Client v1.8
+LM Studio Client v1.9
 
 Communication with LM Studio local server.
 """
 
 from typing import Optional
+import json
 import requests
 
 
@@ -42,11 +43,9 @@ class LMStudioClient:
         ]
         if not available:
             raise RuntimeError("No models available")
-
         for preferred in PREFERRED_CHAT_MODELS:
             if preferred in available:
                 return preferred
-
         candidates = [
             model for model in available
             if "embedding" not in model.lower()
@@ -54,11 +53,36 @@ class LMStudioClient:
         ]
         if candidates:
             return candidates[0]
-
         candidates = [model for model in available if "embedding" not in model.lower()]
         if candidates:
             return candidates[0]
         raise RuntimeError("No chat-capable model available; only embedding models are loaded")
+
+    @staticmethod
+    def _extract_json_array(text: str) -> str:
+        """Accept fenced/prose-wrapped JSON while preserving a strict array result."""
+        raw = str(text or "").strip()
+        if raw.startswith("```"):
+            raw = raw.replace("```json", "", 1).replace("```", "", 1).strip()
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return json.dumps(parsed, ensure_ascii=False)
+            if isinstance(parsed, dict) and isinstance(parsed.get("results"), list):
+                return json.dumps(parsed["results"], ensure_ascii=False)
+        except json.JSONDecodeError:
+            pass
+        start = raw.find("[")
+        end = raw.rfind("]")
+        if start >= 0 and end > start:
+            candidate = raw[start:end + 1].strip()
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, list):
+                    return json.dumps(parsed, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pass
+        return raw
 
     def chat(self, prompt: str, system_prompt: str = None, temperature: float = 0.1, max_tokens: int = 2048, enable_thinking: bool = False) -> str:
         if self.model is None:
@@ -76,8 +100,40 @@ class LMStudioClient:
             "extra_body": {"chat_template_kwargs": {"enable_thinking": enable_thinking}},
         }
 
+        # LM Studio supports structured JSON output through /v1/chat/completions.
+        # Use a compact schema for the document-check response. A 4B model can
+        # then spend its limited output budget on the actual findings instead of
+        # deciding how to format the response.
+        if "JSON-массив" in prompt or "JSON-массив" in str(system_prompt or ""):
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "document_check_results",
+                    "strict": True,
+                    "schema": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "enum": ["violation", "compliant", "unchecked"]},
+                                "title": {"type": "string"},
+                                "description": {"type": "string"},
+                                "recommendation": {"type": "string"},
+                                "sheet": {"type": "string"},
+                                "norm": {"type": "string"},
+                                "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+                                "page": {"type": "integer"},
+                                "bbox": {"type": ["array", "null"]},
+                            },
+                            "required": ["type", "title", "description", "recommendation", "sheet", "norm", "severity", "page", "bbox"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+            }
+
         print("\nLM STUDIO REQUEST:")
-        print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking})
+        print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking, "structured_json": "response_format" in payload})
         response = requests.post(f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
@@ -87,7 +143,7 @@ class LMStudioClient:
         if reasoning.strip():
             print("WARNING: reasoning_content received from model")
         if content.strip():
-            return content.strip()
+            return self._extract_json_array(content) if "JSON-массив" in prompt else content.strip()
         if reasoning.strip():
             return "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
         return "LLM вернул пустой ответ."
