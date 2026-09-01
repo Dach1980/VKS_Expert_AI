@@ -7,14 +7,22 @@ var currentFilter = 'all';
 var currentSeverityFilter = '';
 var currentSectionFilter = 'all';
 
-// Data comes from backend. Demo project/check values are intentionally absent.
 var docsData = [];
 var normsData = [];
 var checksData = [];
 
+// Results are kept only for the current application data schema. Old demo
+// values from previous builds must never reappear in the real dashboard.
+var CHECKS_STORAGE_VERSION = 'v2-real-checks';
 try {
-  var savedChecks = JSON.parse(localStorage.getItem('projectExpertAI.checks') || '[]');
-  if (Array.isArray(savedChecks)) checksData = savedChecks;
+  var savedChecksVersion = localStorage.getItem('projectExpertAI.checks.version');
+  if (savedChecksVersion === CHECKS_STORAGE_VERSION) {
+    var savedChecks = JSON.parse(localStorage.getItem('projectExpertAI.checks') || '[]');
+    if (Array.isArray(savedChecks)) checksData = savedChecks;
+  } else {
+    localStorage.removeItem('projectExpertAI.checks');
+    localStorage.setItem('projectExpertAI.checks.version', CHECKS_STORAGE_VERSION);
+  }
 } catch (error) {
   console.warn('[VKS Expert AI] Не удалось загрузить сохраненные результаты проверок:', error);
 }
@@ -45,7 +53,6 @@ var settingsData = {
 var indexingState = { active: false, total: 0, completed: 0, currentNormId: null };
 var checkingState = { active: false, total: 0, completed: 0, documentIds: [] };
 
-// Real statistics are calculated from checksData by dashboard.js.
 var appStats = {
   totalChecks: checksData.length,
   totalViolations: checksData.filter(function (x) { return x.type === 'violation'; }).length,
@@ -57,9 +64,6 @@ var appStats = {
 function getDocumentById(id) { return docsData.find(function (doc) { return String(doc.id) === String(id); }); }
 function getNormById(id) { return normsData.find(function (norm) { return String(norm.id) === String(id); }); }
 function getCheckById(id) { return checksData.find(function (check) { return String(check.id) === String(id); }); }
-function getNextCheckId() {
-  if (!checksData.length) return 1;
-  return Math.max.apply(null, checksData.map(function (x) { return Number(x.id) || 0; })) + 1;
-}
+function getNextCheckId() { if (!checksData.length) return 1; return Math.max.apply(null, checksData.map(function (x) { return Number(x.id) || 0; })) + 1; }
 
-console.log('[VKS Expert AI] state.js загружен — demo-результаты отключены');
+console.log('[VKS Expert AI] state.js загружен — только реальные результаты проверок');
