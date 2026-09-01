@@ -11,8 +11,9 @@ function changeNumberFromFilename(filename) {
   var match = stem.match(/(?:\bизм\.?|\bизменени(?:е|я)|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
   return match ? match[1] : null;
 }
+function isUserCurrent(v) { return v && v.status === 'current' && v.current_selected_by_user === true; }
 function versionLabel(v) {
-  var suffix = v.status === 'current' ? ' · действующая' : ' · архивная';
+  var suffix = isUserCurrent(v) ? ' · действующая' : ' · архивная';
   var filename = String(v.original_filename || v.filename || '');
   var change = changeNumberFromFilename(filename);
   if (change !== null) return 'Изменение №' + esc(change) + suffix;
@@ -26,14 +27,14 @@ function findVersion(n, sourceId, versionId) { var vs = n && Array.isArray(n.ver
 function searchIcon() { return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>'; }
 function renderVersionActions(n, v, sid, vid) {
   var state = indexing(v) ? '<span class="status-badge info">Происходит индексация</span>' : indexed(v) ? '<span class="status-badge success">Индексировано</span>' : '<button type="button" class="btn btn-primary btn-sm norm-version-index" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Индексировать</button>';
-  var active = v.status === 'current' ? '<span class="status-badge success">Действующая редакция</span>' : '<button type="button" class="btn btn-secondary btn-sm norm-version-activate" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Сделать действующей</button>';
+  var active = isUserCurrent(v) ? '<span class="status-badge success">Действующая редакция</span>' : '<button type="button" class="btn btn-secondary btn-sm norm-version-activate" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Сделать действующей</button>';
   var del = '<button type="button" class="btn btn-danger btn-sm norm-version-delete" data-card="' + esc(n.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Удалить</button>';
   return state + active + del;
 }
 function renderNormVersions(n) {
   var vs = Array.isArray(n.versions) ? n.versions.slice() : [];
   if (!vs.length) return '';
-  vs.sort(function (a, b) { if (a.status === 'current') return -1; if (b.status === 'current') return 1; return String(b.effective_from || '').localeCompare(String(a.effective_from || '')); });
+  vs.sort(function (a, b) { if (isUserCurrent(a)) return -1; if (isUserCurrent(b)) return 1; return String(b.effective_from || '').localeCompare(String(a.effective_from || '')); });
   var h = '<div id="normVersions-' + esc(n.id) + '" class="norm-versions-panel" style="display:none"><div class="norm-versions-title">Загруженные документы</div>';
   vs.forEach(function (v) {
     var sid = v.document_id || n.id, vid = v.version_id || v.id, p = v.processing || {}, date = v.change_date || v.effective_from || 'Дата не указана', pages = p.pages_count || v.pages_count || 0;
@@ -47,7 +48,7 @@ function renderNorms() {
   var grid = document.getElementById('normsGrid'); if (!grid) return;
   var ns = getNormsData(), h = '';
   ns.forEach(function (n) {
-    var p = n.processing || {}, cv = (n.versions || []).find(function (v) { return v.status === 'current'; });
+    var p = n.processing || {}, cv = (n.versions || []).find(function (v) { return isUserCurrent(v); });
     var pages = cv ? ((cv.processing || {}).pages_count || cv.pages_count || 0) : p.pages_count || 0;
     var currentFilename = cv ? (cv.original_filename || cv.filename || '') : '';
     var currentChange = changeNumberFromFilename(currentFilename);
