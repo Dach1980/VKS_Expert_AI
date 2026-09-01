@@ -69,7 +69,7 @@ def _vision_request(client: LMStudioClient, prompt: str, image_path: Path, max_t
     payload = {
         "model": client.model,
         "messages": [
-            {"role": "system", "content": "Ты выполняешь визуальный анализ проектной документации. Не выдумывай факты и координаты."},
+            {"role": "system", "content": "Ты выполняешь строгий визуальный анализ проектной документации. Не выдумывай факты, координаты или нарушения. Возвращай только наблюдения, которые можно проверить по изображению."},
             {"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": _image_data_url(image_path)}},
@@ -84,6 +84,26 @@ def _vision_request(client: LMStudioClient, prompt: str, image_path: Path, max_t
     return str(response.json()["choices"][0]["message"].get("content") or "").strip()
 
 
+def _strict_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only concrete visual facts suitable for a subsequent normative test."""
+    accepted: list[dict[str, Any]] = []
+    for candidate in candidates:
+        title = str(candidate.get("title") or "").strip()
+        description = str(candidate.get("description") or "").strip()
+        evidence_text = str(candidate.get("evidence_text") or "").strip()
+        bbox = candidate.get("bbox")
+        confidence = float(candidate.get("confidence") or 0)
+        # A candidate must point to an actual visible fact, not merely name a field.
+        if not evidence_text or not title or confidence < 0.55:
+            continue
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            continue
+        if not description or len(description) < 10:
+            continue
+        accepted.append({**candidate, "evidence_text": evidence_text})
+    return accepted
+
+
 def _context_text(results: list[dict[str, Any]], normative_number: str) -> str:
     parts = []
     for item in results:
@@ -96,7 +116,7 @@ def _context_text(results: list[dict[str, Any]], normative_number: str) -> str:
 
 
 def _decision(client: LMStudioClient, candidate: dict[str, Any], norm_text: str) -> dict[str, Any]:
-    prompt = f"""Проведи нормативную проверку одного потенциального несоответствия.
+    prompt = f"""Проведи нормативную проверку одного визуально подтверждённого факта.
 
 ПРОЕКТНОЕ НАБЛЮДЕНИЕ:
 {json.dumps(candidate, ensure_ascii=False)}
@@ -104,10 +124,15 @@ def _decision(client: LMStudioClient, candidate: dict[str, Any], norm_text: str)
 НОРМАТИВНЫЙ КОНТЕКСТ:
 {norm_text[:MAX_DECISION_CHARS]}
 
+Правила:
+1. type=violation только если конкретный факт на изображении прямо противоречит конкретному требованию из приведённого нормативного контекста.
+2. type=compliant только если приведённый факт можно прямо сопоставить с нормативным требованием и соответствие подтверждается.
+3. Во всех остальных случаях type=unchecked.
+4. Не придумывай пункт нормы, размеры, значения, листы или свойства объекта.
+5. Не считай сам факт наличия надписи/названия нарушением без конкретного нормативного требования.
+
 Верни только JSON-объект:
 {{"type":"violation|compliant|unchecked","title":"","description":"","recommendation":"","sheet":"","norm":"","clause":"","severity":"critical|major|minor","confidence":0.0}}
-
-Не придумывай пункт нормы. Если нормативного доказательства недостаточно, type=unchecked.
 """
     return _json_object(client.chat(prompt, temperature=0.1, max_tokens=900, enable_thinking=False))
 
@@ -133,10 +158,10 @@ def run_first_pass_api(
     normative_number: str = DEFAULT_NORM_NUMBER,
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    """Run page -> VL -> RAG -> compliance -> evidence -> report JSON."""
+    """Run strict page -> VL -> RAG -> compliance -> evidence -> report JSON."""
     def progress(**data: Any) -> None:
         if progress_callback:
-            progress_callback(data)
+            progress(data)
 
     root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
     pdf_path = root / "source.pdf"
@@ -154,21 +179,36 @@ def run_first_pass_api(
     pages = render_pdf_pages(pdf_path, evidence_dir, dpi=CHECK_DPI)
     total_pages = len(pages)
     findings = []
-    progress(stage="visual", percent=2, current_page=0, total_pages=total_pages, message=f"Страницы подготовлены: {total_pages}. Начинаю визуальный анализ…")
+    progress(stage="visual", percent=2, current_page=0, total_pages=total_pages, message=f"Подготовлено страниц: {total_pages}. Начинаю строгий визуальный анализ…")
 
     for page_index, page in enumerate(pages, start=1):
         page_start = 2 + int((page_index - 1) / max(total_pages, 1) * 96)
-        progress(stage="visual", percent=page_start, current_page=page_index, total_pages=total_pages, message=f"Визуальный анализ страницы {page_index} из {total_pages}…")
-        visual_prompt = f"""Страница PDF №{page.page}. Найди видимые элементы, которые требуют инженерной проверки по нормативам: размеры, схемные решения, обозначения, таблицы, подписи, параметры. Не утверждай нарушение без нормы. Для каждого кандидата укажи bbox в пикселях [x1,y1,x2,y2]. Если координаты ненадёжны — null. Верни только JSON-массив объектов с полями title, description, evidence_text, bbox, confidence."""
-        candidates = _json_array(_vision_request(client, visual_prompt, Path(page.image_path), 1000))
-        for candidate_index, candidate in enumerate(candidates, start=1):
-            progress(stage="normative", percent=min(98, page_start + 1), current_page=page_index, total_pages=total_pages, message=f"Проверяю нормативное основание: страница {page_index}…")
+        progress(stage="visual", percent=page_start, current_page=page_index, total_pages=total_pages, message=f"Анализ страницы {page_index} из {total_pages}…")
+        visual_prompt = f"""Ты выполняешь строгий первый визуальный проход нормоконтроля страницы PDF №{page.page}.
+
+Ищи ТОЛЬКО конкретные визуально проверяемые факты, которые потенциально могут быть сопоставлены с требованием СП 30.13330.2020: реальные размеры и расстояния, отметки, диаметры, уклоны, параметры таблиц, видимые элементы схем, подключения, обозначения и другие инженерные параметры.
+
+НЕ возвращай:
+- просто названия проекта, раздела или тома;
+- номера документов сами по себе;
+- декоративный или организационный текст;
+- утверждение «это нарушение» без нормы;
+- предположения о невидимых данных.
+
+Для каждого кандидата ОБЯЗАТЕЛЬНО укажи точный видимый факт в evidence_text, кратко объясни, что именно на странице нужно проверить, confidence от 0 до 1 и bbox в пикселях [x1,y1,x2,y2]. Если точный bbox определить нельзя — не возвращай кандидата.
+
+Верни только JSON-массив:
+[{{"title":"конкретный объект проверки","description":"какой конкретный факт виден и что именно проверяется","evidence_text":"точный видимый текст/значение/обозначение","bbox":[x1,y1,x2,y2],"confidence":0.0}}]
+Если конкретных фактов нет, верни []."""
+        candidates = _strict_candidates(_json_array(_vision_request(client, visual_prompt, Path(page.image_path), 1000)))
+        progress(stage="normative", percent=min(98, page_start + 1), current_page=page_index, total_pages=total_pages, message=f"Найдено кандидатов: {len(candidates)}. Выполняю RAG-проверку страницы {page_index}…")
+        for candidate in candidates:
             bbox = normalize_bbox(candidate.get("bbox"), page.width, page.height)
             query = " ".join(str(candidate.get(k, "")) for k in ("title", "description", "evidence_text"))
             norm_results = retriever.search(query, top_k=MAX_NORM_RESULTS) if query else []
             norm_text = _context_text(norm_results, normative_number)
             if not norm_text:
-                decision = {"type": "unchecked", "title": candidate.get("title", "Потенциальное несоответствие"), "description": candidate.get("description", ""), "recommendation": "Требуется дополнительная проверка нормативной базы.", "severity": "minor", "confidence": 0.0}
+                decision = {"type": "unchecked", "title": candidate.get("title", "Потенциальное несоответствие"), "description": candidate.get("description", ""), "recommendation": "Недостаточно нормативного контекста для подтверждения.", "severity": "minor", "confidence": 0.0}
             else:
                 decision = _decision(client, candidate, norm_text)
             finding_id = len(findings) + 1
@@ -189,7 +229,7 @@ def run_first_pass_api(
                 "confidence": decision.get("confidence", candidate.get("confidence")), "normative_sources": norm_results,
             })
         completed_percent = 2 + int(page_index / max(total_pages, 1) * 96)
-        progress(stage="visual", percent=min(98, completed_percent), current_page=page_index, total_pages=total_pages, message=f"Страница {page_index} из {total_pages} завершена.")
+        progress(stage="visual", percent=min(98, completed_percent), current_page=page_index, total_pages=total_pages, message=f"Страница {page_index} из {total_pages} завершена. Подтверждённых кандидатов: {len(candidates)}.")
 
     violations = [x for x in findings if x["type"] == "violation"]
     report = {
