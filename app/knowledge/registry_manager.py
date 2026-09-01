@@ -61,7 +61,10 @@ class DocumentRegistry:
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
-        current_versions = [version for version in document.get("versions", []) if version.get("status") == "current"]
+        current_versions = [
+            version for version in document.get("versions", [])
+            if version.get("status") == "current" and version.get("current_selected_by_user") is True
+        ]
         if not current_versions:
             raise RegistryError(f"Для документа {document_id} не найдена действующая версия.")
         if len(current_versions) > 1:
@@ -107,6 +110,7 @@ class DocumentRegistry:
             "id": version_id,
             "type": version_type,
             "status": "uploaded",
+            "current_selected_by_user": False,
             "effective_from": effective_from,
             "file": file_path,
             "parsed_file": parsed_file,
@@ -145,6 +149,7 @@ class DocumentRegistry:
     def _activate_in_document(document, target):
         for version in document.get("versions", []):
             version["status"] = "current" if version is target else "superseded"
+            version["current_selected_by_user"] = version is target
 
     def activate_version(self, document_id, version_id):
         document = self.get_document(document_id)
@@ -165,18 +170,17 @@ class DocumentRegistry:
         target = next((v for v in versions if v.get("id") == version_id), None)
         if target is None:
             raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
-        was_current = target.get("status") == "current"
+        was_current = target.get("status") == "current" and target.get("current_selected_by_user") is True
         versions.remove(target)
         document_removed = False
         if not versions:
             self.data["documents"] = [item for item in self.get_all_documents() if item.get("id") != document_id]
             document_removed = True
         elif was_current:
-            # Do not silently choose another edition. The user must explicitly
-            # designate the next current version in the UI.
             for version in versions:
                 if version.get("status") == "current":
                     version["status"] = "superseded"
+                version["current_selected_by_user"] = False
         self.save()
         return target, document_removed
 
@@ -213,7 +217,7 @@ class DocumentRegistry:
             if not isinstance(versions, list):
                 errors.append(f"{document_id}: versions должен быть списком.")
                 continue
-            current_count = sum(1 for version in versions if version.get("status") == "current")
+            current_count = sum(1 for version in versions if version.get("status") == "current" and version.get("current_selected_by_user") is True)
             for version in versions:
                 file_path = version.get("file")
                 if file_path and not (PROJECT_ROOT / file_path).exists():
