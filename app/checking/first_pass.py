@@ -9,12 +9,7 @@ from typing import Any
 
 import requests
 
-from app.checking.page_pipeline import (
-    annotate_evidence,
-    build_report,
-    normalize_bbox,
-    render_pdf_pages,
-)
+from app.checking.page_pipeline import annotate_evidence, normalize_bbox, render_pdf_pages
 from app.knowledge.storage import KnowledgeStorage
 from app.rag.retriever import Retriever
 from app.llm.lmstudio_client import LMStudioClient
@@ -38,7 +33,7 @@ def _json_object(text: str) -> dict[str, Any]:
                 value = json.loads(raw[start:end + 1])
                 return value if isinstance(value, dict) else {}
             except json.JSONDecodeError:
-                return {}
+                pass
     return {}
 
 
@@ -84,15 +79,7 @@ def _vision_request(client: LMStudioClient, prompt: str, image_path: Path, max_t
     }
     response = requests.post(f"{client.base_url}/chat/completions", json=payload, timeout=client.timeout)
     response.raise_for_status()
-    message = response.json()["choices"][0]["message"]
-    return str(message.get("content") or "").strip()
-
-
-def _normative_context(retriever: Retriever, query: str, normative_number: str) -> list[dict[str, Any]]:
-    results = retriever.search(query, top_k=MAX_NORM_RESULTS)
-    if not results:
-        return []
-    return results
+    return str(response.json()["choices"][0]["message"].get("content") or "").strip()
 
 
 def _context_text(results: list[dict[str, Any]], normative_number: str) -> str:
@@ -140,7 +127,7 @@ def resolve_current_norm(storage: KnowledgeStorage, canonical_number: str = DEFA
 
 
 def run_first_pass_api(document_id: str, normative_number: str = DEFAULT_NORM_NUMBER) -> dict[str, Any]:
-    """Run every PDF page through VL, RAG and compliance validation and persist evidence/report JSON."""
+    """Run PDF page -> Qwen VL -> RAG -> compliance -> evidence -> report JSON."""
     root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
     pdf_path = root / "source.pdf"
     if not pdf_path.exists():
@@ -162,7 +149,7 @@ def run_first_pass_api(document_id: str, normative_number: str = DEFAULT_NORM_NU
         for candidate in candidates:
             bbox = normalize_bbox(candidate.get("bbox"), page.width, page.height)
             query = " ".join(str(candidate.get(k, "")) for k in ("title", "description", "evidence_text"))
-            norm_results = _normative_context(retriever, query, normative_number)
+            norm_results = retriever.search(query, top_k=MAX_NORM_RESULTS) if query else []
             norm_text = _context_text(norm_results, normative_number)
             if not norm_text:
                 decision = {"type": "unchecked", "title": candidate.get("title", "Потенциальное несоответствие"), "description": candidate.get("description", ""), "recommendation": "Требуется дополнительная проверка нормативной базы.", "severity": "minor", "confidence": 0.0}
@@ -170,9 +157,11 @@ def run_first_pass_api(document_id: str, normative_number: str = DEFAULT_NORM_NU
                 decision = _decision(client, candidate, norm_text)
             finding_id = len(findings) + 1
             evidence_image = None
+            image_url = None
             if bbox:
                 evidence_path = evidence_dir / "annotated" / f"page_{page.page:04d}_finding_{finding_id:03d}.png"
                 evidence_image = annotate_evidence(page.image_path, bbox, evidence_path)
+                image_url = f"/api/reports/evidence/{document_id}/{evidence_path.name}"
             findings.append({
                 "id": finding_id,
                 "type": decision.get("type", "unchecked"),
@@ -188,7 +177,7 @@ def run_first_pass_api(document_id: str, normative_number: str = DEFAULT_NORM_NU
                 "page": page.page,
                 "bbox": bbox,
                 "evidence_image": evidence_image,
-                "image": evidence_image,
+                "image": image_url,
                 "evidence_text": str(candidate.get("evidence_text") or ""),
                 "confidence": decision.get("confidence", candidate.get("confidence")),
                 "normative_sources": norm_results,
