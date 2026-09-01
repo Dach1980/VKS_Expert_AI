@@ -25,8 +25,11 @@ function changeNumberFromFilename(filename) {
 function isUserCurrent(version) {
   return !!(version && version.status === 'current' && version.current_selected_by_user === true);
 }
+function versionFilename(version) {
+  return String((version && (version.original_filename || version.filename)) || '').trim();
+}
 function versionLabel(version) {
-  var filename = String(version.original_filename || version.filename || '');
+  var filename = versionFilename(version);
   var change = changeNumberFromFilename(filename);
   return (change === null ? 'Без изменений' : 'Изменение №' + change)
     + (isUserCurrent(version) ? ' · действующая' : ' · архивная');
@@ -90,7 +93,7 @@ function renderNormVersions(norm) {
     var sid = version.document_id || norm.id;
     var vid = version.version_id || version.id;
     var processing = version.processing || {};
-    var filename = version.original_filename || version.filename || vid;
+    var filename = versionFilename(version) || 'Имя файла не указано';
     var date = version.change_date || version.effective_from || 'Дата не указана';
     var pages = processing.pages_count || version.pages_count || 0;
     var viewer = '<a class="norm-version-view" href="' + esc(pdfUrl(sid, vid)) + '" target="_blank" rel="noopener" title="Открыть PDF в новой странице" aria-label="Открыть PDF в новой странице">' + searchIcon() + '</a>';
@@ -99,10 +102,10 @@ function renderNormVersions(norm) {
       + '<div class="norm-version-info-block">'
       + '<div class="norm-version-label">' + esc(versionLabel(version)) + '</div>'
       + '<div class="norm-version-filename">'
-      + '<span class="norm-version-file-date">' + esc(date) + '</span>'
       + viewer
       + '<span class="norm-version-file-name" title="' + esc(filename) + '">' + esc(filename) + '</span>'
       + '</div>'
+      + '<div class="norm-version-file-date">' + esc(date) + '</div>'
       + '<div class="norm-version-pages">📄 ' + esc(pages) + ' стр.</div>'
       + '</div>'
       + '<div class="norm-version-actions">' + renderVersionActions(norm, version) + '</div>'
@@ -119,7 +122,7 @@ function renderNorms() {
   getNormsData().forEach(function (norm) {
     var versions = Array.isArray(norm.versions) ? norm.versions : [];
     var current = versions.find(isUserCurrent) || null;
-    var currentFilename = current ? (current.original_filename || current.filename || '') : '';
+    var currentFilename = current ? versionFilename(current) : '';
     var change = changeNumberFromFilename(currentFilename);
     var changeText = current
       ? (change === null ? ' — Без изменений' : ' — Изменение №' + esc(change))
@@ -193,7 +196,12 @@ async function loadNorms(expandIds) {
         current_change_date: item.current_change_date,
         status: processing.error ? 'error' : processing.indexing ? 'indexing' : processing.vector_index && processing.vector_metadata ? 'indexed' : 'pending',
         processing: processing,
-        versions: item.versions || [],
+        versions: (item.versions || []).map(function (version) {
+          return Object.assign({}, version, {
+            original_filename: version.original_filename || version.filename || '',
+            filename: version.filename || version.original_filename || ''
+          });
+        }),
         raw: item
       };
     }));
@@ -226,7 +234,7 @@ async function indexNormVersion(cardId, sourceId, versionId) {
     version.processing = version.processing || {};
     version.processing.indexing = true;
     renderNorms();
-    toast('Происходит индексация: ' + (version.original_filename || version.filename || versionId), 'info');
+    toast('Происходит индексация: ' + (versionFilename(version) || versionId), 'info');
     pollNormStatus(cardId, sourceId, versionId);
   } catch (error) {
     toast('Ошибка запуска индексации: ' + error.message, 'error');
@@ -238,7 +246,7 @@ async function activateNormVersion(cardId, sourceId, versionId) {
   if (!norm) return toast('Документ не найден', 'error');
   var version = findVersion(norm, sourceId, versionId);
   if (!version) return toast('Версия не найдена. Обновите список.', 'error');
-  var filename = version.original_filename || version.filename || versionId;
+  var filename = versionFilename(version) || versionId;
   if (!confirm('Сделать версию «' + filename + '» действующей?')) return;
 
   try {
@@ -301,7 +309,7 @@ async function deleteNormVersion(cardId, sourceId, versionId) {
   var norm = getNormByIdLocal(cardId);
   var version = findVersion(norm, sourceId, versionId);
   if (!norm || !version) return;
-  var filename = version.original_filename || version.filename || versionId;
+  var filename = versionFilename(version) || versionId;
   if (!confirm('Удалить загруженный файл «' + filename + '»?')) return;
 
   try {
@@ -381,6 +389,8 @@ window.handleNormFiles = handleNormFiles;
 window.uploadNormFile = uploadNormFile;
 window.deleteNorm = deleteNorm;
 window.toggleNormVersions = toggleNormVersions;
+
+console.log('[VKS Expert AI][Norms] norms.js v7 loaded');
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { loadNorms(); }, { once: true });
 else loadNorms();
