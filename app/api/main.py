@@ -6,7 +6,8 @@ Application entry point.
 """
 
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
 from app.api.norms import router as norms_router
@@ -32,18 +33,29 @@ Capabilities:
 )
 
 # The frontend may be opened through either localhost or 127.0.0.1.
-# Keep both origins explicit so browser requests to the local API receive
-# CORS headers even when the hostnames differ.
+CORS_ORIGINS = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Return a CORS-compatible JSON error instead of an opaque browser 500."""
+    print(f"[Project Expert AI][API] Unhandled {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Внутренняя ошибка API: {exc}"},
+    )
+
 
 app.include_router(router)
 for route in norms_router.routes:
