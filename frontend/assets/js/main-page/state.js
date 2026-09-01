@@ -23,6 +23,13 @@ var nextDocId = 1;
 var nextNormId = 1;
 var currentReport = null;
 var reportsData = [];
+try {
+  var savedReports = JSON.parse(localStorage.getItem('projectExpertAI.reports') || '[]');
+  if (Array.isArray(savedReports)) reportsData = savedReports;
+} catch (error) {
+  console.warn('[VKS Expert AI] Не удалось загрузить сохраненные отчеты:', error);
+}
+
 var settingsData = {
   autoCheck: true,
   autoIndex: true,
