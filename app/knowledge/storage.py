@@ -202,6 +202,13 @@ class KnowledgeStorage:
 
     @classmethod
     def _extract_parsed_metadata(cls, data):
+        """Extract explicit metadata fields from the JSON belonging to this version.
+
+        We intentionally do not scan arbitrary PDF text for ``Изменение №...``:
+        normative PDFs routinely contain references to other amendments. The
+        version's parsed JSON is the authoritative source when it exposes an
+        explicit change/amendment field.
+        """
         result: dict[str, str] = {}
         for key, value in cls._walk_strings(data):
             k = key.lower().strip()
@@ -210,7 +217,7 @@ class KnowledgeStorage:
             text = value.strip()
             if not text:
                 continue
-            if k in {"document_number", "norm_number", "normative_number", "standard_number", "number", "code", "document", "standard"}:
+            if k in {"document_number", "norm_number", "normative_number", "standard_number", "number", "code"}:
                 m = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", text)
                 if m:
                     result.setdefault("number", re.sub(r"\s+", " ", m.group(1)).strip())
@@ -242,6 +249,7 @@ class KnowledgeStorage:
                 return 0
 
     def get_version_metadata(self, document_id, version_id=None):
+        """Return metadata with parsed JSON taking precedence over stored fallbacks."""
         version = self.get_version(document_id, version_id)
         pdf = self.resolve(version.get("file", ""))
         parsed = self.resolve(version.get("parsed_file", ""))
@@ -256,10 +264,44 @@ class KnowledgeStorage:
             try:
                 parsed_meta = self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig")))
                 for key, value in parsed_meta.items():
-                    result.setdefault(key, value)
+                    # Parsed JSON belongs to this exact version, so it is more
+                    # authoritative than a stale registry fallback.
+                    result[key] = value
             except (OSError, json.JSONDecodeError):
                 pass
         return result
+
+    def refresh_version_metadata_from_parsed(self, document_id, version_id):
+        """Synchronize explicit metadata from this version's parsed JSON into Registry."""
+        version = self.get_version(document_id, version_id)
+        parsed = self.resolve(version.get("parsed_file", ""))
+        if not parsed.exists():
+            return {}
+        try:
+            data = json.loads(parsed.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        meta = self._extract_parsed_metadata(data)
+        changed = False
+        if meta.get("number") and meta["number"] != self.registry.get_document(document_id).get("number"):
+            self.registry.get_document(document_id)["number"] = meta["number"]
+            changed = True
+        if meta.get("title"):
+            document = self.registry.get_document(document_id)
+            if document.get("title") != meta["title"]:
+                document["title"] = meta["title"]
+                changed = True
+        if meta.get("change_number") is not None:
+            if str(version.get("change_number", "")) != str(meta["change_number"]):
+                version["change_number"] = str(meta["change_number"])
+                changed = True
+        if meta.get("change_date"):
+            if str(version.get("change_date", "")) != str(meta["change_date"]):
+                version["change_date"] = str(meta["change_date"])
+                changed = True
+        if changed:
+            self.registry.save()
+        return meta
 
     def list_statuses(self):
         result = []
