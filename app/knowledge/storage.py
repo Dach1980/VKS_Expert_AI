@@ -1,4 +1,4 @@
-"""Project Expert AI — KnowledgeStorage v3."""
+"""Project Expert AI — KnowledgeStorage v4."""
 from __future__ import annotations
 
 import json
@@ -117,7 +117,7 @@ class KnowledgeStorage:
     @staticmethod
     def _classify_uploaded_filename(filename: str) -> tuple[str | None, str | None]:
         stem = Path(filename).stem.replace("_", " ").replace("-", " ")
-        if re.search(r"(?i)\bбазов(?:ая|ая версия)\b|\bбез\s+изменений\b", stem):
+        if re.search(r"(?i)\bбазов(?:ая|ую|ая версия)\b|\bбез\s+изменений\b", stem):
             return "base", None
         match = re.search(r"(?i)\b(?:изм(?:енение|енения)?|изменени[ея]|amendment)\s*№?\s*(\d+)\b", stem)
         if match:
@@ -177,10 +177,7 @@ class KnowledgeStorage:
     def start_indexing(self, document_id, version_id):
         p = self._indexing_marker_path(document_id, version_id)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(
-            json.dumps({"started_at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        p.write_text(json.dumps({"started_at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False), encoding="utf-8")
 
     def finish_indexing(self, document_id, version_id):
         self._indexing_marker_path(document_id, version_id).unlink(missing_ok=True)
@@ -191,10 +188,7 @@ class KnowledgeStorage:
     def write_index_error(self, document_id, version_id, error):
         p = self._index_error_path(document_id, version_id)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(
-            json.dumps({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        p.write_text(json.dumps({"error": str(error), "error_type": type(error).__name__, "checked_at": datetime.now().isoformat()}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @staticmethod
     def _walk_strings(value):
@@ -271,16 +265,18 @@ class KnowledgeStorage:
         result = []
         for document in self.registry.get_all_documents():
             versions = document.get("versions", [])
-            current = next((v for v in versions if v.get("status") == "current"), None) or (versions[0] if versions else None)
-            if current is None:
+            if not versions:
                 continue
-            processing = self._version_processing(document["id"], current["id"])
+            current = next((v for v in versions if v.get("status") == "current"), None)
+            processing = self._version_processing(document["id"], current["id"]) if current else {"pages_count": 0, "vector_index": False, "vector_metadata": False, "indexing": False}
             result.append({
                 "document_id": document["id"],
                 "number": document.get("number"),
                 "title": document.get("title"),
-                "version_id": current.get("id"),
-                "effective_from": current.get("effective_from"),
+                "version_id": current.get("id") if current else None,
+                "effective_from": current.get("effective_from") if current else None,
+                "current_change_number": self.get_version_metadata(document["id"], current["id"]).get("change_number") if current else None,
+                "current_change_date": self.get_version_metadata(document["id"], current["id"]).get("change_date") if current else None,
                 "processing": processing,
                 "versions": [self._version_status(document["id"], v) for v in versions],
             })
@@ -291,7 +287,9 @@ class KnowledgeStorage:
         return {
             **version,
             "document_id": document_id,
+            "version_id": version.get("id"),
             "filename": filename,
+            "original_filename": version.get("original_filename") or filename,
             "processing": self._version_processing(document_id, version.get("id")),
         }
 
