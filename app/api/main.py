@@ -31,9 +31,15 @@ Capabilities:
     version="0.1.0",
 )
 
+# The frontend may be opened through either localhost or 127.0.0.1.
+# Keep both origins explicit so browser requests to the local API receive
+# CORS headers even when the hostnames differ.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
