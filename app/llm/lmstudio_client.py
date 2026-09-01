@@ -1,6 +1,6 @@
 """
 VKS Expert AI
-LM Studio Client v1.6
+LM Studio Client v1.7
 
 Purpose:
 Communication with LM Studio local server.
@@ -9,21 +9,26 @@ Features:
 - OpenAI compatible API
 - Qwen3.5 thinking mode control
 - reasoning_content protection
+- deterministic selection of a chat model (never an embedding model)
 - RAG ready
 - Production-safe output filtering
 """
-
 
 from typing import Optional
 import requests
 
 
+PREFERRED_CHAT_MODELS = (
+    "qwen3.5-9b-mtp",
+    "qwen/qwen3.5-9b",
+    "qwen3.5-9b",
+    "qwen3.5-4b-mtp",
+    "qwen/qwen3.5-4b",
+)
+
 
 class LMStudioClient:
-    """
-    Client for LM Studio OpenAI-compatible API.
-    """
-
+    """Client for LM Studio OpenAI-compatible API."""
 
     def __init__(
         self,
@@ -31,28 +36,47 @@ class LMStudioClient:
         model: Optional[str] = None,
         timeout: int = 300,
     ):
-
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
 
-
-
     def get_models(self):
-        """
-        Get available models.
-        """
-
-        response = requests.get(
-            f"{self.base_url}/models",
-            timeout=self.timeout,
-        )
-
+        """Get available models from LM Studio."""
+        response = requests.get(f"{self.base_url}/models", timeout=self.timeout)
         response.raise_for_status()
-
         return response.json()
 
+    @staticmethod
+    def _select_chat_model(models: dict) -> str:
+        """Select an LLM model and never accidentally select the embedding model."""
+        available = [
+            str(item.get("id", ""))
+            for item in models.get("data", [])
+            if isinstance(item, dict) and item.get("id")
+        ]
+        if not available:
+            raise RuntimeError("No models available")
 
+        for preferred in PREFERRED_CHAT_MODELS:
+            if preferred in available:
+                return preferred
+
+        # Fallback: prefer a Qwen/chat-looking model and explicitly exclude
+        # embedding models. This keeps /v1/models ordering from deciding which
+        # model receives the checking prompt.
+        candidates = [
+            model for model in available
+            if "embedding" not in model.lower()
+            and any(token in model.lower() for token in ("qwen", "llama", "mistral", "gemma"))
+        ]
+        if candidates:
+            return candidates[0]
+
+        candidates = [model for model in available if "embedding" not in model.lower()]
+        if candidates:
+            return candidates[0]
+
+        raise RuntimeError("No chat-capable model available; only embedding models are loaded")
 
     def chat(
         self,
@@ -62,250 +86,71 @@ class LMStudioClient:
         max_tokens: int = 2048,
         enable_thinking: bool = False,
     ) -> str:
-        """
-        Send request to LM Studio.
-
-        Important:
-        reasoning_content is NEVER returned.
-        """
-
-
+        """Send a chat request to a selected LM Studio chat model."""
         if self.model is None:
-
             models = self.get_models()
-
-            if not models.get("data"):
-
-                raise RuntimeError(
-                    "No models available"
-                )
-
-
-            self.model = (
-                models["data"][0]["id"]
-            )
-
-
+            self.model = self._select_chat_model(models)
 
         messages = []
-
-
         if system_prompt:
-
-            messages.append(
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                }
-            )
-
-
-        messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        )
-
-
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
 
         payload = {
-
             "model": self.model,
-
             "messages": messages,
-
             "temperature": temperature,
-
             "max_tokens": max_tokens,
-
-
-            # Qwen3/Qwen3.5 control
-            # Disable internal reasoning
-            "extra_body":
-            {
-                "chat_template_kwargs":
-                {
+            "extra_body": {
+                "chat_template_kwargs": {
                     "enable_thinking": enable_thinking
                 }
-            }
-
+            },
         }
 
-
-
         print("\nLM STUDIO REQUEST:")
-        print(
-            {
-                "model": self.model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "thinking": enable_thinking,
-            }
-        )
-
-
+        print({
+            "model": self.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "thinking": enable_thinking,
+        })
 
         response = requests.post(
-
             f"{self.base_url}/chat/completions",
-
             json=payload,
-
-            timeout=self.timeout
-
+            timeout=self.timeout,
         )
-
-
         response.raise_for_status()
-
-
         data = response.json()
-
-
-
-        message = (
-            data["choices"][0]
-            ["message"]
-        )
-
-
-        content = (
-            message.get(
-                "content",
-                ""
-            )
-            or ""
-        )
-
-
-        reasoning = (
-            message.get(
-                "reasoning_content",
-                ""
-            )
-            or ""
-        )
-
-
-
-        # --------------------------------------------------
-        # Security check
-        # Never expose chain-of-thought
-        # --------------------------------------------------
+        message = data["choices"][0]["message"]
+        content = message.get("content", "") or ""
+        reasoning = message.get("reasoning_content", "") or ""
 
         if reasoning.strip():
-
-            print(
-                "WARNING:"
-                " reasoning_content received from model"
-            )
-
-
-
-        # --------------------------------------------------
-        # Normal answer
-        # --------------------------------------------------
+            print("WARNING: reasoning_content received from model")
 
         if content.strip():
-
             return content.strip()
-
-
-
-        # --------------------------------------------------
-        # Empty answer protection
-        # --------------------------------------------------
-
         if reasoning.strip():
-
-            return (
-                "LLM вернул только внутреннее рассуждение. "
-                "Проверьте режим Qwen thinking в LM Studio."
-            )
-
-
-        return (
-            "LLM вернул пустой ответ."
-        )
-
+            return "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+        return "LLM вернул пустой ответ."
 
 
 def demo():
-
-
-    print("=" * 70)
-    print(
-        "VKS Expert AI"
-    )
-    print(
-        "LM Studio Client v1.6"
-    )
-    print("=" * 70)
-
-
-
-    client = LMStudioClient(
-        model="qwen3.5-4b-mtp"
-    )
-
-
-
-    print("\nAvailable models:")
-
-
-    models = client.get_models()
-
-
-    for model in models.get(
-        "data",
-        []
-    ):
-
-        print(
-            "-",
-            model["id"]
-        )
-
-
-
-    print("\nTest request...\n")
-
-
-
+    client = LMStudioClient(model="qwen3.5-4b-mtp")
+    print("Available models:")
+    for model in client.get_models().get("data", []):
+        print("-", model["id"])
     answer = client.chat(
-
-        """
-Объясни назначение СП 30.13330.2020
-для проектирования внутренних систем
-водоснабжения.
-""",
-
-        system_prompt="""
-Ты инженерный AI-ассистент VKS Expert AI.
-
-Отвечай только на русском языке.
-Используй инженерную терминологию.
-Не показывай внутренние рассуждения модели.
-""",
-
+        "Объясни назначение СП 30.13330.2020 для проектирования внутренних систем водоснабжения.",
+        system_prompt="Ты инженерный AI-ассистент VKS Expert AI. Отвечай только на русском языке. Не показывай внутренние рассуждения модели.",
         temperature=0.1,
-
         max_tokens=2048,
-
-        enable_thinking=False
-
+        enable_thinking=False,
     )
-
-
-
-    print("\nANSWER:")
-    print(answer)
-
-
+    print("\nANSWER:\n", answer)
 
 
 if __name__ == "__main__":
-
     demo()
-    
