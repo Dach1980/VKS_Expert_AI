@@ -1,0 +1,64 @@
+/* Norms version list: keep file names readable and the PDF viewer icon beside them. */
+.norm-version-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.norm-version-info-block {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.norm-version-filename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.norm-version-file-date {
+  flex: 0 0 auto;
+}
+
+.norm-version-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.norm-version-view {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.norm-version-view:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-hover);
+}
+
+.norm-version-view svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .norm-version-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .norm-version-actions {
+    justify-content: flex-start;
+  }
+}
