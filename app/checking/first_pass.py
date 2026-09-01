@@ -19,6 +19,7 @@ CHECK_DPI = 144
 MAX_NORM_RESULTS = 5
 MAX_NORM_CHARS = 6000
 MAX_DECISION_CHARS = 12000
+REPORT_API_BASE = "http://127.0.0.1:8000"
 
 
 def _json_object(text: str) -> dict[str, Any]:
@@ -161,7 +162,7 @@ def run_first_pass_api(document_id: str, normative_number: str = DEFAULT_NORM_NU
             if bbox:
                 evidence_path = evidence_dir / "annotated" / f"page_{page.page:04d}_finding_{finding_id:03d}.png"
                 evidence_image = annotate_evidence(page.image_path, bbox, evidence_path)
-                image_url = f"/api/reports/evidence/{document_id}/{evidence_path.name}"
+                image_url = f"{REPORT_API_BASE}/api/reports/evidence/{document_id}/{evidence_path.name}"
             findings.append({
                 "id": finding_id,
                 "type": decision.get("type", "unchecked"),
