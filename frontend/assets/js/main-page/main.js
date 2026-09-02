@@ -1,56 +1,18 @@
-// ============================================================
-// VKS Expert AI
-// main.js v9
-// ============================================================
-// Главная точка входа приложения.
-// ES-модули не публикуют свои функции в window автоматически, поэтому
-// навигация реализуется здесь через DOM-события, а совместимость с
-// существующими inline onclick сохраняется через window.navigateTo/switchSection.
-
-import './state.js?v=20260901-9';
-import './utils.js?v=20260901-9';
-import './dashboard.js?v=20260901-9';
-import './norms.js?v=20260901-9';
-import './norms-metadata-fix.js?v=20260901-9';
-import './documents.js?v=20260901-9';
-import './checks.js?v=20260901-9';
-import './reports.js?v=20260901-9';
-import './settings.js?v=20260901-9';
-
-const SECTION_LABELS = {
-  dashboard: 'Dashboard', norms: 'Нормы', docs: 'Документация', checks: 'Проверки', reports: 'Отчёты', settings: 'Настройки',
-};
-
-function switchSection(sectionName) {
-  const name = String(sectionName || 'dashboard');
-  const target = document.getElementById(name + 'Section');
-  if (!target) { console.warn('[VKS Expert AI] Раздел не найден:', name); return false; }
-  document.querySelectorAll('.section').forEach((section) => section.classList.toggle('active', section === target));
-  document.querySelectorAll('.sidebar .nav-item[data-section]').forEach((item) => item.classList.toggle('active', item.dataset.section === name));
-  const breadcrumb = document.getElementById('breadcrumbCurrent');
-  if (breadcrumb) breadcrumb.textContent = SECTION_LABELS[name] || name;
-  window.currentSection = name;
-  if (name === 'dashboard' && typeof window.renderDashboard === 'function') window.renderDashboard();
-  if (name === 'norms' && typeof window.renderNorms === 'function') window.renderNorms();
-  if (name === 'docs' && typeof window.renderDocs === 'function') window.renderDocs();
-  if (name === 'checks' && typeof window.renderChecks === 'function') window.renderChecks();
-  if (name === 'reports' && typeof window.renderReports === 'function') window.renderReports();
-  if (name === 'settings' && typeof window.renderSettings === 'function') window.renderSettings();
-  console.log('[VKS Expert AI] Переход в раздел:', name);
-  return true;
-}
-function navigateTo(sectionName) { return switchSection(sectionName); }
-function initNavigation() {
-  document.querySelectorAll('.sidebar .nav-item[data-section]').forEach((item) => {
-    item.addEventListener('click', (event) => { event.preventDefault(); switchSection(item.dataset.section); });
-  });
-  window.switchSection = switchSection; window.navigateTo = navigateTo; switchSection('dashboard');
-}
-function installFavicon() {
-  const existing = document.querySelector('link[rel="icon"]');
-  if (existing) { existing.href = './favicon.svg?v=20260901-4'; return; }
-  const link = document.createElement('link'); link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = './favicon.svg?v=20260901-4'; document.head.appendChild(link);
-}
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { initNavigation(); installFavicon(); }, { once: true });
-else { initNavigation(); installFavicon(); }
-console.log('[VKS Expert AI] Main page modules loaded — main.js v9');
+// Project Expert AI — main entry point and live counters
+import './state.js?v=20260902-2';
+import './utils.js?v=20260902-2';
+import './dashboard.js?v=20260902-2';
+import './norms.js?v=20260902-2';
+import './norms-metadata-fix.js?v=20260902-2';
+import './documents.js?v=20260902-2';
+import './checks.js?v=20260902-2';
+import './reports.js?v=20260902-2';
+import './settings.js?v=20260902-2';
+const SECTION_LABELS={dashboard:'Dashboard',norms:'Нормы',docs:'Документация',checks:'Замечания',reports:'Отчёты',settings:'Настройки'};
+function updateNavCounters(){var norms=Array.isArray(window.normsData)?window.normsData.length:0,docs=Array.isArray(window.docsData)?window.docsData.length:0,checks=Array.isArray(window.checksData)?window.checksData.filter(function(x){return x&&x.type==='violation';}).length:0,reports=Array.isArray(window.reportsData)?window.reportsData.length:0;var n=document.getElementById('normsBadge'),d=document.getElementById('docsBadge'),c=document.getElementById('checksBadge'),r=document.getElementById('reportsBadge');if(n)n.textContent=norms;if(d)d.textContent=docs;if(c)c.textContent=checks;if(r)r.textContent=reports;var nav=document.querySelector('.nav-item[data-section="checks"]');if(nav){var spans=nav.querySelectorAll('span');if(spans.length>1)spans[1].textContent='Замечания';}}
+function switchSection(name){name=String(name||'dashboard');var target=document.getElementById(name+'Section');if(!target)return false;document.querySelectorAll('.section').forEach(function(x){x.classList.toggle('active',x===target);});document.querySelectorAll('.sidebar .nav-item[data-section]').forEach(function(x){x.classList.toggle('active',x.dataset.section===name);});var b=document.getElementById('breadcrumbCurrent');if(b)b.textContent=SECTION_LABELS[name]||name;window.currentSection=name;updateNavCounters();if(name==='dashboard'&&window.renderDashboard)window.renderDashboard();if(name==='norms'&&window.renderNorms)window.renderNorms();if(name==='docs'&&window.renderDocs)window.renderDocs();if(name==='checks'&&window.renderChecks)window.renderChecks();if(name==='reports'&&window.renderReports)window.renderReports();if(name==='settings'&&window.renderSettings)window.renderSettings();return true;}
+function navigateTo(name){return switchSection(name);}
+window.updateNavCounters=updateNavCounters;window.switchSection=switchSection;window.navigateTo=navigateTo;
+function init(){document.querySelectorAll('.sidebar .nav-item[data-section]').forEach(function(item){item.addEventListener('click',function(e){e.preventDefault();switchSection(item.dataset.section);});});switchSection('dashboard');setTimeout(function(){if(window.loadDocs)window.loadDocs();if(window.loadNorms)window.loadNorms();if(window.loadReports)window.loadReports();updateNavCounters();},100);setInterval(function(){updateNavCounters();if(window.loadReports)window.loadReports();},5000);}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+console.log('[Project Expert AI] main.js loaded — server-backed counters and reports');

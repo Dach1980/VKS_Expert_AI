@@ -33,6 +33,23 @@ def _report_for_document(document_id: str) -> dict:
     return report
 
 
+@router.get("")
+def list_reports():
+    """Return all persisted reports, newest first, for the Reports UI."""
+    items = []
+    if DOCUMENTS_ROOT.exists():
+        for root in DOCUMENTS_ROOT.iterdir():
+            if not root.is_dir():
+                continue
+            report = _load_saved_report(root.name)
+            if not report:
+                continue
+            report["template"] = REPORT_TEMPLATE
+            items.append(report)
+    items.sort(key=lambda x: str(x.get("checked_at") or ""), reverse=True)
+    return {"reports": items}
+
+
 @router.get("/{document_id}")
 def get_report(document_id: str):
     return {"success": True, **_report_for_document(document_id)}
