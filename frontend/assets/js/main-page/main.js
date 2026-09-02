@@ -2,7 +2,7 @@
 import './state.js?v=20260902-3';
 import './utils.js?v=20260902-3';
 import './dashboard.js?v=20260902-3';
-import './norms.js?v=20260902-3';
+import './norms.js?v=20260903-1';
 import './norms-metadata-fix.js?v=20260902-3';
 import './documents.js?v=20260902-3';
 import './checks.js?v=20260902-3';
