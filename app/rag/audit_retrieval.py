@@ -1,9 +1,11 @@
-"""Higher-recall, value-aware retrieval helpers for engineering norm-control audits."""
+"""Skill-routed, value-aware retrieval helpers for engineering norm-control audits."""
 from __future__ import annotations
+
 import re
 from typing import Any
 
 from app.checking.engineering_values import normalize_engineering_value
+from app.rag.normative_router import filter_retrievers, route_candidate
 
 
 def _clean(value: Any) -> str:
@@ -51,7 +53,6 @@ def _text(result: dict[str, Any]) -> str:
 
 
 def _value_relevance(candidate: dict[str, Any], text: str) -> float:
-    """Prefer clauses that discuss the same parameter and engineering value."""
     parameter = _clean(candidate.get("parameter"))
     raw = _clean(candidate.get("project_value") or candidate.get("evidence_text"))
     normalized = normalize_engineering_value(raw, parameter)
@@ -70,12 +71,22 @@ def _value_relevance(candidate: dict[str, Any], text: str) -> float:
     return keyword_score + numeric_score + unit_score + kind_score
 
 
-def retrieve_audit_context(retrievers: list[tuple[dict[str, Any], dict[str, Any], Any]], candidate: dict[str, Any], top_k: int = 6) -> list[dict[str, Any]]:
-    """Retrieve several queries across all active norms, then rerank by evidence relevance."""
+def retrieve_audit_context(
+    retrievers: list[tuple[dict[str, Any], dict[str, Any], Any]],
+    candidate: dict[str, Any],
+    top_k: int = 6,
+    skill_id: str = "vk_wastewater",
+) -> list[dict[str, Any]]:
+    """Retrieve only from normative documents allowed by the selected skill and route."""
+    route = route_candidate(candidate, skill_id)
+    scoped_retrievers = filter_retrievers(retrievers, route)
+    if not scoped_retrievers:
+        return []
+    candidate["normative_route"] = route
     merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     queries = build_audit_queries(candidate)
-    for query_index, query in enumerate(queries):
-        for document, version, retriever in retrievers:
+    for query in queries:
+        for document, version, retriever in scoped_retrievers:
             number = str(document.get("number") or document.get("id") or "")
             title = str(document.get("title") or "")
             try:
@@ -100,9 +111,10 @@ def retrieve_audit_context(retrievers: list[tuple[dict[str, Any], dict[str, Any]
                 item["best_score"] = max(item["best_score"], float(result.get("score", 0) or 0))
     ranked = list(merged.values())
     for item in ranked:
-        text = _text(item)
-        value_bonus = _value_relevance(candidate, text)
+        value_bonus = _value_relevance(candidate, _text(item))
         item["value_relevance"] = value_bonus
+        item["route_scope"] = route["scope"]
+        item["route_reason"] = route["reason"]
         item["score"] = item["best_score"] + min(0.20, max(0, item["query_hits"] - 1) * 0.05) + value_bonus
     ranked.sort(key=lambda x: float(x.get("score", 0) or 0), reverse=True)
     return ranked[:top_k]
