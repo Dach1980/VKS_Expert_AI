@@ -55,10 +55,6 @@ class Retriever:
         if not self.metadata_file.exists():
             raise FileNotFoundError(f"Метаданные нормативного индекса не найдены: {self.metadata_file}")
 
-        # FAISS on Windows can fail to open an existing index when any parent
-        # directory contains Cyrillic characters. The project deliberately
-        # allows Cyrillic document/version IDs, so copy the file through Python
-        # to an ASCII-only temporary path before asking FAISS to read it.
         temp_index_file = self.storage.project_root / f".faiss_read_{os.getpid()}_{id(self)}.index"
         try:
             shutil.copy2(self.index_file, temp_index_file)
@@ -99,6 +95,10 @@ class Retriever:
             "source": r["source"],
             "score": r["score"],
             "content": r["item"].get("content", ""),
+            # Keep parser metadata available to the normative requirement layer.
+            # It may contain the clause/section when the text chunk itself does not.
+            "metadata": r["item"].get("metadata", {}),
+            "chunk_id": r["item"].get("chunk_id"),
         } for r in merged[:top_k]]
 
 
