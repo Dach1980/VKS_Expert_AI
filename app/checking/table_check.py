@@ -37,6 +37,67 @@ def _normalized(raw: Any, parameter: str, source: str = "") -> NormalizedEnginee
     return normalize_engineering_value(raw, parameter=parameter, source=source)
 
 
+def deterministic_numeric_comparison(
+    candidate: dict[str, Any],
+    decision: dict[str, Any],
+    requirements: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Apply only an unambiguous numeric requirement comparison.
+
+    The LLM remains responsible for semantic/conditional checks. This helper is
+    deliberately conservative: it changes the decision only when a retrieved
+    requirement has an explicit operator, numeric value, compatible unit/kind,
+    and enough parameter overlap to tie the requirement to the project fact.
+    """
+    requirements = requirements or []
+    parameter = str(decision.get("parameter") or candidate.get("parameter") or "").strip()
+    project_raw = str(decision.get("project_value") or candidate.get("project_value") or "").strip()
+    project = _normalized(project_raw, parameter, str(candidate.get("source_row") or candidate.get("evidence_text") or ""))
+    if project.value is None or not parameter:
+        return decision
+
+    parameter_words = {word.lower() for word in __import__("re").findall(r"[A-Za-zА-Яа-яЁё]{4,}", parameter)}
+    for requirement in requirements:
+        normative_value = requirement.get("normative_value")
+        operator = str(requirement.get("operator") or "")
+        if normative_value is None or operator not in {">=", "<=", "="}:
+            continue
+        text = str(requirement.get("requirement") or "")
+        overlap = sum(word in text.lower() for word in parameter_words)
+        if parameter_words and overlap == 0:
+            continue
+        normative_unit = str(requirement.get("normative_unit") or "")
+        requirement_raw = f"{normative_value} {normative_unit}".strip()
+        norm = _normalized(requirement_raw, parameter, text)
+        if norm.value is None:
+            continue
+        if project.unit and norm.unit and project.unit != norm.unit:
+            continue
+        if project.kind != norm.kind and not ({project.kind, norm.kind} <= {"number", "length"}):
+            continue
+        if operator == ">=":
+            ok = project.value >= norm.value
+            comparison = "в пределах" if ok else "ниже"
+        elif operator == "<=":
+            ok = project.value <= norm.value
+            comparison = "в пределах" if ok else "выше"
+        else:
+            ok = project.value == norm.value
+            comparison = "равно" if ok else ("выше" if project.value > norm.value else "ниже")
+        result = "compliant" if ok else "violation"
+        updated = dict(decision)
+        updated["type"] = result
+        updated["norm"] = str(requirement.get("norm") or decision.get("norm") or "")
+        updated["clause"] = str(requirement.get("clause") or decision.get("clause") or "")
+        updated["normative_value"] = requirement_raw
+        updated["normative_unit"] = normative_unit or str(decision.get("normative_unit") or "")
+        updated["comparison"] = comparison
+        if result == "violation":
+            updated["recommendation"] = str(decision.get("recommendation") or "Привести параметр в соответствие с указанным нормативным требованием.")
+        return updated
+    return decision
+
+
 def build_table_check_row(candidate: dict[str, Any], decision: dict[str, Any], page: int | str, sources: list[dict[str, Any]] | None = None) -> TableCheckRow:
     parameter = str(decision.get("parameter") or candidate.get("parameter") or "").strip()
     project_raw = str(decision.get("project_value") or candidate.get("project_value") or "").strip()
