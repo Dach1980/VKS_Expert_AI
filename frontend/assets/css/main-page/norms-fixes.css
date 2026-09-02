@@ -1,6 +1,5 @@
 /* Normative version list layout — stable on desktop and narrow cards. */
 .norm-versions-panel {
-  display: block;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -103,7 +102,7 @@
   display: block !important;
   margin-top: 3px;
   color: var(--text-secondary);
-  white-space: nowrap;
+  white-space: nowrap !important;
 }
 
 .norm-version-actions {
