@@ -153,7 +153,6 @@ def build_pdf(report: dict) -> bytes:
 
     findings = _findings(report)
     summary = report.get("summary") or {}
-    basis = report.get("normative_basis") or []
     story = [
         Paragraph("PROJECT EXPERT AI", title),
         Spacer(1, 3 * mm),
@@ -176,13 +175,16 @@ def build_pdf(report: dict) -> bytes:
 
     table_data = [[Paragraph("№", cellb), Paragraph("Лист", cellb), Paragraph("Параметр", cellb), Paragraph("Значение в исходнике", cellb), Paragraph("Нормативное требование", cellb), Paragraph("СП / пункт", cellb), Paragraph("Результат", cellb), Paragraph("Рекомендация", cellb)]]
     for index, finding in enumerate(findings, 1):
+        norm = _text(finding.get("norm")) or "—"
+        clause = _text(finding.get("clause"))
+        norm_clause = f"{norm} / п. {clause}" if clause else norm
         table_data.append([
             Paragraph(str(index), cell),
             Paragraph(_p(finding.get("sheet") or finding.get("page") or "—"), cell),
             Paragraph(_p(_parameter(finding)), cell),
             Paragraph(_p(_project_value(finding)), cell),
             Paragraph(_p(_norm_requirement(finding)), cell),
-            Paragraph(_p((_text(finding.get("norm")) or "—") + ((" / п. " + _text(finding.get("clause"))) if _text(finding.get("clause")) else "")), cell),
+            Paragraph(_p(norm_clause), cell),
             Paragraph(_p(_status(finding)), cell),
             Paragraph(_p(finding.get("recommendation") or "—"), cell),
         ])
@@ -195,7 +197,11 @@ def build_pdf(report: dict) -> bytes:
         story.append(Paragraph("Доказательств нет: результатов проверки не сохранено.", body))
     for index, finding in enumerate(findings, 1):
         story.append(Paragraph(f"4.{index}. Результат №{index} — {_p(_parameter(finding))}", h2))
-        story.append(Paragraph(f"<b>Страница:</b> {_p(finding.get('page') or '—')} &nbsp;&nbsp; <b>Статус:</b> {_p(_status(finding))} &nbsp;&nbsp; <b>СП / пункт:</b> {_p((_text(finding.get('norm')) or '—') + ((" / п. " + _text(finding.get('clause'))) if _text(finding.get('clause')) else ''))}", small))
+        norm = _text(finding.get("norm")) or "—"
+        clause = _text(finding.get("clause"))
+        norm_clause = f"{norm} / п. {clause}" if clause else norm
+        page = _p(finding.get("page") or "—")
+        story.append(Paragraph(f"<b>Страница:</b> {page} &nbsp;&nbsp; <b>Статус:</b> {_p(_status(finding))} &nbsp;&nbsp; <b>СП / пункт:</b> {_p(norm_clause)}", small))
         story.append(Paragraph(f"<b>Значение в исходнике:</b> {_p(_project_value(finding))}", body))
         story.append(Paragraph(f"<b>Нормативное требование:</b> {_p(_norm_requirement(finding))}", body))
         if _text(finding.get("comparison")):
@@ -213,10 +219,11 @@ def build_pdf(report: dict) -> bytes:
 
     story += [Spacer(1, 4 * mm), Paragraph("5. Нормативные источники", h1)]
     sources = _sources(findings)
-    if not sources:
-        sources = [f"{_text(x.get('number'))} — {_text(x.get('title'))}" for x in basis if _text(x.get('number'))]
-    for index, source in enumerate(sources, 1):
-        story.append(Paragraph(f"{index}. {_p(source)}", body))
-    story += [Spacer(1, 5 * mm), Paragraph("6. Примечание", h1), Paragraph("Результаты со статусом «Требует проверки» не являются установленными нарушениями. Подтверждённые замечания должны содержать конкретный проектный факт, применимое нормативное требование и доказательное изображение с совпадающим номером.", body)]
+    if sources:
+        for source in sources:
+            story.append(Paragraph(f"• {_p(source)}", body))
+    else:
+        story.append(Paragraph("Нормативные источники для подтверждённых результатов отсутствуют.", body))
+
     doc.build(story)
     return out.getvalue()
