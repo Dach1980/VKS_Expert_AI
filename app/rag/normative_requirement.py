@@ -10,13 +10,11 @@ _CLAUSE_PATTERNS = (
 )
 
 _NUMBER_PATTERNS = (
-    # A number is normative only when tied to an explicit requirement operator.
     re.compile(
         r"(?:не\s+менее|не\s+ниже|не\s+более|не\s+выше|равен|равна|равно|>=|<=)\s*"
         r"([0-9]+(?:[.,][0-9]+)?)",
         re.IGNORECASE,
     ),
-    # Or when immediately followed by a recognized engineering unit.
     re.compile(
         r"([0-9]+(?:[.,][0-9]+)?)\s*(мм|м\b|л\s*/\s*с|м\s*[³3]\s*/\s*(?:ч|сут)|кпа\b|м/с)",
         re.IGNORECASE,
@@ -34,7 +32,29 @@ _UNIT_PATTERNS = (
 )
 
 
-def _clause(text: str) -> str:
+def _metadata_text(result: dict[str, Any]) -> str:
+    metadata = result.get("metadata")
+    if not isinstance(metadata, dict):
+        return ""
+    parts: list[str] = []
+    for key in ("clause", "section", "paragraph", "point", "number", "heading", "title"):
+        value = metadata.get(key)
+        if value not in (None, ""):
+            parts.append(str(value))
+    return " ".join(parts)
+
+
+def _clause(text: str, result: dict[str, Any] | None = None) -> str:
+    # Prefer an explicit clause stored by the parser, because a chunk can carry
+    # the requirement text without repeating its section number.
+    if result:
+        metadata = result.get("metadata")
+        if isinstance(metadata, dict):
+            for key in ("clause", "paragraph", "point", "section"):
+                value = str(metadata.get(key) or "").strip()
+                match = re.search(r"\d+(?:\.\d+)+", value)
+                if match:
+                    return match.group(0)
     for pattern in _CLAUSE_PATTERNS:
         match = pattern.search(text)
         if match:
@@ -48,7 +68,6 @@ def _number(text: str) -> float | None:
         match = pattern.search(text.lower())
         if not match:
             continue
-        # The unit pattern has the number in group 1; operator pattern also does.
         try:
             return float(match.group(1).replace(",", "."))
         except ValueError:
@@ -62,8 +81,6 @@ def _operator(text: str) -> str:
         return ">="
     if any(x in lower for x in ("не более", "не выше", "<=")):
         return "<="
-    # '=' is accepted only as a standalone mathematical equality; a clause such
-    # as 8.3.2 must never become a normative equality.
     if "равен" in lower or "равна" in lower or "равно" in lower or re.search(r"(?<![0-9])=(?!=)", lower):
         return "="
     return ""
@@ -72,10 +89,12 @@ def _operator(text: str) -> str:
 def extract_requirement(result: dict[str, Any], parameter: str = "") -> dict[str, Any]:
     content = result.get("content", {})
     text = str(content.get("text", "") if isinstance(content, dict) else content).strip()
+    metadata_text = _metadata_text(result)
+    clause = _clause(text, result)
     requirement = {
         "norm": str(result.get("norm_number") or ""),
         "version": str(result.get("version") or ""),
-        "clause": _clause(text),
+        "clause": clause,
         "requirement": text,
         "parameter": parameter,
         "operator": _operator(text),
@@ -83,11 +102,14 @@ def extract_requirement(result: dict[str, Any], parameter: str = "") -> dict[str
         "normative_unit": "",
         "page": result.get("page"),
         "source": result,
+        "metadata": result.get("metadata") if isinstance(result.get("metadata"), dict) else {},
     }
     for pattern, unit in _UNIT_PATTERNS:
         if re.search(pattern, text, re.IGNORECASE):
             requirement["normative_unit"] = unit
             break
+    if metadata_text:
+        requirement["metadata_text"] = metadata_text
     return requirement
 
 
@@ -101,7 +123,8 @@ def select_normative_requirements(
     for result in results:
         item = extract_requirement(result, parameter)
         text = item["requirement"].lower()
-        overlap = sum(word in text for word in parameter_words)
+        metadata_text = str(item.get("metadata_text") or "").lower()
+        overlap = sum(word in f"{text} {metadata_text}" for word in parameter_words)
         explicit = bool(
             item["clause"]
             or item["operator"]
