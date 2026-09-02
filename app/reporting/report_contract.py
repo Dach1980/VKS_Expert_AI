@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-REPORT_SCHEMA_VERSION = "1.0"
+REPORT_SCHEMA_VERSION = "1.1"
 
 
 def _normalise_finding(finding: dict[str, Any]) -> dict[str, Any]:
@@ -29,6 +29,43 @@ def _normalise_finding(finding: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
+def _build_diagnostics(report: dict[str, Any], findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a compact diagnostic view of the Skill → RAG → decision chain.
+
+    This deliberately does not turn diagnostic observations into remarks. The
+    diagnostic matrix shows where evidence exists and how many results reached
+    each downstream stage using the data persisted by the checker.
+    """
+    matrix = []
+    for item in report.get("check_matrix") or []:
+        if not isinstance(item, dict):
+            continue
+        check_id = str(item.get("id") or "")
+        related = [x for x in findings if str(x.get("check_id") or "") == check_id]
+        rag_hits = sum(bool(x.get("normative_sources")) for x in related)
+        requirements = sum(len(x.get("normative_requirements") or []) for x in related)
+        decisions = {"violation": 0, "compliant": 0, "unchecked": 0}
+        for finding in related:
+            kind = str(finding.get("type") or "unchecked")
+            if kind in decisions:
+                decisions[kind] += 1
+        matrix.append({
+            "id": check_id,
+            "name": item.get("name", ""),
+            "visual_candidates": int(item.get("candidates", 0) or 0),
+            "rag_candidates": rag_hits,
+            "normative_requirements": requirements,
+            "decisions": decisions,
+            "remarks": decisions["violation"],
+            "status": item.get("status") or ("evidence_found" if related else "no_evidence_candidate"),
+        })
+    return {
+        "chain": ["Skill", "visual_candidates", "RAG", "normative_requirements", "decision", "remark"],
+        "matrix": matrix,
+        "note": "Диагностика не является частью замечаний. Отсутствие кандидата или нормативного требования означает необходимость проверки цепочки, а не нарушение проекта.",
+    }
+
+
 def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
     """Convert internal checker output into the canonical user-facing report."""
     public = deepcopy(report)
@@ -45,8 +82,6 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
     public["compliant_results"] = compliant
     public["review_results"] = review
 
-    # The checker stores the authoritative page counts in check_scope. Older
-    # report payloads may also have a summary; use it only as a fallback.
     scope = report.get("check_scope") or {}
     source_summary = report.get("summary") or {}
     try:
@@ -55,13 +90,23 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
         pages = 0
     if pages <= 0:
         try:
+            pages = int(scope.get("pages_available", 0) or 0)
+        except (TypeError, ValueError):
+            pages = 0
+    if pages <= 0:
+        try:
             pages = int(source_summary.get("pages", 0) or 0)
         except (TypeError, ValueError):
             pages = 0
 
+    try:
+        pages_available = int(scope.get("pages_available", pages) or pages)
+    except (TypeError, ValueError):
+        pages_available = pages
+
     public["summary"] = {
         "pages": pages,
-        "pages_available": int(scope.get("pages_available", pages) or pages),
+        "pages_available": pages_available,
         "total": len(remarks),
         "violations": len(remarks),
         "critical": sum(x.get("severity") == "critical" for x in remarks),
@@ -70,6 +115,7 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
         "compliant": len(compliant),
         "unchecked": len(review),
     }
+    public["diagnostics"] = _build_diagnostics(report, findings)
     public["report_definition"] = {
         "remark_status": "violation",
         "remark_fields": [
@@ -79,6 +125,7 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
         ],
         "evidence_numbering": "remark_id_order",
         "review_results_excluded_from_remarks": True,
+        "diagnostics_excluded_from_remarks": True,
     }
     return public
 
