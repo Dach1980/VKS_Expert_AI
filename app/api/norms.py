@@ -84,7 +84,7 @@ def _find_duplicate_version(storage: KnowledgeStorage, upload_hash: str):
     for document in storage.registry.get_all_documents():
         for version in document.get("versions", []):
             registered = version.get("file")
-            if registered and _sha256_path(storage.resolve(registered)) == upload_hash:
+            if registered and storage.resolve(registered).exists() and _sha256_path(storage.resolve(registered)) == upload_hash:
                 return document, version
     root = storage.knowledge_root / "regulations"
     if root.exists():
@@ -122,6 +122,11 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         item["processing"] = dict(item["processing"])
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
         item["is_current"] = item.get("status") == "current"
+        # Keep an explicit flag in the public payload so the frontend does not
+        # have to reconstruct current-version state from registry internals.
+        item["current_selected_by_user"] = bool(
+            item.get("current_selected_by_user") is True or item["is_current"]
+        )
         item["original_filename"] = item.get("original_filename") or item.get("filename") or Path(item.get("file", "")).name
         versions.append(item)
         if item["is_current"]:
@@ -203,150 +208,3 @@ def pick_norm_storage_folder():
         return {"selected": False, "path": initial}
     path = storage.set_vector_index_root(selected)
     return {"selected": True, "path": str(path), "backend": "FAISS"}
-
-
-@router.post("/upload", response_model=NormUploadResponse)
-def upload_norm(file: UploadFile = File(...), number: str | None = None, title: str | None = None, document_id: str | None = None, version_id: str | None = None, effective_from: str | None = None):
-    filename = file.filename or ""
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Для нормативной базы поддерживается только PDF")
-    storage = KnowledgeStorage()
-    upload_hash = _sha256_uploaded(file)
-    duplicate = _find_duplicate_version(storage, upload_hash)
-    if duplicate:
-        document, version = duplicate
-        original = version.get("original_filename") or Path(version.get("file", "")).name or version.get("id")
-        raise HTTPException(status_code=409, detail=f"Данный файл уже загружен: «{original}». Документ: {document.get('number', document.get('id'))}. Версия: {version.get('id')}.")
-
-    resolved_number = _infer_number(filename, number)
-    resolved_document_id = _safe_id(document_id or resolved_number.replace(" ", "_"))
-    existing_id = _find_existing_document_id(storage, resolved_number, filename)
-    if existing_id:
-        resolved_document_id = existing_id
-    existing = storage.registry.get_document(resolved_document_id)
-    resolved_title = (title or (existing.get("title") if existing else None) or "Внутренний водопровод и канализация зданий").strip()
-    resolved_version_id = _safe_id(version_id) if version_id else _safe_id(f"{resolved_document_id}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}")
-    resolved_effective_from = effective_from or date.today().isoformat()
-    relative_dir = Path("knowledge") / "regulations" / resolved_document_id
-    relative_pdf = relative_dir / f"{resolved_version_id}.pdf"
-    relative_parsed = Path("knowledge") / "parsed" / f"{resolved_version_id}.json"
-    relative_structured = Path("knowledge") / "structured" / f"{resolved_version_id}.json"
-    try:
-        # A new upload is NEVER made current automatically. Only the explicit
-        # /activate action may assign the current edition.
-        storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title, version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from, file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"), structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
-        saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
-        filename_meta = storage._classify_uploaded_filename(filename)
-        document = storage.registry.get_document(resolved_document_id)
-        version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
-
-        version_type, filename_change = filename_meta
-        if version_type == "base":
-            version["type"] = "base"
-            version.pop("change_number", None)
-            version.pop("change_date", None)
-        elif version_type == "amendment":
-            version["type"] = "amendment"
-            if filename_change:
-                version["change_number"] = filename_change
-        else:
-            version["type"] = "edition"
-            # Do not inspect arbitrary PDF text here: it can contain references
-            # to later amendments and would incorrectly label every edition.
-            version.pop("change_number", None)
-            version.pop("change_date", None)
-
-        version["pages_count"] = storage._pdf_pages(saved)
-        version["sha256"] = upload_hash
-        version["original_filename"] = filename
-        storage.registry.save()
-    except (StorageError, OSError, StopIteration, RegistryError) as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-
-    return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=resolved_number, title=resolved_title, status="uploaded", filename=filename)
-
-
-@router.post("/{document_id}/{version_id}/activate", response_model=NormIndexResponse)
-def activate_norm_version(document_id: str, version_id: str):
-    storage = KnowledgeStorage()
-    try:
-        target = storage.registry.activate_version(document_id, version_id)
-    except RegistryError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return NormIndexResponse(success=True, document_id=document_id, version_id=version_id, status="current", message=f"Версия {target.get('id')} назначена действующей")
-
-
-@router.post("/{document_id}/{version_id}/index", response_model=NormIndexResponse)
-def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTasks):
-    storage = KnowledgeStorage()
-    try:
-        storage.get_version(document_id, version_id)
-        paths = storage.paths(document_id, version_id)
-        if not paths.pdf.exists():
-            raise StorageError(f"PDF не найден: {paths.pdf}")
-        storage.clear_index_error(document_id, version_id)
-        storage.ensure_version_dirs(document_id, version_id)
-        storage.start_indexing(document_id, version_id)
-    except StorageError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    background_tasks.add_task(_index_norm_after_start, document_id, version_id)
-    return NormIndexResponse(success=True, document_id=document_id, version_id=version_id, status="indexing", message="Индексация выбранной версии запущена")
-
-
-def _index_norm_after_start(document_id: str, version_id: str) -> None:
-    storage = KnowledgeStorage()
-    try:
-        SPIndexBuilder(document_id=document_id, version_id=version_id, storage=storage).run()
-    except Exception as error:
-        storage.write_index_error(document_id, version_id, error)
-        print(f"[Project Expert AI][Norms] Индексация завершилась ошибкой: {document_id}/{version_id}: {error}")
-    finally:
-        try:
-            storage.refresh_version_metadata_from_parsed(document_id, version_id)
-        except Exception as error:
-            print(f"[Project Expert AI][Norms] Не удалось обновить метаданные версии: {document_id}/{version_id}: {error}")
-        storage.finish_indexing(document_id, version_id)
-
-
-@router.delete("/{document_id}", response_model=NormDeleteResponse)
-def delete_norm(document_id: str, version_id: str | None = None):
-    storage = KnowledgeStorage()
-    try:
-        if version_id is None:
-            raise StorageError("Не указана версия для удаления")
-        version = storage.get_version(document_id, version_id)
-        paths = storage.paths(document_id, version.get("id"))
-        target_version_id = version.get("id")
-        for path in (paths.pdf, paths.parsed, paths.structured):
-            path.unlink(missing_ok=True)
-        if paths.index_root.exists():
-            shutil.rmtree(paths.index_root)
-        _, document_removed = storage.registry.delete_version(document_id, target_version_id)
-    except StorageError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return NormDeleteResponse(success=True, document_id=document_id, version_id=target_version_id, document_removed=document_removed, message="Нормативный документ удалён" if document_removed else "Нормативная версия удалена")
-
-
-@router.get("/{document_id}")
-def get_norm(document_id: str, version_id: str | None = None):
-    storage = KnowledgeStorage()
-    try:
-        status = storage.get_status(document_id, version_id)
-        document = storage.registry.get_document(document_id)
-        status["versions"] = []
-        for version in document.get("versions", []):
-            version_status = storage.get_status(document_id, version.get("id"))
-            status["versions"].append({
-                "document_id": document_id,
-                "version_id": version.get("id"),
-                "version_type": version.get("type"),
-                "status": version.get("status"),
-                "effective_from": version.get("effective_from"),
-                "change_number": version_status.get("change_number"),
-                "change_date": version_status.get("change_date"),
-                "filename": version.get("original_filename") or Path(version.get("file", "")).name,
-                "processing": version_status.get("processing", {}),
-            })
-        return status
-    except StorageError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
