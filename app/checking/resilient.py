@@ -30,6 +30,10 @@ def _load_checkpoint(path:Path,document_id:str,pdf_name:str,skill_id:str)->dict[
     try:
         value=json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value,dict) or value.get("document_id")!=document_id or value.get("skill_id",skill_id)!=skill_id:return empty
+        # A completed checkpoint is a historical result, not a reason to skip a new
+        # explicit "Проверить" request. Resume is intended only for interrupted runs.
+        # This prevents an updated Skill/pipeline from instantly returning stale findings.
+        if value.get("status")=="completed":return empty
         value.setdefault("completed_pages",[]);value.setdefault("findings",[]);value.setdefault("pages_completed",len(value["completed_pages"]));value["skill_id"]=skill_id;return value
     except (OSError,ValueError,json.JSONDecodeError):return empty
 
