@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading,time,uuid
 from datetime import datetime
 from typing import Any
-from app.checking.resilient import run_resilient_check
+from app.checking.audit_trace import run_traced_resilient_check
 _jobs:dict[str,dict[str,Any]]={};_lock=threading.Lock()
 _STAGE_LABELS={"queued":"Ожидание запуска","preparing":"Подготовка документа","visual":"Визуальный анализ страниц","normative":"Нормативная проверка через RAG","retry":"Повторная попытка страницы","completed":"Формирование отчёта","error":"Ошибка проверки"}
 def _update(job_id:str,**fields:Any)->None:
@@ -29,7 +29,7 @@ def _progress(job_id:str,data:dict[str,Any])->None:
 def _worker(job_id:str,document_id:str,skill_id:str)->None:
     _update(job_id,status="running",started_at=datetime.now().isoformat(timespec="seconds"),started_monotonic=time.monotonic())
     try:
-        report=run_resilient_check(document_id,progress_callback=lambda data:_progress(job_id,data),skill_id=skill_id);scope=report.get("check_scope") or {};pages_checked=int(scope.get("pages_checked",report.get("summary",{}).get("pages",0)) or 0);pages_available=int(scope.get("pages_available",pages_checked) or pages_checked)
+        report=run_traced_resilient_check(document_id, normative_number="СП 30.13330.2020", progress_callback=lambda data:_progress(job_id,data),skill_id=skill_id);scope=report.get("check_scope") or {};pages_checked=int(scope.get("pages_checked",report.get("summary",{}).get("pages",0)) or 0);pages_available=int(scope.get("pages_available",pages_checked) or pages_checked)
         _update(job_id,status="completed",percent=100,stage="completed",message="Проверка завершена. Отчёт готов.",result=report,current_page=pages_available,total_pages=pages_available,pages_completed=pages_checked,pages_checked=pages_checked,pages_available=pages_available,failed_pages=scope.get("failed_pages",[]),report_url=f"/api/reports/{document_id}",report_pdf_url="/api/reports/pdf",report_docx_url="/api/reports/docx",finished_at=datetime.now().isoformat(timespec="seconds"),estimated_remaining_seconds=0)
     except Exception as error:
         _update(job_id,status="error",stage="error",percent=100,message=f"Ошибка проверки: {error}",error=str(error),finished_at=datetime.now().isoformat(timespec="seconds"),estimated_remaining_seconds=0)
