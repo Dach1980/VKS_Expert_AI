@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 _CLAUSE_PATTERNS = (
-    re.compile(r"(?:пункт|п\.)\s*([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE),
+    re.compile(r"(?:пункт|п\.|параграф|раздел)\s*([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE),
     re.compile(r"(?:^|\s)([0-9]+(?:\.[0-9]+){2,})(?:\s|$)"),
 )
 
@@ -45,8 +45,6 @@ def _metadata_text(result: dict[str, Any]) -> str:
 
 
 def _clause(text: str, result: dict[str, Any] | None = None) -> str:
-    # Prefer an explicit clause stored by the parser, because a chunk can carry
-    # the requirement text without repeating its section number.
     if result:
         metadata = result.get("metadata")
         if isinstance(metadata, dict):
@@ -116,6 +114,13 @@ def extract_requirement(result: dict[str, Any], parameter: str = "") -> dict[str
 def select_normative_requirements(
     results: list[dict[str, Any]], parameter: str = "", limit: int = 4
 ) -> list[dict[str, Any]]:
+    """Rank concrete, clause-bearing requirements ahead of generic chunks.
+
+    The audit pipeline must not silently lose a visual candidate merely because
+    the best semantic hit was a heading/table fragment without an explicit clause.
+    Clause-bearing requirements therefore receive a strong priority, followed by
+    parameter overlap and explicit numeric operators/values.
+    """
     selected = []
     parameter_words = {
         x.lower() for x in re.findall(r"[A-Za-zА-Яа-яЁё]{4,}", parameter)
@@ -125,12 +130,18 @@ def select_normative_requirements(
         text = item["requirement"].lower()
         metadata_text = str(item.get("metadata_text") or "").lower()
         overlap = sum(word in f"{text} {metadata_text}" for word in parameter_words)
-        explicit = bool(
-            item["clause"]
-            or item["operator"]
-            or item["normative_value"] is not None
+        has_clause = bool(item["clause"])
+        has_requirement_text = bool(item["requirement"].strip())
+        has_numeric_rule = item["operator"] in {">=", "<=", "="} or item["normative_value"] is not None
+        explicit = has_clause or has_numeric_rule
+        item["requirement_relevance"] = (
+            (2.0 if has_clause else 0.0)
+            + (0.5 if has_numeric_rule else 0.0)
+            + (overlap * 0.1)
+            + (0.1 if has_requirement_text else 0.0)
         )
-        item["requirement_relevance"] = overlap * 0.1 + (0.25 if explicit else 0.0)
+        item["has_concrete_clause"] = has_clause
+        item["has_numeric_rule"] = has_numeric_rule
         selected.append(item)
     selected.sort(key=lambda x: x["requirement_relevance"], reverse=True)
     return selected[:limit]
