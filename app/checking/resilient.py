@@ -15,6 +15,7 @@ from app.llm.lmstudio_client import LMStudioClient
 from app.rag.retriever import Retriever
 from app.rag.audit_retrieval import retrieve_audit_context
 from app.rag.normative_requirement import select_normative_requirements
+from app.reporting.report_contract import prepare_public_report
 from app.skills.registry import get_skill
 ProgressCallback=Callable[[dict[str,Any]],None]
 MAX_PAGE_RETRIES=3
@@ -30,9 +31,6 @@ def _load_checkpoint(path:Path,document_id:str,pdf_name:str,skill_id:str)->dict[
     try:
         value=json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value,dict) or value.get("document_id")!=document_id or value.get("skill_id",skill_id)!=skill_id:return empty
-        # A completed checkpoint is a historical result, not a reason to skip a new
-        # explicit "Проверить" request. Resume is intended only for interrupted runs.
-        # This prevents an updated Skill/pipeline from instantly returning stale findings.
         if value.get("status")=="completed":return empty
         value.setdefault("completed_pages",[]);value.setdefault("findings",[]);value.setdefault("pages_completed",len(value["completed_pages"]));value["skill_id"]=skill_id;return value
     except (OSError,ValueError,json.JSONDecodeError):return empty
@@ -48,15 +46,15 @@ def _indexed_norms(storage:KnowledgeStorage)->list[tuple[dict[str,Any],dict[str,
 
 def _multi_context(results:list[dict[str,Any]],candidate:dict[str,Any])->tuple[str,list[dict[str,Any]]]:
     requirements=select_normative_requirements(results,str(candidate.get("parameter") or ""),limit=4)
+    # Only requirements with a concrete clause are eligible for a confirmed finding.
+    requirements=[x for x in requirements if str(x.get("clause") or "").strip()]
     parts=[]
     for item in requirements:
         if item.get("requirement"):
-            meta=f"{item.get('norm','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}, п. {item.get('clause') or '—'}"
+            meta=f"{item.get('norm','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}, п. {item.get('clause')}"
             rule=f"оператор {item.get('operator') or '—'}, нормативное значение {item.get('normative_value') if item.get('normative_value') is not None else '—'} {item.get('normative_unit') or ''}".strip()
             parts.append(f"{meta}: {rule}\nТекст требования: {item['requirement']}")
     value="\n\n".join(parts)
-    if not value:
-        value="\n\n".join(f"{item.get('norm_number','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}: {str(item.get('content',{}).get('text','') if isinstance(item.get('content',{}),dict) else item.get('content','')).strip()}" for item in results if str(item.get('content',{}).get('text','') if isinstance(item.get('content',{}),dict) else item.get('content','')).strip())
     return value[:12000]+("\n[нормативный контекст сокращён]" if len(value)>12000 else ""),requirements
 
 def _bbox_has_real_evidence(image_path:Path,bbox:list[float])->bool:
@@ -68,8 +66,24 @@ def _bbox_has_real_evidence(image_path:Path,bbox:list[float])->bool:
     except Exception:return False
 
 def _build_report(document_id:str,pdf_name:str,norms,total_pages:int,findings:list[dict[str,Any]],failed_pages:list[int],skill:dict[str,Any])->dict[str,Any]:
-    violations=[x for x in findings if x.get("type")=="violation"];basis=[{"number":d.get("number"),"version":v.get("id"),"title":d.get("title")} for d,v,_ in norms]
-    return {"template":"reference_normcontrol_report_ios_3.1","document_id":document_id,"document_name":pdf_name,"skill_id":skill["id"],"skill_name":skill["name"],"checked_at":datetime.now().isoformat(timespec="seconds"),"status":"completed","normative_document":", ".join(str(x.get("number")) for x in basis if x.get("number")) or DEFAULT_NORM_NUMBER,"normative_version":", ".join(str(x.get("version")) for x in basis if x.get("version")),"normative_basis":basis,"results":findings,"check_scope":{"pages_checked":total_pages-len(failed_pages),"pages_available":total_pages,"limited":False,"max_pages":None,"failed_pages":failed_pages},"summary":{"pages":total_pages,"total":len(findings),"violations":len(violations),"critical":sum(x.get("severity")=="critical" for x in violations),"major":sum(x.get("severity")=="major" for x in violations),"minor":sum(x.get("severity")=="minor" for x in violations),"compliant":sum(x.get("type")=="compliant" for x in findings),"unchecked":sum(x.get("type")=="unchecked" for x in findings)}}
+    basis=[{"number":d.get("number"),"version":v.get("id"),"title":d.get("title")} for d,v,_ in norms]
+    report={"template":"reference_normcontrol_report_ios_3.1","document_id":document_id,"document_name":pdf_name,"skill_id":skill["id"],"skill_name":skill["name"],"checked_at":datetime.now().isoformat(timespec="seconds"),"status":"completed","normative_document":", ".join(str(x.get("number")) for x in basis if x.get("number")) or DEFAULT_NORM_NUMBER,"normative_version":", ".join(str(x.get("version")) for x in basis if x.get("version")),"normative_basis":basis,"results":findings,"check_scope":{"pages_checked":total_pages-len(failed_pages),"pages_available":total_pages,"limited":False,"max_pages":None,"failed_pages":failed_pages}}
+    return prepare_public_report(report)
+
+def _finalise_decision(decision:dict[str,Any],candidate:dict[str,Any],requirements:list[dict[str,Any]])->dict[str,Any]:
+    """Hard safety gate: a violation needs an auditable normative basis."""
+    decision=dict(decision or {})
+    decision["type"] = decision.get("type") if decision.get("type") in {"violation","compliant","unchecked"} else "unchecked"
+    if decision["type"] in {"violation","compliant"}:
+        valid=[r for r in requirements if r.get("clause") and r.get("requirement") and r.get("norm")]
+        if not valid or not decision.get("norm") or not decision.get("clause") or not decision.get("normative_requirement"):
+            decision["type"]="unchecked"
+            decision["comparison"]="не определено"
+    if decision["type"]=="violation":
+        decision["title"]=str(decision.get("title") or "Нарушение требований нормативной документации")
+        decision["description"]=str(decision.get("description") or "")
+        decision["recommendation"]=str(decision.get("recommendation") or "Привести проектное решение в соответствие с указанным нормативным требованием.")
+    return decision
 
 def run_resilient_check(document_id:str,normative_number:str=DEFAULT_NORM_NUMBER,progress_callback:ProgressCallback|None=None,skill_id:str="vk_wastewater")->dict[str,Any]:
     skill=get_skill(skill_id)
@@ -92,14 +106,14 @@ def run_resilient_check(document_id:str,normative_number:str=DEFAULT_NORM_NUMBER
                     bbox=normalize_bbox(candidate.get("bbox"),page.width,page.height)
                     if not bbox or not _bbox_has_real_evidence(Path(page.image_path),bbox):continue
                     norm_results=retrieve_audit_context(norms,candidate,top_k=MAX_NORM_RESULTS,skill_id=skill_id);norm_text,normative_requirements=_multi_context(norm_results,candidate)
-                    if not norm_text:continue
+                    if not normative_requirements:continue
                     decision=decide_audit(client,candidate,norm_text)
                     decision=deterministic_numeric_comparison(candidate,decision,normative_requirements)
-                    if decision.get("type") not in {"violation","compliant","unchecked"}:decision["type"]="unchecked"
-                    if decision.get("type")=="violation" and float(decision.get("confidence") or 0)<0.55:decision["type"]="unchecked"
+                    decision["normative_requirement"]=str(decision.get("normative_requirement") or (normative_requirements[0].get("requirement") if normative_requirements else ""))
+                    decision=_finalise_decision(decision,candidate,normative_requirements)
                     table_row=build_table_check_row(candidate,decision,page.page,norm_results)
                     finding_id=next_finding_id+len(page_findings);evidence_path=evidence_dir/"annotated"/f"page_{page.page:04d}_finding_{finding_id:03d}.png";evidence_image=annotate_evidence(page.image_path,bbox,evidence_path)
-                    page_findings.append({"id":finding_id,"type":decision.get("type","unchecked"),"docId":document_id,"docName":pdf_path.name,"skill_id":skill_id,"skill_name":skill["name"],"title":str(decision.get("title") or candidate.get("title") or "Результат проверки"),"description":str(decision.get("description") or candidate.get("description") or ""),"recommendation":str(decision.get("recommendation") or ""),"sheet":str(decision.get("sheet") or ""),"norm":str(decision.get("norm") or (norm_results[0].get("norm_number") if norm_results else normative_number)),"clause":str(decision.get("clause") or ""),"parameter":table_row.parameter,"project_value":table_row.project_value_raw,"project_unit":table_row.project_unit,"normative_value":table_row.normative_value_raw,"normative_unit":table_row.normative_unit,"comparison":table_row.comparison,"project_value_normalized":table_row.project_value,"project_kind":table_row.project_kind,"normative_value_normalized":table_row.normative_value,"normative_kind":table_row.normative_kind,"source_row":table_row.source_row,"source_context":table_row.source_context,"table_check":table_row.to_dict(),"severity":str(decision.get("severity") or "minor"),"page":page.page,"bbox":bbox,"evidence_image":evidence_image,"image":f"{REPORT_API_BASE}/api/reports/evidence/{document_id}/{evidence_path.name}","evidence_text":table_row.evidence_text,"confidence":table_row.confidence,"normative_route":candidate.get("normative_route"),"normative_requirements":normative_requirements,"normative_sources":norm_results})
+                    page_findings.append({"id":finding_id,"type":decision.get("type","unchecked"),"docId":document_id,"docName":pdf_path.name,"skill_id":skill_id,"skill_name":skill["name"],"title":str(decision.get("title") or candidate.get("title") or "Результат проверки"),"description":str(decision.get("description") or candidate.get("description") or ""),"recommendation":str(decision.get("recommendation") or ""),"sheet":str(decision.get("sheet") or page.page),"norm":table_row.norm,"clause":table_row.clause,"parameter":table_row.parameter,"project_value":table_row.project_value_raw,"project_value_raw":table_row.project_value_raw,"project_unit":table_row.project_unit,"normative_requirement":table_row.normative_requirement,"normative_value":table_row.normative_value_raw,"normative_value_raw":table_row.normative_value_raw,"normative_unit":table_row.normative_unit,"comparison":table_row.comparison,"project_value_normalized":table_row.project_value,"project_kind":table_row.project_kind,"normative_value_normalized":table_row.normative_value,"normative_kind":table_row.normative_kind,"source_row":table_row.source_row,"source_context":table_row.source_context,"table_check":table_row.to_dict(),"severity":str(decision.get("severity") or "minor"),"page":page.page,"bbox":bbox,"evidence_image":evidence_image,"image":f"{REPORT_API_BASE}/api/reports/evidence/{document_id}/{evidence_path.name}","evidence_text":table_row.evidence_text,"confidence":table_row.confidence,"normative_route":candidate.get("normative_route"),"normative_requirements":normative_requirements,"normative_sources":norm_results})
                 findings.extend(page_findings);next_finding_id+=len(page_findings);completed_pages.add(page_index);checkpoint.update({"status":"running","pages_completed":len(completed_pages),"completed_pages":sorted(completed_pages),"findings":findings,"last_error":None});_write_json(checkpoint_file,checkpoint);page_success=True;progress(stage="visual",percent=min(98,2+int(page_index/max(total_pages,1)*96)),current_page=page_index,total_pages=total_pages,page_completed=True,message=f"Страница {page_index} из {total_pages} завершена. Значимых результатов: {len(page_findings)}.");break
             except Exception as error:
                 last_error=error;checkpoint["last_error"]={"page":page_index,"attempt":attempt,"error":str(error),"at":datetime.now().isoformat(timespec="seconds")};_write_json(checkpoint_file,checkpoint)
