@@ -15,11 +15,11 @@ function toast(message, type) {
   else console.log('[Norms]', message);
 }
 
-// Amendment metadata is owned by the uploaded filename. The API's
-// change_number is used first because it is already derived from that filename.
+// Amendment metadata is owned by the uploaded filename. Accept the common
+// forms "Изм.5", "Изм 5", "Изм. 5" and the full "Изменение №5" form.
 function changeNumberFromFilename(filename) {
   var stem = String(filename || '').replace(/[_-]+/g, ' ');
-  var match = stem.match(/(?:\bизм\.?|\bизменени(?:е|я)|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
+  var match = stem.match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
   return match ? match[1] : null;
 }
 function versionChangeNumber(version) {
@@ -232,5 +232,5 @@ async function uploadNormFile(file) {
 window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms;
 window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop;
 window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.deleteNorm = deleteNorm; window.toggleNormVersions = toggleNormVersions;
-console.log('[VKS Expert AI][Norms] norms.js v8 loaded');
+console.log('[VKS Expert AI][Norms] norms.js v9 loaded');
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { loadNorms(); }, { once: true }); else loadNorms();
