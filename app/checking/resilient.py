@@ -7,7 +7,7 @@ from typing import Any,Callable
 from PIL import Image
 from app.checking.first_pass import CHECK_DPI,DEFAULT_NORM_NUMBER,MAX_NORM_RESULTS,REPORT_API_BASE,_json_array,_strict_candidates,_vision_request
 from app.checking.audit_decision import decide_audit
-from app.checking.table_check import build_table_check_row
+from app.checking.table_check import build_table_check_row,deterministic_numeric_comparison
 from app.checking.page_pipeline import annotate_evidence,normalize_bbox,render_pdf_pages
 from app.checking.vk_audit import build_vk_audit_prompt
 from app.knowledge.storage import KnowledgeStorage
@@ -90,6 +90,7 @@ def run_resilient_check(document_id:str,normative_number:str=DEFAULT_NORM_NUMBER
                     norm_results=retrieve_audit_context(norms,candidate,top_k=MAX_NORM_RESULTS,skill_id=skill_id);norm_text,normative_requirements=_multi_context(norm_results,candidate)
                     if not norm_text:continue
                     decision=decide_audit(client,candidate,norm_text)
+                    decision=deterministic_numeric_comparison(candidate,decision,normative_requirements)
                     if decision.get("type") not in {"violation","compliant","unchecked"}:decision["type"]="unchecked"
                     if decision.get("type")=="violation" and float(decision.get("confidence") or 0)<0.55:decision["type"]="unchecked"
                     table_row=build_table_check_row(candidate,decision,page.page,norm_results)
