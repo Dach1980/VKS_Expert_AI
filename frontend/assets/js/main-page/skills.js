@@ -29,4 +29,5 @@ async function runSkillCheck(id){
 }
 function installSkillCheckOverrides(){window.checkDocument=runSkillCheck;window.checkSelectedDocs=function(){const docs=Array.isArray(window.docsData)?window.docsData.filter(x=>x.checked):[];if(!docs.length){if(typeof window.documentsToast==='function')window.documentsToast('Выберите хотя бы один документ.','error');return}return docs.reduce((promise,d)=>promise.then(()=>runSkillCheck(d.id)),Promise.resolve())};renderSkillSelector()}
 window.loadSkills=loadSkills;window.getSelectedSkillId=getSelectedSkillId;window.renderSkillSelector=renderSkillSelector;window.runSkillCheck=runSkillCheck;window.installSkillCheckOverrides=installSkillCheckOverrides;
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(function(){installSkillCheckOverrides();loadSkills()},150),{once:true});else setTimeout(function(){installSkillCheckOverrides();loadSkills()},150);
+function initSkills(){installSkillCheckOverrides();loadSkills()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initSkills,{once:true});else setTimeout(initSkills,150);
