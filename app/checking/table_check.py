@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import Any
+import re
 
 from app.checking.engineering_values import NormalizedEngineeringValue, normalize_engineering_value
 
@@ -56,7 +57,7 @@ def deterministic_numeric_comparison(
     if project.value is None or not parameter:
         return decision
 
-    parameter_words = {word.lower() for word in __import__("re").findall(r"[A-Za-zА-Яа-яЁё]{4,}", parameter)}
+    parameter_words = {word.lower() for word in re.findall(r"[A-Za-zА-Яа-яЁё]{4,}", parameter)}
     for requirement in requirements:
         normative_value = requirement.get("normative_value")
         operator = str(requirement.get("operator") or "")
@@ -92,6 +93,7 @@ def deterministic_numeric_comparison(
         updated["normative_value"] = requirement_raw
         updated["normative_unit"] = normative_unit or str(decision.get("normative_unit") or "")
         updated["comparison"] = comparison
+        updated["confidence"] = max(float(decision.get("confidence") or 0.0), 0.9)
         if result == "violation":
             updated["recommendation"] = str(decision.get("recommendation") or "Привести параметр в соответствие с указанным нормативным требованием.")
         return updated
