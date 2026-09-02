@@ -33,18 +33,17 @@ def build_audit_queries(candidate: dict[str, Any]) -> list[str]:
     machine_value = ""
     if normalized.value is not None:
         machine_value = f"{normalized.kind} {normalized.value:g} {normalized.unit}".strip()
+    # The first query is deliberately rich enough to retrieve the requirement in
+    # one embedding request. A fallback query is used only when the first pass
+    # produces no usable normative requirement. This avoids multiplying LM
+    # Studio embedding calls for every page/candidate.
+    primary = _clean(f"{parameter} {project_value} {machine_value} {evidence} {context}")
+    fallback = _clean(f"{parameter} {title} {description} {context}")
     queries: list[str] = []
-    for value in (
-        f"{parameter} {project_value} {machine_value} {evidence}",
-        f"{parameter} {title} {description}",
-        f"{parameter} {context}",
-        f"{normalized.kind} {normalized.unit}" if normalized.kind != "text" else "",
-        title,
-    ):
-        value = _clean(value)
+    for value in (primary, fallback):
         if value and value not in queries:
-            queries.append(value[:1200])
-    return queries[:5]
+            queries.append(value[:1400])
+    return queries
 
 
 def _text(result: dict[str, Any]) -> str:
@@ -71,6 +70,15 @@ def _value_relevance(candidate: dict[str, Any], text: str) -> float:
     return keyword_score + numeric_score + unit_score + kind_score
 
 
+def _has_concrete_requirement(result: dict[str, Any]) -> bool:
+    """Cheap pre-check used before paying for a second embedding query."""
+    text = _text(result)
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+    clause = any(re.search(r"\d+(?:\.\d+)+", str(metadata.get(key) or "")) for key in ("clause", "paragraph", "point", "section"))
+    clause = clause or bool(re.search(r"(?:пункт|п\.)\s*\d+(?:\.\d+)+", text, re.IGNORECASE))
+    return clause
+
+
 def retrieve_audit_context(
     retrievers: list[tuple[dict[str, Any], dict[str, Any], Any]],
     candidate: dict[str, Any],
@@ -85,7 +93,8 @@ def retrieve_audit_context(
     candidate["normative_route"] = route
     merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     queries = build_audit_queries(candidate)
-    for query in queries:
+
+    def run_query(query: str) -> None:
         for document, version, retriever in scoped_retrievers:
             number = str(document.get("number") or document.get("id") or "")
             title = str(document.get("title") or "")
@@ -109,6 +118,16 @@ def retrieve_audit_context(
                     merged[key] = item
                 item["query_hits"] += 1
                 item["best_score"] = max(item["best_score"], float(result.get("score", 0) or 0))
+
+    if queries:
+        run_query(queries[0])
+
+    # Only pay for the fallback embedding query when the first retrieval did not
+    # expose any chunk carrying a concrete clause. This is the main performance
+    # guard for full-document audits.
+    if queries and not any(_has_concrete_requirement(item) for item in merged.values()):
+        run_query(queries[1])
+
     ranked = list(merged.values())
     for item in ranked:
         value_bonus = _value_relevance(candidate, _text(item))
