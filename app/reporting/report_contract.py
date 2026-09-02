@@ -39,17 +39,29 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
     compliant = [x for x in findings if x.get("type") == "compliant"]
     review = [x for x in findings if x.get("type") == "unchecked"]
 
-    # `results` is deliberately the remarks register. This is the contract used
-    # by the Remarks tab, web report and PDF/Word exporters.
     public["schema_version"] = REPORT_SCHEMA_VERSION
     public["results"] = remarks
     public["remarks"] = remarks
     public["compliant_results"] = compliant
     public["review_results"] = review
 
+    # The checker stores the authoritative page counts in check_scope. Older
+    # report payloads may also have a summary; use it only as a fallback.
+    scope = report.get("check_scope") or {}
     source_summary = report.get("summary") or {}
+    try:
+        pages = int(scope.get("pages_checked", 0) or 0)
+    except (TypeError, ValueError):
+        pages = 0
+    if pages <= 0:
+        try:
+            pages = int(source_summary.get("pages", 0) or 0)
+        except (TypeError, ValueError):
+            pages = 0
+
     public["summary"] = {
-        "pages": source_summary.get("pages", 0),
+        "pages": pages,
+        "pages_available": int(scope.get("pages_available", pages) or pages),
         "total": len(remarks),
         "violations": len(remarks),
         "critical": sum(x.get("severity") == "critical" for x in remarks),
