@@ -1,4 +1,4 @@
-"""Project Expert AI — report API backed by the IOS 3.1 report builder."""
+"""Project Expert AI — report API backed by the canonical report contract."""
 from __future__ import annotations
 
 import io
@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.documents import DOCUMENTS_ROOT
+from app.reporting.report_contract import prepare_public_report
 from app.reporting.ios31 import build_docx
 from app.reporting.ios31_pdf import build_pdf
 
@@ -32,22 +33,18 @@ def _save_report(document_id: str, report: dict) -> None:
     try:
         path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
-        # Report serving must remain available even if metadata persistence fails.
         pass
 
 
 def _document_filename(document_id: str, report: dict) -> str:
-    """Return the real uploaded filename, never the internal source.pdf name."""
     current = str(report.get("document_name") or "").strip()
     if current and current.lower() != "source.pdf":
         return current
-
     registry_path = DOCUMENTS_ROOT / "documents.json"
     try:
         items = json.loads(registry_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         items = []
-
     item = next((x for x in items if str(x.get("id")) == document_id), None)
     if item:
         filename = str(item.get("filename") or "").strip()
@@ -56,13 +53,11 @@ def _document_filename(document_id: str, report: dict) -> str:
         name = str(item.get("name") or "").strip()
         if name:
             return f"{name}.pdf"
-
     source = str(report.get("source") or "").strip()
     return source if source and source.lower() != "source.pdf" else "Документ.pdf"
 
 
 def _report_page_count(report: dict) -> int | None:
-    """Count pages of the actual generated IOS 3.1 PDF report."""
     for key in ("report_pages", "pdf_pages", "generated_report_pages", "pages_report"):
         try:
             value = int(report.get(key) or 0)
@@ -70,7 +65,6 @@ def _report_page_count(report: dict) -> int | None:
             value = 0
         if value > 0:
             return value
-
     try:
         pdf_data = build_pdf(report)
         with fitz.open(stream=pdf_data, filetype="pdf") as document:
@@ -80,18 +74,17 @@ def _report_page_count(report: dict) -> int | None:
 
 
 def _enrich_report(document_id: str, report: dict) -> dict:
+    # Normalize before enrichment so every consumer sees the same report model.
+    report = prepare_public_report(report)
     changed = False
-
     filename = _document_filename(document_id, report)
     if report.get("document_name") != filename:
         report["document_name"] = filename
         changed = True
-
     page_count = _report_page_count(report)
     if page_count is not None and report.get("report_pages") != page_count:
         report["report_pages"] = page_count
         changed = True
-
     report["template"] = REPORT_TEMPLATE
     if changed:
         _save_report(document_id, report)
@@ -114,7 +107,6 @@ def list_reports():
                 report = _load_saved_report(root.name)
                 if report:
                     items.append(_enrich_report(root.name, report))
-
     items.sort(key=lambda x: str(x.get("checked_at") or ""), reverse=True)
     return {"reports": items}
 
@@ -132,32 +124,26 @@ def create_report(document_id: str):
 @router.post("/pdf")
 def export_pdf(report: dict):
     try:
-        data = build_pdf(report)
+        data = build_pdf(prepare_public_report(report))
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Не удалось сформировать PDF: {error}") from error
-
     document_id = str(report.get("document_id", "report"))
     return StreamingResponse(
         io.BytesIO(data),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="project-expert-ai-check-{document_id}.pdf"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="project-expert-ai-check-{document_id}.pdf"'},
     )
 
 
 @router.post("/docx")
 def export_docx(report: dict):
     try:
-        data = build_docx(report)
+        data = build_docx(prepare_public_report(report))
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Не удалось сформировать Word: {error}") from error
-
     document_id = str(report.get("document_id", "report"))
     return StreamingResponse(
         io.BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={
-            "Content-Disposition": f'attachment; filename="project-expert-ai-check-{document_id}.docx"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="project-expert-ai-check-{document_id}.docx"'},
     )
