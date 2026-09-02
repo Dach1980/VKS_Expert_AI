@@ -14,6 +14,7 @@ from app.knowledge.storage import KnowledgeStorage
 from app.llm.lmstudio_client import LMStudioClient
 from app.rag.retriever import Retriever
 from app.rag.audit_retrieval import retrieve_audit_context
+from app.rag.normative_requirement import select_normative_requirements
 from app.skills.registry import get_skill
 ProgressCallback=Callable[[dict[str,Any]],None]
 MAX_PAGE_RETRIES=3
@@ -41,12 +42,18 @@ def _indexed_norms(storage:KnowledgeStorage)->list[tuple[dict[str,Any],dict[str,
         except Exception:continue
     return result
 
-def _multi_context(results:list[dict[str,Any]])->str:
+def _multi_context(results:list[dict[str,Any]],candidate:dict[str,Any])->tuple[str,list[dict[str,Any]]]:
+    requirements=select_normative_requirements(results,str(candidate.get("parameter") or ""),limit=4)
     parts=[]
-    for item in results:
-        content=item.get("content",{});text=content.get("text","") if isinstance(content,dict) else str(content)
-        if text:parts.append(f"{item.get('norm_number','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}: {text}")
-    value="\n\n".join(parts);return value[:12000]+("\n[нормативный контекст сокращён]" if len(value)>12000 else "")
+    for item in requirements:
+        if item.get("requirement"):
+            meta=f"{item.get('norm','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}, п. {item.get('clause') or '—'}"
+            rule=f"оператор {item.get('operator') or '—'}, нормативное значение {item.get('normative_value') if item.get('normative_value') is not None else '—'} {item.get('normative_unit') or ''}".strip()
+            parts.append(f"{meta}: {rule}\nТекст требования: {item['requirement']}")
+    value="\n\n".join(parts)
+    if not value:
+        value="\n\n".join(f"{item.get('norm_number','СП')}, версия {item.get('version','—')}, стр. {item.get('page','—')}: {str(item.get('content',{}).get('text','') if isinstance(item.get('content',{}),dict) else item.get('content','')).strip()}" for item in results if str(item.get('content',{}).get('text','') if isinstance(item.get('content',{}),dict) else item.get('content','')).strip())
+    return value[:12000]+("\n[нормативный контекст сокращён]" if len(value)>12000 else ""),requirements
 
 def _bbox_has_real_evidence(image_path:Path,bbox:list[float])->bool:
     try:
@@ -80,14 +87,14 @@ def run_resilient_check(document_id:str,normative_number:str=DEFAULT_NORM_NUMBER
                 for candidate in candidates:
                     bbox=normalize_bbox(candidate.get("bbox"),page.width,page.height)
                     if not bbox or not _bbox_has_real_evidence(Path(page.image_path),bbox):continue
-                    norm_results=retrieve_audit_context(norms,candidate,top_k=MAX_NORM_RESULTS,skill_id=skill_id);norm_text=_multi_context(norm_results)
+                    norm_results=retrieve_audit_context(norms,candidate,top_k=MAX_NORM_RESULTS,skill_id=skill_id);norm_text,normative_requirements=_multi_context(norm_results,candidate)
                     if not norm_text:continue
                     decision=decide_audit(client,candidate,norm_text)
                     if decision.get("type") not in {"violation","compliant","unchecked"}:decision["type"]="unchecked"
                     if decision.get("type")=="violation" and float(decision.get("confidence") or 0)<0.55:decision["type"]="unchecked"
                     table_row=build_table_check_row(candidate,decision,page.page,norm_results)
                     finding_id=next_finding_id+len(page_findings);evidence_path=evidence_dir/"annotated"/f"page_{page.page:04d}_finding_{finding_id:03d}.png";evidence_image=annotate_evidence(page.image_path,bbox,evidence_path)
-                    page_findings.append({"id":finding_id,"type":decision.get("type","unchecked"),"docId":document_id,"docName":pdf_path.name,"skill_id":skill_id,"skill_name":skill["name"],"title":str(decision.get("title") or candidate.get("title") or "Результат проверки"),"description":str(decision.get("description") or candidate.get("description") or ""),"recommendation":str(decision.get("recommendation") or ""),"sheet":str(decision.get("sheet") or ""),"norm":str(decision.get("norm") or (norm_results[0].get("norm_number") if norm_results else normative_number)),"clause":str(decision.get("clause") or ""),"parameter":table_row.parameter,"project_value":table_row.project_value_raw,"project_unit":table_row.project_unit,"normative_value":table_row.normative_value_raw,"normative_unit":table_row.normative_unit,"comparison":table_row.comparison,"project_value_normalized":table_row.project_value,"project_kind":table_row.project_kind,"normative_value_normalized":table_row.normative_value,"normative_kind":table_row.normative_kind,"source_row":table_row.source_row,"source_context":table_row.source_context,"table_check":table_row.to_dict(),"severity":str(decision.get("severity") or "minor"),"page":page.page,"bbox":bbox,"evidence_image":evidence_image,"image":f"{REPORT_API_BASE}/api/reports/evidence/{document_id}/{evidence_path.name}","evidence_text":table_row.evidence_text,"confidence":table_row.confidence,"normative_route":candidate.get("normative_route"),"normative_sources":norm_results})
+                    page_findings.append({"id":finding_id,"type":decision.get("type","unchecked"),"docId":document_id,"docName":pdf_path.name,"skill_id":skill_id,"skill_name":skill["name"],"title":str(decision.get("title") or candidate.get("title") or "Результат проверки"),"description":str(decision.get("description") or candidate.get("description") or ""),"recommendation":str(decision.get("recommendation") or ""),"sheet":str(decision.get("sheet") or ""),"norm":str(decision.get("norm") or (norm_results[0].get("norm_number") if norm_results else normative_number)),"clause":str(decision.get("clause") or ""),"parameter":table_row.parameter,"project_value":table_row.project_value_raw,"project_unit":table_row.project_unit,"normative_value":table_row.normative_value_raw,"normative_unit":table_row.normative_unit,"comparison":table_row.comparison,"project_value_normalized":table_row.project_value,"project_kind":table_row.project_kind,"normative_value_normalized":table_row.normative_value,"normative_kind":table_row.normative_kind,"source_row":table_row.source_row,"source_context":table_row.source_context,"table_check":table_row.to_dict(),"severity":str(decision.get("severity") or "minor"),"page":page.page,"bbox":bbox,"evidence_image":evidence_image,"image":f"{REPORT_API_BASE}/api/reports/evidence/{document_id}/{evidence_path.name}","evidence_text":table_row.evidence_text,"confidence":table_row.confidence,"normative_route":candidate.get("normative_route"),"normative_requirements":normative_requirements,"normative_sources":norm_results})
                 findings.extend(page_findings);next_finding_id+=len(page_findings);completed_pages.add(page_index);checkpoint.update({"status":"running","pages_completed":len(completed_pages),"completed_pages":sorted(completed_pages),"findings":findings,"last_error":None});_write_json(checkpoint_file,checkpoint);page_success=True;progress(stage="visual",percent=min(98,2+int(page_index/max(total_pages,1)*96)),current_page=page_index,total_pages=total_pages,page_completed=True,message=f"Страница {page_index} из {total_pages} завершена. Значимых результатов: {len(page_findings)}.");break
             except Exception as error:
                 last_error=error;checkpoint["last_error"]={"page":page_index,"attempt":attempt,"error":str(error),"at":datetime.now().isoformat(timespec="seconds")};_write_json(checkpoint_file,checkpoint)
