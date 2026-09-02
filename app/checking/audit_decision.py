@@ -3,41 +3,63 @@ from __future__ import annotations
 import json
 from typing import Any
 
+
 def _json_object(client, prompt: str) -> dict[str, Any]:
-    raw=client.chat(prompt,temperature=0.1,max_tokens=1000,enable_thinking=False)
-    text=str(raw or "").strip()
+    raw = client.chat(prompt, temperature=0.1, max_tokens=1200, enable_thinking=False)
+    text = str(raw or "").strip()
     try:
-        value=json.loads(text)
-        return value if isinstance(value,dict) else {}
+        value = json.loads(text)
+        return value if isinstance(value, dict) else {}
     except json.JSONDecodeError:
-        start=text.find("{"); end=text.rfind("}")
-        if start>=0 and end>start:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
             try:
-                value=json.loads(text[start:end+1]); return value if isinstance(value,dict) else {}
-            except json.JSONDecodeError:return {}
+                value = json.loads(text[start:end + 1])
+                return value if isinstance(value, dict) else {}
+            except json.JSONDecodeError:
+                return {}
         return {}
 
-def decide_audit(client, candidate:dict[str,Any], norm_text:str)->dict[str,Any]:
-    prompt=f"""Ты — инженер нормоконтроля проектной документации РФ. Проверь ОДИН визуально подтверждённый факт по приведённым фрагментам действующих нормативных документов.
+
+def decide_audit(client, candidate: dict[str, Any], norm_text: str) -> dict[str, Any]:
+    prompt = f"""Ты — инженер нормоконтроля проектной документации РФ. Проверь ОДИН визуально подтверждённый факт по приведённым фрагментам действующих нормативных документов.
 
 ФАКТ ИЗ ПРОЕКТА:
-{json.dumps(candidate,ensure_ascii=False)}
+{json.dumps(candidate, ensure_ascii=False)}
 
 НОРМАТИВНЫЕ ФРАГМЕНТЫ:
 {norm_text}
 
+Главный принцип: сначала зафиксируй значения как в исходнике, затем сравнивай их с нормой. Не подменяй проектное значение пересказом.
+
 Алгоритм:
-1) Найди в нормативных фрагментах конкретное обязательное/условное требование, относящееся именно к факту.
-2) Сопоставь фактическое значение, наличие/отсутствие элемента или проектное решение с этим требованием.
-3) violation ставь ТОЛЬКО при прямом подтверждении противоречия. Если нужный пункт не найден, ставь unchecked.
-4) compliant ставь только при прямом подтверждении соответствия. Иначе unchecked.
-5) Никогда не придумывай номер пункта, норматив, значение, лист или отсутствующий в контексте текст.
-6) Для violation обязательно сформулируй цепочку: «в проекте ...; норма требует ...; следовательно ...».
-7) norm и clause должны быть взяты из предоставленного контекста, а не из памяти модели.
-8) severity: critical — существенное влияние на безопасность/работоспособность; major — значимое нормативное несоответствие; minor — локальное/малозначимое.
-9) Если проектный факт недостаточно однозначен или нормативный фрагмент нерелевантен — unchecked.
+1) Найди конкретное обязательное/условное требование, относящееся именно к параметру.
+2) Если проект содержит числовое значение, сравнивай число, единицу измерения и тип параметра отдельно.
+3) Для таблиц учитывай название строки/параметра и контекст, чтобы не сравнить значение другой строки.
+4) violation — ТОЛЬКО при прямом подтверждённом противоречии.
+5) compliant — ТОЛЬКО при прямом подтверждённом соответствии.
+6) Если нормативный фрагмент не содержит нужного требования или значение неоднозначно — unchecked.
+7) Никогда не придумывай пункт, норму, значение, лист или текст.
+8) norm, clause и normative_value должны быть взяты только из контекста.
+9) project_value должен повторять значение из ФАКТА ИЗ ПРОЕКТА; если оно не выделяется однозначно — оставь пустым.
+10) severity оценивай только для violation.
 
 Верни ТОЛЬКО JSON:
-{{"type":"violation|compliant|unchecked","title":"конкретное название замечания","description":"доказательное сопоставление факта и нормы","recommendation":"конкретное действие","sheet":"","norm":"точное обозначение СП из контекста","clause":"точный пункт из контекста","severity":"critical|major|minor","confidence":0.0}}
-"""
-    return _json_object(client,prompt)
+{{
+  "type":"violation|compliant|unchecked",
+  "title":"конкретное название проверки",
+  "description":"доказательное сопоставление без выдуманных данных",
+  "recommendation":"конкретное действие или пусто",
+  "sheet":"",
+  "norm":"точное обозначение СП из контекста",
+  "clause":"точный пункт из контекста",
+  "parameter":"проверяемый параметр",
+  "project_value":"значение из проекта",
+  "project_unit":"единица проекта",
+  "normative_value":"значение/диапазон/условие из нормы, если оно явно есть",
+  "normative_unit":"единица нормы",
+  "comparison":"кратко: равно|в пределах|выше|ниже|не применимо|не определено",
+  "severity":"critical|major|minor",
+  "confidence":0.0
+}}"""
+    return _json_object(client, prompt)
