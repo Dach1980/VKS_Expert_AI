@@ -19,6 +19,7 @@ class TableCheckRow:
     normative_value: float | None = None
     normative_unit: str = ""
     normative_kind: str = ""
+    normative_requirement: str = ""
     comparison: str = "не определено"
     result: str = "unchecked"
     norm: str = ""
@@ -38,18 +39,8 @@ def _normalized(raw: Any, parameter: str, source: str = "") -> NormalizedEnginee
     return normalize_engineering_value(raw, parameter=parameter, source=source)
 
 
-def deterministic_numeric_comparison(
-    candidate: dict[str, Any],
-    decision: dict[str, Any],
-    requirements: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Apply only an unambiguous numeric requirement comparison.
-
-    The LLM remains responsible for semantic/conditional checks. This helper is
-    deliberately conservative: it changes the decision only when a retrieved
-    requirement has an explicit operator, numeric value, compatible unit/kind,
-    and enough parameter overlap to tie the requirement to the project fact.
-    """
+def deterministic_numeric_comparison(candidate: dict[str, Any], decision: dict[str, Any], requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Apply only an unambiguous numeric requirement comparison."""
     requirements = requirements or []
     parameter = str(decision.get("parameter") or candidate.get("parameter") or "").strip()
     project_raw = str(decision.get("project_value") or candidate.get("project_value") or "").strip()
@@ -68,7 +59,7 @@ def deterministic_numeric_comparison(
         if parameter_words and overlap == 0:
             continue
         normative_unit = str(requirement.get("normative_unit") or "")
-        requirement_raw = f"{normative_value} {normative_unit}".strip()
+        requirement_raw = f"{normative_value:g} {normative_unit}".strip()
         norm = _normalized(requirement_raw, parameter, text)
         if norm.value is None:
             continue
@@ -77,25 +68,25 @@ def deterministic_numeric_comparison(
         if project.kind != norm.kind and not ({project.kind, norm.kind} <= {"number", "length"}):
             continue
         if operator == ">=":
-            ok = project.value >= norm.value
-            comparison = "в пределах" if ok else "ниже"
+            ok, comparison = project.value >= norm.value, ("в пределах" if project.value >= norm.value else "ниже")
         elif operator == "<=":
-            ok = project.value <= norm.value
-            comparison = "в пределах" if ok else "выше"
+            ok, comparison = project.value <= norm.value, ("в пределах" if project.value <= norm.value else "выше")
         else:
             ok = project.value == norm.value
             comparison = "равно" if ok else ("выше" if project.value > norm.value else "ниже")
-        result = "compliant" if ok else "violation"
         updated = dict(decision)
-        updated["type"] = result
+        updated["type"] = "compliant" if ok else "violation"
         updated["norm"] = str(requirement.get("norm") or decision.get("norm") or "")
         updated["clause"] = str(requirement.get("clause") or decision.get("clause") or "")
+        updated["normative_requirement"] = text
         updated["normative_value"] = requirement_raw
         updated["normative_unit"] = normative_unit or str(decision.get("normative_unit") or "")
         updated["comparison"] = comparison
         updated["confidence"] = max(float(decision.get("confidence") or 0.0), 0.9)
-        if result == "violation":
-            updated["recommendation"] = str(decision.get("recommendation") or "Привести параметр в соответствие с указанным нормативным требованием.")
+        if not updated.get("sheet"):
+            updated["sheet"] = candidate.get("page") or ""
+        if updated["type"] == "violation":
+            updated["recommendation"] = str(decision.get("recommendation") or "Привести проектное решение в соответствие с указанным нормативным требованием.")
         return updated
     return decision
 
@@ -121,6 +112,7 @@ def build_table_check_row(candidate: dict[str, Any], decision: dict[str, Any], p
         normative_value=norm.value,
         normative_unit=str(decision.get("normative_unit") or norm.unit),
         normative_kind=norm.kind,
+        normative_requirement=str(decision.get("normative_requirement") or ""),
         comparison=str(decision.get("comparison") or "не определено"),
         result=str(decision.get("type") or "unchecked"),
         norm=str(decision.get("norm") or ""),
