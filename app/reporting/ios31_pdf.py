@@ -37,6 +37,15 @@ def _image(path):
     try:return p.read_bytes()
     except OSError:return None
 
+def _evidence_image(raw:bytes,maxw:float,maxh:float):
+    """Create an evidence image using one scale factor for both axes."""
+    reader=ImageReader(io.BytesIO(raw)); iw,ih=reader.getSize()
+    if not iw or not ih:return None
+    scale=min(maxw/float(iw),maxh/float(ih),1.0)
+    width=float(iw)*scale
+    height=float(ih)*scale
+    return Image(io.BytesIO(raw),width=width,height=height,preserveAspectRatio=True,anchor="sw",hAlign="LEFT",vAlign="TOP")
+
 def build_pdf(report:dict)->bytes:
     regular,bold=_fonts(); out=io.BytesIO(); doc=SimpleDocTemplate(out,pagesize=A4,leftMargin=12*mm,rightMargin=12*mm,topMargin=12*mm,bottomMargin=12*mm)
     base=getSampleStyleSheet(); body=ParagraphStyle("PEBody",parent=base["BodyText"],fontName=regular,fontSize=8.5,leading=11); small=ParagraphStyle("PESmall",parent=body,fontSize=7.5,leading=9); h1=ParagraphStyle("PEH1",parent=base["Heading1"],fontName=bold,fontSize=14,leading=17,spaceBefore=7,spaceAfter=6); title=ParagraphStyle("PETitle",parent=base["Title"],fontName=bold,fontSize=18,leading=21,alignment=1); cell=ParagraphStyle("PECell",parent=body,fontSize=7,leading=8.5); cellb=ParagraphStyle("PECellB",parent=cell,fontName=bold)
@@ -65,7 +74,8 @@ def build_pdf(report:dict)->bytes:
         raw=_image(f.get("evidence_image"))
         if raw:
             try:
-                reader=ImageReader(io.BytesIO(raw)); iw,ih=reader.getSize(); maxw=175*mm; maxh=105*mm; scale=min(maxw/iw,maxh/ih); story += [Spacer(1,2*mm),Image(io.BytesIO(raw),width=iw*scale,height=ih*scale),Paragraph("Фрагмент исходной страницы с отмеченной областью.",small)]
+                image=_evidence_image(raw,175*mm,105*mm)
+                if image: story += [Spacer(1,2*mm),image,Paragraph("Фрагмент исходной страницы с отмеченной областью.",small)]
             except Exception: pass
         story.append(Spacer(1,5*mm))
     story += [PageBreak(),Paragraph("5. Заключение",h1),Paragraph(_p(report.get("conclusion")) or "Подтверждённые несоответствия рекомендуется устранить до выпуска документации. Результаты ИИ являются инструментом предварительного нормоконтроля и подлежат экспертной верификации.",body),Paragraph("6. Нормативные источники",h1)]
