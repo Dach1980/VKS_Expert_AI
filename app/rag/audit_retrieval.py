@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.checking.engineering_values import normalize_engineering_value
+
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
@@ -25,11 +27,16 @@ def build_audit_queries(candidate: dict[str, Any]) -> list[str]:
     parameter = _clean(candidate.get("parameter"))
     project_value = _clean(candidate.get("project_value"))
     context = _clean(candidate.get("source_context"))
+    normalized = normalize_engineering_value(project_value, parameter)
+    machine_value = ""
+    if normalized.value is not None:
+        machine_value = f"{normalized.kind} {normalized.value:g} {normalized.unit}".strip()
     queries: list[str] = []
     for value in (
-        f"{parameter} {project_value} {evidence}",
+        f"{parameter} {project_value} {machine_value} {evidence}",
         f"{parameter} {title} {description}",
         f"{parameter} {context}",
+        f"{normalized.kind} {normalized.unit}" if normalized.kind != "text" else "",
         title,
     ):
         value = _clean(value)
@@ -44,19 +51,23 @@ def _text(result: dict[str, Any]) -> str:
 
 
 def _value_relevance(candidate: dict[str, Any], text: str) -> float:
-    """Prefer clauses that discuss the same parameter and, when useful, units/numbers.
-
-    Numeric equality is only a retrieval signal. The final LLM decision still
-    determines whether the project value actually violates the requirement.
-    """
+    """Prefer clauses that discuss the same parameter and engineering value."""
+    parameter = _clean(candidate.get("parameter"))
+    raw = _clean(candidate.get("project_value") or candidate.get("evidence_text"))
+    normalized = normalize_engineering_value(raw, parameter)
     query = " ".join(_clean(candidate.get(x)) for x in ("parameter", "title", "evidence_text", "source_context"))
     qwords, twords = _keywords(query), _keywords(text)
     keyword_score = min(0.22, len(qwords & twords) * 0.025)
-    qnums = _numbers(_clean(candidate.get("project_value") or candidate.get("evidence_text")))
+    qnums = _numbers(raw)
+    if normalized.value is not None:
+        qnums.add(f"{normalized.value:g}")
     tnums = _numbers(text)
     numeric_score = 0.10 if qnums and qnums & tnums else 0.0
-    unit_score = 0.08 if any(u in query.lower() and u in text.lower() for u in ("мм", "м3/ч", "м³/ч", "л/с", "%", "кпа", "м", "i=")) else 0.0
-    return keyword_score + numeric_score + unit_score
+    unit = normalized.unit.lower()
+    unit_score = 0.08 if unit and unit in text.lower() else 0.0
+    kind_terms = {"diameter": ("диаметр", "условный проход", "dn"), "slope": ("уклон",), "flow": ("расход",), "pressure": ("давление",), "length": ("длина",), "count": ("количество", "число")}
+    kind_score = 0.05 if any(term in text.lower() for term in kind_terms.get(normalized.kind, ())) else 0.0
+    return keyword_score + numeric_score + unit_score + kind_score
 
 
 def retrieve_audit_context(retrievers: list[tuple[dict[str, Any], dict[str, Any], Any]], candidate: dict[str, Any], top_k: int = 6) -> list[dict[str, Any]]:
