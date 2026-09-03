@@ -12,7 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _FONT_READY = False
 _FONT = "Helvetica"
@@ -125,8 +125,7 @@ def _evidence_image(raw: bytes, max_width: float = 178 * mm, max_height: float =
 def _sources(findings: list[dict]) -> list[str]:
     result, seen = [], set()
     for finding in findings:
-        sources = finding.get("normative_sources") or []
-        for source in sources:
+        for source in finding.get("normative_sources") or []:
             document = _text(source.get("document") or source.get("norm_number")) or "СП"
             version = _text(source.get("version")) or "—"
             page = _text(source.get("page")) or "—"
@@ -154,22 +153,20 @@ def build_pdf(report: dict) -> bytes:
     findings = _findings(report)
     summary = report.get("summary") or {}
     story = [
-        Paragraph("PROJECT EXPERT AI", title),
-        Spacer(1, 3 * mm),
+        Paragraph("PROJECT EXPERT AI", title), Spacer(1, 3 * mm),
         Paragraph("ОТЧЁТ ПО НОРМОКОНТРОЛЮ ПРОЕКТНОЙ ДОКУМЕНТАЦИИ", h1),
         Paragraph(f"<b>Документ:</b> {_p(report.get('document_name'))}", body),
         Paragraph(f"<b>Профиль экспертизы:</b> {_p(report.get('skill_name') or report.get('skill_id') or '—')}", body),
         Paragraph(f"<b>Дата проверки:</b> {_p(report.get('checked_at'))}", body),
         Paragraph(f"<b>Нормативная база:</b> {_p(report.get('normative_document'))}", body),
-        Paragraph(f"<b>Действующие версии:</b> {_p(report.get('normative_version'))}", body),
-        Spacer(1, 5 * mm),
+        Paragraph(f"<b>Действующие версии:</b> {_p(report.get('normative_version'))}", body), Spacer(1, 5 * mm),
         Paragraph("1. Область и нормативная база", h1),
         Paragraph(f"Проверено страниц: {summary.get('pages', 0)}. Результатов: {summary.get('total', 0)}. Подтверждённых замечаний: {summary.get('violations', 0)}. Соответствий: {summary.get('compliant', 0)}. Требуют проверки: {summary.get('unchecked', 0)}.", body),
     ]
     overview = Table([
         ["Страниц", "Результатов", "Замечаний", "Соответствий", "Требуют проверки"],
         [summary.get("pages", 0), summary.get("total", 0), summary.get("violations", 0), summary.get("compliant", 0), summary.get("unchecked", 0)],
-    ], colWidths=[32 * mm, 34 * mm, 34 * mm, 34 * mm, 40 * mm], repeatRows=1)
+    ], colWidths=[31 * mm, 34 * mm, 34 * mm, 34 * mm, 45 * mm], repeatRows=1)
     overview.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), .35, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey), ("FONTNAME", (0, 0), (-1, 0), bold), ("FONTNAME", (0, 1), (-1, -1), regular), ("FONTSIZE", (0, 0), (-1, -1), 7), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
     story += [Spacer(1, 4 * mm), overview, Spacer(1, 7 * mm), Paragraph("2. Заключение", h1), Paragraph(_p(report.get("conclusion")) or "Неподтверждённые результаты не считаются установленными нарушениями и требуют экспертной верификации.", body), Spacer(1, 7 * mm), Paragraph("3. Результаты проверки", h1)]
 
@@ -179,17 +176,17 @@ def build_pdf(report: dict) -> bytes:
         clause = _text(finding.get("clause"))
         norm_clause = f"{norm} / п. {clause}" if clause else norm
         table_data.append([
-            Paragraph(str(index), cell),
-            Paragraph(_p(finding.get("sheet") or finding.get("page") or "—"), cell),
-            Paragraph(_p(_parameter(finding)), cell),
-            Paragraph(_p(_project_value(finding)), cell),
-            Paragraph(_p(_norm_requirement(finding)), cell),
-            Paragraph(_p(norm_clause), cell),
-            Paragraph(_p(_status(finding)), cell),
-            Paragraph(_p(finding.get("recommendation") or "—"), cell),
+            Paragraph(str(index), cell), Paragraph(_p(finding.get("sheet") or finding.get("page") or "—"), cell),
+            Paragraph(_p(_parameter(finding)), cell), Paragraph(_p(_project_value(finding)), cell),
+            Paragraph(_p(_norm_requirement(finding)), cell), Paragraph(_p(norm_clause), cell),
+            Paragraph(_p(_status(finding)), cell), Paragraph(_p(finding.get("recommendation") or "—"), cell),
         ])
-    results_table = Table(table_data, colWidths=[7 * mm, 13 * mm, 27 * mm, 45 * mm, 45 * mm, 25 * mm, 23 * mm, 34 * mm], repeatRows=1)
-    results_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), .35, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey), ("FONTNAME", (0, 0), (-1, 0), bold), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (0, 1), (0, -1), "CENTER"), ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3), ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    page_width = A4[0] - doc.leftMargin - doc.rightMargin
+    widths = [7, 12, 24, 34, 39, 22, 20, 30]
+    scale = page_width / (sum(widths) * mm)
+    col_widths = [w * mm * scale for w in widths]
+    results_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    results_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), .35, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey), ("FONTNAME", (0, 0), (-1, 0), bold), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (0, 1), (0, -1), "CENTER"), ("LEFTPADDING", (0, 0), (-1, -1), 2), ("RIGHTPADDING", (0, 0), (-1, -1), 2), ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
     story.append(results_table)
 
     story += [Spacer(1, 8 * mm), Paragraph("4. Доказательства по результатам", h1)]
@@ -200,8 +197,7 @@ def build_pdf(report: dict) -> bytes:
         norm = _text(finding.get("norm")) or "—"
         clause = _text(finding.get("clause"))
         norm_clause = f"{norm} / п. {clause}" if clause else norm
-        page = _p(finding.get("page") or "—")
-        story.append(Paragraph(f"<b>Страница:</b> {page} &nbsp;&nbsp; <b>Статус:</b> {_p(_status(finding))} &nbsp;&nbsp; <b>СП / пункт:</b> {_p(norm_clause)}", small))
+        story.append(Paragraph(f"<b>Страница:</b> {_p(finding.get('page') or '—')} &nbsp;&nbsp; <b>Статус:</b> {_p(_status(finding))} &nbsp;&nbsp; <b>СП / пункт:</b> {_p(norm_clause)}", small))
         story.append(Paragraph(f"<b>Значение в исходнике:</b> {_p(_project_value(finding))}", body))
         story.append(Paragraph(f"<b>Нормативное требование:</b> {_p(_norm_requirement(finding))}", body))
         if _text(finding.get("comparison")):
