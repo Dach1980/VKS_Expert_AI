@@ -6,6 +6,11 @@
   overflow: hidden;
 }
 
+/* hidden is an explicit UI state and must win over any generic display rule. */
+.norm-versions-panel[hidden] {
+  display: none !important;
+}
+
 .norm-versions-title { margin-bottom: 8px; }
 
 .norm-version-row {
@@ -37,7 +42,6 @@
   overflow-wrap: anywhere;
 }
 
-/* PDF viewer icon is the first element, immediately before the filename. */
 .norm-version-filename {
   display: flex !important;
   flex-direction: row !important;
@@ -68,16 +72,8 @@
   border-radius: 6px;
 }
 
-.norm-version-view:hover {
-  background: var(--bg-tertiary);
-  color: var(--accent-hover) !important;
-}
-
-.norm-version-view svg {
-  display: block !important;
-  width: 16px !important;
-  height: 16px !important;
-}
+.norm-version-view:hover { background: var(--bg-tertiary); color: var(--accent-hover) !important; }
+.norm-version-view svg { display: block !important; width: 16px !important; height: 16px !important; }
 
 .norm-version-file-name {
   display: block !important;
@@ -91,19 +87,8 @@
   color: var(--text-primary) !important;
 }
 
-.norm-version-file-date {
-  display: block !important;
-  margin-top: 4px;
-  color: var(--text-secondary) !important;
-  white-space: nowrap !important;
-}
-
-.norm-version-pages {
-  display: block !important;
-  margin-top: 3px;
-  color: var(--text-secondary);
-  white-space: nowrap !important;
-}
+.norm-version-file-date { display: block !important; margin-top: 4px; color: var(--text-secondary) !important; white-space: nowrap !important; }
+.norm-version-pages { display: block !important; margin-top: 3px; color: var(--text-secondary); white-space: nowrap !important; }
 
 .norm-version-actions {
   display: flex !important;
@@ -127,18 +112,8 @@
   white-space: nowrap !important;
 }
 
-.norm-version-actions .btn {
-  padding: 6px 10px !important;
-  font-size: 12px !important;
-}
-
-.norm-card-status,
-.norm-card-actions {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
+.norm-version-actions .btn { padding: 6px 10px !important; font-size: 12px !important; }
+.norm-card-status, .norm-card-actions { width: 100%; max-width: 100%; box-sizing: border-box; }
 .norm-card-actions { display: flex; flex-wrap: wrap; }
 
 @media (max-width: 600px) {
