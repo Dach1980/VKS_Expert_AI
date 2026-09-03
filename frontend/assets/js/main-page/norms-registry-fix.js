@@ -8,13 +8,19 @@
   function isCurrent(version) {
     return !!(version && String(version.status || '').toLowerCase() === 'current' && version.current_selected_by_user === true);
   }
-  function changeNumber(version) {
-    if (version && version.change_number != null && String(version.change_number).trim() !== '') {
-      return String(version.change_number).trim();
-    }
-    var filename = String((version && (version.original_filename || version.filename || version.file)) || '');
-    var match = filename.replace(/[_-]+/g, ' ').match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
+  function changeNumberFromFilename(filename) {
+    var text = String(filename || '').replace(/[\u00A0\u202F]/g, ' ').replace(/[_-]+/g, ' ');
+    var match = text.match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]\.?|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
     return match ? match[1] : null;
+  }
+  function changeNumber(version) {
+    // The uploaded PDF filename is authoritative. Legacy registry metadata may
+    // contain stale change_number values and must never override the filename.
+    var filename = String((version && (version.original_filename || version.filename || version.file)) || '');
+    var fromFilename = changeNumberFromFilename(filename);
+    if (fromFilename !== null) return fromFilename;
+    return version && version.change_number != null && String(version.change_number).trim() !== ''
+      ? String(version.change_number).trim() : null;
   }
   function normalize(data) {
     var groups = new Map();
@@ -33,6 +39,8 @@
           var copy = Object.assign({}, version);
           copy.document_id = copy.document_id || item.document_id || item.id;
           copy.version_id = copy.version_id || copy.id;
+          var filenameChange = changeNumberFromFilename(copy.original_filename || copy.filename || copy.file);
+          if (filenameChange !== null) copy.change_number = filenameChange;
           versions.push(copy);
         });
       });
