@@ -66,10 +66,7 @@ def _norm_term_set(query: str) -> set[str]:
     """Build high-value normalized search terms from the actual user question."""
     text = _query_text(query).lower()
     terms = set(lexical_tokens(text))
-    if any(phrase in text for phrase in (
-        "диаметр труб", "диаметр трубы", "внутренний диаметр", "наружный диаметр",
-        "условный проход", "минимальный диаметр", "принимать диаметр",
-    )):
+    if any(phrase in text for phrase in ("диаметр труб", "диаметр трубы", "внутренний диаметр", "наружный диаметр", "условный проход", "минимальный диаметр", "принимать диаметр")):
         terms.update(lexical_tokens("диаметр трубы условный проход"))
     if any(term in text for term in ("диаметр", "диаметру", "диаметры")):
         terms.update({"диаметр", "труб", "трубопровод", "условный", "проход", "ду", "dn"})
@@ -111,7 +108,9 @@ class Retriever:
     def __init__(self, document_id: str | None = None, version_id: str | None = None, storage: KnowledgeStorage | None = None):
         self.storage = storage or KnowledgeStorage()
         self.document_id = self._resolve_document_id(document_id)
-        self.version_id = version_id or self.storage.get_current_version(self.document_id).get("id")
+        self.version = self._resolve_version(version_id)
+        self.version_id = str(self.version.get("id") or version_id or "")
+        self.version_label = self._version_label(self.version)
         self.paths = self.storage.paths(self.document_id, self.version_id)
         self.index_file = self.paths.embeddings / "index.faiss"
         self.metadata_file = self.paths.embeddings / "metadata.json"
@@ -139,6 +138,30 @@ class Retriever:
             raise ValueError(f"Нормативный документ не найден в реестре: {document_id or DEFAULT_DOCUMENT_NUMBER}")
         candidates.sort(key=lambda item: len(item.get("versions", [])), reverse=True)
         return str(candidates[0].get("id"))
+
+    def _resolve_version(self, version_id: str | None) -> dict:
+        document = self.storage.registry.get_document(self.document_id)
+        versions = document.get("versions", []) if document else []
+        if version_id:
+            version = next((item for item in versions if item.get("id") == version_id), None)
+            if version is not None:
+                return version
+        return self.storage.get_current_version(self.document_id)
+
+    @staticmethod
+    def _version_label(version: dict) -> str:
+        """Build a stable human-readable version label from registry metadata."""
+        change_number = version.get("change_number")
+        if change_number not in (None, "", 0, "0"):
+            value = str(change_number).strip()
+            match = re.search(r"\d+", value)
+            if match:
+                return f"Изменение №{match.group(0)}"
+        filename = str(version.get("file") or "")
+        match = re.search(r"(?:изм|изменени[ея])\s*\.?\s*№?\s*(\d+)", filename, re.IGNORECASE)
+        if match:
+            return f"Изменение №{match.group(1)}"
+        return "Без изменений"
 
     @staticmethod
     def _number_group(value: str) -> str:
@@ -189,6 +212,8 @@ class Retriever:
         return [{
             "document": r["item"].get("document", self.document_id),
             "version": self.version_id,
+            "version_label": self.version_label,
+            "document_display_name": f"{r["item"].get("document", self.document_id)} — {self.version_label}",
             "page": r["item"].get("page", 0),
             "type": r["item"].get("type", "text"),
             "source": r["source"],
@@ -212,6 +237,7 @@ def main():
     retriever = Retriever()
     print(f"DOCUMENT: {retriever.document_id}")
     print(f"VERSION: {retriever.version_id}")
+    print(f"VERSION LABEL: {retriever.version_label}")
     for i, result in enumerate(retriever.search(query), 1):
         content = result.get("content", {})
         text = content.get("text", "") if isinstance(content, dict) else str(content)
