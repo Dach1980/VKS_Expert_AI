@@ -10,7 +10,7 @@
   }
   function changeNumberFromFilename(filename) {
     var text = String(filename || '').replace(/[\u00A0\u202F]/g, ' ').replace(/[_-]+/g, ' ');
-    var match = text.match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]\.?|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
+    var match = text.match(/(?:^|\s)(?:изм(?:енение|енения)?\.?|изменени[ея]\.?|amendment)\s*№?\s*\.?\s*(\d+)\b/i);
     return match ? match[1] : null;
   }
   function changeNumber(version) {
