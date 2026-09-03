@@ -82,11 +82,9 @@ def lexical_score(query: str, item: dict) -> float:
     overlap = query_terms & text_terms
     if not overlap:
         return 0.0
-
     score = 0.34 * (len(overlap) / max(len(query_terms), 1))
     question = _query_text(query).lower()
     text_lower = str(text).lower()
-
     if any(phrase in question for phrase in ("диаметр труб", "диаметр трубы", "диаметру труб")):
         if "диаметр" in text_lower:
             score += 0.34
@@ -94,7 +92,6 @@ def lexical_score(query: str, item: dict) -> float:
             score += 0.18
         if any(phrase in text_lower for phrase in ("диаметр труб", "диаметры труб", "диаметр трубопровода", "принимать диаметр")):
             score += 0.24
-
     normalized_query = " ".join(lexical_tokens(question))
     normalized_text = " ".join(lexical_tokens(text_lower))
     if normalized_query and normalized_query in normalized_text:
@@ -118,14 +115,12 @@ class Retriever:
             raise FileNotFoundError(f"Индекс нормативной версии не найден: {self.index_file}")
         if not self.metadata_file.exists():
             raise FileNotFoundError(f"Метаданные нормативного индекса не найдены: {self.metadata_file}")
-
         temp_index_file = self.storage.project_root / f".faiss_read_{os.getpid()}_{id(self)}.index"
         try:
             shutil.copy2(self.index_file, temp_index_file)
             self.index = faiss.read_index(str(temp_index_file))
         finally:
             temp_index_file.unlink(missing_ok=True)
-
         self.metadata = json.loads(self.metadata_file.read_text(encoding="utf-8-sig"))
         self.client = EmbeddingClient()
 
@@ -186,7 +181,6 @@ class Retriever:
             if formula_mode and item.get("type") == "formula_context":
                 final_score += 0.30
             merged[idx] = {"item": item, "score": final_score, "source": "faiss"}
-
         lexical_candidates = []
         for idx, item in enumerate(self.metadata):
             score = lexical_score(query, item)
@@ -198,7 +192,6 @@ class Retriever:
             candidate = {"item": item, "score": score + 0.35, "source": "lexical"}
             if current is None or candidate["score"] > current["score"]:
                 merged[idx] = candidate
-
         if formula_mode:
             for idx, item in enumerate(self.metadata):
                 score = formula_score(query, item)
@@ -207,13 +200,12 @@ class Retriever:
                     current = merged.get(idx)
                     if current is None or candidate["score"] > current["score"]:
                         merged[idx] = candidate
-
         ranked = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
         return [{
             "document": r["item"].get("document", self.document_id),
             "version": self.version_id,
             "version_label": self.version_label,
-            "document_display_name": f"{r["item"].get("document", self.document_id)} — {self.version_label}",
+            "document_display_name": f"{r['item'].get('document', self.document_id)} — {self.version_label}",
             "page": r["item"].get("page", 0),
             "type": r["item"].get("type", "text"),
             "source": r["source"],
