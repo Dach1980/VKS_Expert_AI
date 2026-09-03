@@ -28,8 +28,6 @@
     return /\bбазов(?:ая|ую|ая\s+версия)\b|\bбез\s+изменений\b/i.test(filename);
   }
   function inferredChangeNumber(version, norm, versions) {
-    // The uploaded filename is authoritative: the UI must never assign a
-    // different amendment number merely because the registry field is stale.
     var fromFilename = changeNumberFromFilename(version && (version.original_filename || version.filename || version.file));
     if (fromFilename !== null) return fromFilename;
     var explicit = version && version.change_number != null && String(version.change_number).trim() !== ''
@@ -38,11 +36,6 @@
     var fromVersionId = changeNumberFromVersionId(version);
     if (fromVersionId !== null) return fromVersionId;
     if (isBaseVersion(version)) return null;
-
-    // Some locally migrated registries contain the correct version files but
-    // lost change_number/original_filename. For the three initial SPs we can
-    // safely restore the amendment number from the chronological version
-    // sequence: base, Изм.1, Изм.2, ... .
     var maxChange = expectedAmendmentCount(norm);
     if (maxChange === null || !Array.isArray(versions) || versions.length !== maxChange + 1) return null;
     var ordered = versions.slice().sort(function (a, b) {
@@ -106,17 +99,18 @@
       var versions = Array.isArray(norm.versions) ? norm.versions : [];
       var panel = document.getElementById('normVersions-' + norm.id);
       if (panel) {
-        var rows = panel.querySelectorAll('.norm-version-row');
-        var renderedVersions = versions.slice().sort(function (a, b) {
-          if (isCurrent(a, norm) && !isCurrent(b, norm)) return -1;
-          if (!isCurrent(a, norm) && isCurrent(b, norm)) return 1;
-          return String(b.effective_from || '').localeCompare(String(a.effective_from || ''));
-        });
-        renderedVersions.forEach(function (version, index) {
-          var row = rows[index];
-          if (!row) return;
+        // Match each rendered row to its own visible filename. Do not use row
+        // position: sorting or legacy registry order must never change the label.
+        panel.querySelectorAll('.norm-version-row').forEach(function (row) {
+          var filenameNode = row.querySelector('.norm-version-file-name');
           var label = row.querySelector('.norm-version-label');
-          if (label) label.textContent = labelFor(version, norm, versions);
+          if (!filenameNode || !label) return;
+          var filename = filenameNode.getAttribute('title') || filenameNode.textContent || '';
+          var filenameChange = changeNumberFromFilename(filename);
+          var text = filenameChange === null ? 'Без изменений' : 'Изменение №' + filenameChange;
+          var currentText = label.textContent || '';
+          var isCurrentRow = /·\s*действующая\s*$/i.test(currentText);
+          label.textContent = text + (isCurrentRow ? ' · действующая' : ' · архивная');
         });
       }
       var card = document.querySelector('[data-norm-card="' + CSS.escape(String(norm.id)) + '"]');
@@ -134,5 +128,5 @@
   function normalizeAndPatch() { normalizeState(); patchRenderedRows(); }
   var attempts = 0;
   var timer = setInterval(function () { attempts += 1; normalizeAndPatch(); if (attempts >= 40) clearInterval(timer); }, 300);
-  console.log('[VKS Expert AI][Norms] metadata compatibility fix v8 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v9 loaded');
 })();
