@@ -1,5 +1,5 @@
 // Project Expert AI — compatibility fix for legacy norm-version metadata.
-// Amendment numbers are always derived from the uploaded PDF filename.
+// Amendment numbers are derived from explicit metadata first, then the uploaded PDF filename/version id.
 (function installNormMetadataFix() {
   function changeNumberFromFilename(filename) {
     var text = String(filename || '')
@@ -7,6 +7,21 @@
       .replace(/[_-]+/g, ' ');
     var match = text.match(/(?:\bизм(?:енение|енения)?\b|\bизменени[ея]\b|\bamendment\b)\s*\.?\s*№?\s*\.?\s*(\d+)\b/i);
     return match ? match[1] : null;
+  }
+
+  function changeNumberFromVersionId(version) {
+    var id = String(version && (version.version_id || version.id) || '');
+    var match = id.match(/(?:^|[_\s-])(?:изм|iz|amendment)[._\s-]*(\d+)(?:$|[_\s-])/i);
+    return match ? match[1] : null;
+  }
+
+  function changeNumber(version) {
+    if (version && version.change_number != null && String(version.change_number).trim() !== '') {
+      return String(version.change_number).trim();
+    }
+    var fromFilename = changeNumberFromFilename(version && (version.original_filename || version.filename || version.file));
+    if (fromFilename !== null) return fromFilename;
+    return changeNumberFromVersionId(version);
   }
 
   function isCurrent(version, norm) {
@@ -17,10 +32,7 @@
   }
 
   function labelFor(version, norm) {
-    var filename = String(version.original_filename || version.filename || '');
-    var change = version.change_number != null && String(version.change_number).trim() !== ''
-      ? String(version.change_number).trim()
-      : changeNumberFromFilename(filename);
+    var change = changeNumber(version);
     return (change === null ? 'Без изменений' : 'Изменение №' + change)
       + (isCurrent(version, norm) ? ' · действующая' : ' · архивная');
   }
@@ -31,8 +43,7 @@
     data.forEach(function (norm) {
       var versions = Array.isArray(norm.versions) ? norm.versions : [];
       versions.forEach(function (version) {
-        var filename = String(version.original_filename || version.filename || '').trim();
-        var change = changeNumberFromFilename(filename);
+        var change = changeNumber(version);
         if (change !== null && String(version.change_number || '') !== change) {
           version.change_number = change;
           changed = true;
@@ -49,10 +60,7 @@
       });
       var currentVersion = versions.find(function (v) { return isCurrent(v, norm); });
       if (currentVersion) {
-        var currentChange = currentVersion.change_number != null
-          ? String(currentVersion.change_number)
-          : changeNumberFromFilename(currentVersion.original_filename || currentVersion.filename);
-        norm.current_change_number = currentChange;
+        norm.current_change_number = changeNumber(currentVersion);
         norm.version_id = currentVersion.version_id || currentVersion.id;
       }
     });
@@ -79,16 +87,11 @@
         var current = versions.find(function (v) { return isCurrent(v, norm); });
         if (title) {
           var number = norm.number || norm.id;
-          var change = current ? versionChangeNumber(current) : null;
+          var change = current ? changeNumber(current) : null;
           title.textContent = number + (current ? (change === null ? ' — Без изменений' : ' — Изменение №' + change) : ' — Действующая редакция не выбрана');
         }
       }
     });
-  }
-
-  function versionChangeNumber(version) {
-    if (version && version.change_number != null && String(version.change_number).trim() !== '') return String(version.change_number).trim();
-    return changeNumberFromFilename(version && (version.original_filename || version.filename));
   }
 
   function normalizeAndPatch() {
@@ -103,5 +106,5 @@
     if (attempts >= 40) clearInterval(timer);
   }, 300);
 
-  console.log('[VKS Expert AI][Norms] metadata compatibility fix v3 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v4 loaded');
 })();
