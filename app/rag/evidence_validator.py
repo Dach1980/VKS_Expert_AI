@@ -22,14 +22,7 @@ class EvidenceResult:
 class EvidenceValidator:
     """Validate retrieved evidence with an explicit normative-evidence priority."""
 
-    def __init__(
-        self,
-        min_score: float = 0.55,
-        min_confidence: float = 0.55,
-        min_relevance: float = 0.10,
-        min_query_relevance: float = 0.05,
-        min_faiss_score: float = 0.20,
-    ):
+    def __init__(self, min_score: float = 0.55, min_confidence: float = 0.55, min_relevance: float = 0.10, min_query_relevance: float = 0.05, min_faiss_score: float = 0.20):
         self.min_score = min_score
         self.min_confidence = min_confidence
         self.min_relevance = min_relevance
@@ -37,102 +30,58 @@ class EvidenceValidator:
         self.min_faiss_score = min_faiss_score
 
     DOMAIN_KEYWORDS = {
-        "internal_water_supply": [
-            "водоснабж", "водопровод", "хвс", "гвс", "расход воды",
-            "секундный расход", "расчетный расход", "максимальный расчетный расход",
-            "давление", "напор", "трубопровод", "стояк", "водоразбор",
-            "водоразборный", "система холодного водоснабжения",
-            "система горячего водоснабжения",
-        ],
-        "sewerage": [
-            "канализа", "сток", "водоотведение", "гидравлический затвор",
-            "канализационный стояк", "расчетный расход стоков",
-        ],
-        "fire_water": [
-            "пожар", "внутренний пожарный водопровод", "спринклер",
-            "расход пожарный", "пожаротушение", "пожарный кран",
-        ],
+        "internal_water_supply": ["водоснабж", "водопровод", "хвс", "гвс", "расход воды", "секундный расход", "расчетный расход", "максимальный расчетный расход", "давление", "напор", "трубопровод", "стояк", "водоразбор", "водоразборный", "система холодного водоснабжения", "система горячего водоснабжения"],
+        "sewerage": ["канализа", "сток", "водоотведение", "гидравлический затвор", "канализационный стояк", "расчетный расход стоков"],
+        "fire_water": ["пожар", "внутренний пожарный водопровод", "спринклер", "расход пожарный", "пожаротушение", "пожарный кран"],
     }
 
     TOPIC_KEYWORDS = {
-        "hydraulic_calculation": [
-            "расход", "напор", "давление", "гидравличес", "диаметр",
-            "потери", "формула", "скорость", "водоразбор", "расчет", "расчетный",
-        ],
-        "pipe_selection": [
-            "диаметр", "труба", "материал", "скорость", "трубопровод",
-        ],
-        "normative_requirement": [
-            "требования", "должен", "следует", "нормы", "предусматривать",
-            "допускается", "не допускается", "принимать", "предусматривается",
-        ],
+        "hydraulic_calculation": ["расход", "напор", "давление", "гидравличес", "диаметр", "потери", "формула", "скорость", "водоразбор", "расчет", "расчетный"],
+        "pipe_selection": ["диаметр", "труба", "материал", "скорость", "трубопровод"],
+        "normative_requirement": ["требования", "должен", "следует", "нормы", "предусматривать", "допускается", "не допускается", "принимать", "предусматривается"],
     }
 
-    STOP_WORDS = {
-        "как", "какой", "какая", "какие", "какое", "что", "где", "когда",
-        "для", "при", "по", "на", "в", "во", "из", "и", "или", "а", "о", "об",
-        "с", "со", "к", "у", "от", "до", "за", "не", "же", "ли", "это",
-    }
+    STOP_WORDS = {"как", "какой", "какая", "какие", "какое", "что", "где", "когда", "для", "при", "по", "на", "в", "во", "из", "и", "или", "а", "о", "об", "с", "со", "к", "у", "от", "до", "за", "не", "же", "ли", "это"}
 
     DIRECT_NORMATIVE_PATTERNS = (
-        r"\bследует\s+(?:принимать|предусматривать|определять|устанавливать)",
-        r"\bдолж(?:ен|на|но|ны)\b",
-        r"\bне\s+допускается\b",
-        r"\bдопускается\b",
-        r"\bпринимают\b",
-        r"\bпринимается\b",
-        r"\bпринимают\s+не\s+менее\b",
-        r"\bне\s+менее\b",
-        r"\bне\s+более\b",
-        r"\bне\s+должен\b",
+        r"следует\s+(?:принимать|предусматривать|определять|устанавливать)",
+        r"долж(?:ен|на|но|ны)",
+        r"не\s+допускается",
+        r"допускается",
+        r"принимают",
+        r"принимается",
+        r"не\s+менее",
+        r"не\s+более",
+        r"не\s+должен",
     )
 
+    QUERY_ANCHORS = ("диаметр", "труб", "трубопровод", "условный проход", "водопровод", "водоснабжен", "ду", "dn")
+
     def validate(self, results: List[dict], intent=None, top_k: int = 5, query: str = "") -> EvidenceResult:
-        accepted_candidates = []
-        rejected = []
+        accepted_candidates, rejected = [], []
         normative_query = self._is_normative_query(query, intent)
 
         for item in results:
             if not isinstance(item, dict):
                 continue
-
             text, formula, continuation = self._extract_content(item)
             searchable_text = self._normalize(" ".join(part for part in (text, formula, continuation) if part))
             score = self._safe_float(item.get("score", 0.0))
             relevance = self._calculate_relevance(searchable_text, intent)
             query_relevance = self._calculate_query_relevance(searchable_text, query)
             direct_normative = self._direct_normative_evidence(searchable_text, query, normative_query)
-
             has_formula = bool(formula.strip())
             is_formula_context = item.get("type") == "formula_context"
             formula_bonus = 0.10 if is_formula_context and has_formula else (0.05 if has_formula else 0.0)
             completeness = self._calculate_completeness(text, formula, continuation, item)
-
-            # Direct normative wording is a qualitatively stronger signal than
-            # a generic semantic hit. It receives an explicit bonus and is used
-            # as a preferred acceptance/sorting signal below.
             direct_bonus = 0.20 if direct_normative else 0.0
-            final_score = min(
-                score * 0.55
-                + relevance * 0.15
-                + query_relevance * 0.15
-                + completeness * 0.05
-                + formula_bonus
-                + direct_bonus,
-                1.0,
-            )
+            final_score = min(score * 0.55 + relevance * 0.15 + query_relevance * 0.15 + completeness * 0.05 + formula_bonus + direct_bonus, 1.0)
 
             has_relevance = relevance >= self.min_relevance or query_relevance >= self.min_query_relevance
             strong_query_match = query_relevance >= 0.35
             faiss_ok = score >= self.min_faiss_score
-
-            # Normative questions need stronger direct textual correspondence.
-            # Generic fragments with weak query relevance must not pass merely
-            # because FAISS similarity is high. A direct normative clause is
-            # allowed through this stricter gate.
-            query_gate = self.min_query_relevance
+            query_gate = max(self.min_query_relevance, 0.10) if normative_query and not direct_normative else self.min_query_relevance
             if normative_query and not direct_normative:
-                query_gate = max(query_gate, 0.10)
                 has_relevance = relevance >= self.min_relevance or query_relevance >= query_gate
 
             reasons = []
@@ -144,10 +93,9 @@ class EvidenceValidator:
                 reasons.append("normative_query_relevance_below_threshold")
             if final_score < self.min_score:
                 reasons.append("evidence_score_below_threshold")
-
             if not has_relevance and strong_query_match and faiss_ok:
                 has_relevance = True
-                reasons = [r for r in reasons if r != "no_direct_relevance"]
+                reasons = [reason for reason in reasons if reason != "no_direct_relevance"]
 
             accepted_flag = faiss_ok and has_relevance and final_score >= self.min_score
             if normative_query and not direct_normative and query_relevance < query_gate:
@@ -164,26 +112,10 @@ class EvidenceValidator:
             item["direct_relevance"] = has_relevance
             item["has_formula"] = has_formula
             item["validation_reasons"] = ["accepted"] if accepted_flag else reasons
-            item["score_breakdown"] = {
-                "faiss": round(score * 0.55, 3),
-                "engineering_relevance": round(relevance * 0.15, 3),
-                "query_relevance": round(query_relevance * 0.15, 3),
-                "completeness": round(completeness * 0.05, 3),
-                "formula_bonus": round(formula_bonus, 3),
-                "direct_normative_bonus": round(direct_bonus, 3),
-            }
-
+            item["score_breakdown"] = {"faiss": round(score * 0.55, 3), "engineering_relevance": round(relevance * 0.15, 3), "query_relevance": round(query_relevance * 0.15, 3), "completeness": round(completeness * 0.05, 3), "formula_bonus": round(formula_bonus, 3), "direct_normative_bonus": round(direct_bonus, 3)}
             (accepted_candidates if accepted_flag else rejected).append(item)
 
-        # First rank by evidence strength, then explicitly by direct normative
-        # status so a clause such as "следует принимать ... не менее 50 мм"
-        # stays above generic explanatory mentions of the same term.
-        accepted = sorted(
-            accepted_candidates,
-            key=lambda x: (bool(x.get("direct_normative_evidence")), x.get("evidence_score", 0.0)),
-            reverse=True,
-        )[:top_k]
-
+        accepted = sorted(accepted_candidates, key=lambda x: (bool(x.get("direct_normative_evidence")), x.get("evidence_score", 0.0)), reverse=True)[:top_k]
         confidence = self._calculate_confidence(accepted)
         sufficient = bool(accepted) and confidence >= self.min_confidence
 
@@ -214,12 +146,7 @@ class EvidenceValidator:
                 print(f"#{i}", "page=", item.get("page"), "score=", item.get("evidence_score"), "reasons=", item.get("validation_reasons"))
         print("====================================")
 
-        return EvidenceResult(
-            confidence=round(confidence, 3),
-            accepted=accepted,
-            rejected=rejected,
-            sufficient=sufficient,
-        )
+        return EvidenceResult(confidence=round(confidence, 3), accepted=accepted, rejected=rejected, sufficient=sufficient)
 
     def _extract_content(self, item: dict):
         content = item.get("content", {})
@@ -253,11 +180,7 @@ class EvidenceValidator:
         base = sum(scores) / len(scores)
         documents = {str(item.get("document", "")) for item in accepted if item.get("document")}
         pages = {(str(item.get("document", "")), item.get("page")) for item in accepted}
-        diversity_bonus = 0.0
-        if len(documents) >= 2:
-            diversity_bonus += 0.03
-        if len(pages) >= 2:
-            diversity_bonus += 0.02
+        diversity_bonus = (0.03 if len(documents) >= 2 else 0.0) + (0.02 if len(pages) >= 2 else 0.0)
         return min(base + diversity_bonus, 1.0)
 
     def _normalize(self, text: str) -> str:
@@ -274,13 +197,7 @@ class EvidenceValidator:
             return 0.0
         normalized_text = self._normalize(text)
         normalized_query = self._normalize(query)
-        important_phrases = [
-            "максимальный расчетный расход воды", "расчетный расход воды",
-            "расчетном участке сети", "максимальный расход воды", "расчетный участок сети",
-            "гидравлический расчет", "внутренняя система водоснабжения",
-            "внутренние системы водоснабжения", "диаметр труб", "диаметр трубы",
-            "условный проход", "минимальный диаметр", "принимать диаметр",
-        ]
+        important_phrases = ["максимальный расчетный расход воды", "расчетный расход воды", "расчетном участке сети", "максимальный расход воды", "расчетный участок сети", "гидравлический расчет", "внутренняя система водоснабжения", "внутренние системы водоснабжения", "диаметр труб", "диаметр трубы", "условный проход", "минимальный диаметр", "принимать диаметр"]
         phrase_hits = sum(1 for phrase in important_phrases if phrase in normalized_query and phrase in normalized_text)
         tokens = self._query_tokens(query)
         if not tokens:
@@ -300,13 +217,11 @@ class EvidenceValidator:
             return 0.5
         score = 0.0
         system = getattr(intent, "system", "")
-        system_words = self.DOMAIN_KEYWORDS.get(system, [])
-        system_hits = sum(1 for word in system_words if self._normalize(word) in text)
+        system_hits = sum(1 for word in self.DOMAIN_KEYWORDS.get(system, []) if self._normalize(word) in text)
         if system_hits:
             score += min(system_hits * 0.15, 0.55)
         topic = getattr(intent, "topic", "")
-        topic_words = self.TOPIC_KEYWORDS.get(topic, [])
-        topic_hits = sum(1 for word in topic_words if self._normalize(word) in text)
+        topic_hits = sum(1 for word in self.TOPIC_KEYWORDS.get(topic, []) if self._normalize(word) in text)
         if topic_hits:
             score += min(topic_hits * 0.15, 0.45)
         return min(score, 1.0)
@@ -320,15 +235,20 @@ class EvidenceValidator:
     def _direct_normative_evidence(self, text: str, query: str, normative_query: bool) -> bool:
         if not normative_query:
             return False
-        normalized_text = self._normalize(text)
         normalized_query = self._normalize(query)
-        has_query_anchor = any(
-            phrase in normalized_query
-            for phrase in ("диаметр", "труб", "трубопровод", "условный проход", "водопровод", "водоснабжен")
-        )
-        if not has_query_anchor:
+        anchors = [anchor for anchor in self.QUERY_ANCHORS if anchor in normalized_query]
+        if not anchors:
             return False
-        return any(re.search(pattern, normalized_text) for pattern in self.DIRECT_NORMATIVE_PATTERNS)
+        # Direct evidence requires the queried concept and normative wording
+        # to occur in the same local clause, not merely somewhere on the page.
+        for anchor in anchors:
+            for anchor_match in re.finditer(re.escape(anchor), text):
+                start = max(0, anchor_match.start() - 120)
+                end = min(len(text), anchor_match.end() + 160)
+                window = text[start:end]
+                if any(re.search(pattern, window) for pattern in self.DIRECT_NORMATIVE_PATTERNS):
+                    return True
+        return False
 
     def _safe_float(self, value) -> float:
         try:
