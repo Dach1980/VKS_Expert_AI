@@ -5,6 +5,7 @@ import './dashboard.js?v=20260902-3';
 import './norms.js?v=20260903-2';
 import './norms-metadata-fix.js?v=20260903-5';
 import './norms-registry-fix.js?v=20260903-4';
+import './norms-amendment-label-fix.js?v=20260903-1';
 import './documents.js?v=20260902-3';
 import './checks.js?v=20260902-3';
 import './reports.js?v=20260902-3';
