@@ -23,20 +23,26 @@
   function isBaseVersion(version) {
     var type = String(version && version.type || '').toLowerCase();
     if (type === 'base') return true;
-    var filename = String(version && (version.original_filename || version.filename || version.file) || '');
-    return /\bбазов(?:ая|ую|ая\s+версия)\b|\bбез\s+изменений\b/i.test(filename);
+    var filename = String(version && (version.original_filename || version.filename || version.file) || '')
+      .replace(/[\u00A0\u202F]/g, ' ')
+      .replace(/[_-]+/g, ' ')
+      .trim();
+    if (!filename || changeNumberFromFilename(filename) !== null) return false;
+    return /(?:^|\s)(?:базов(?:ая|ую)|без\s+изменений)(?:\s|$)/i.test(filename);
   }
 
   // Priority is deliberately strict:
   // 1. PDF filename — authoritative source.
-  // 2. Existing explicit metadata — compatibility fallback only when the filename
+  // 2. Base-version marker — explicitly means no amendment.
+  // 3. Existing explicit metadata — compatibility fallback only when the filename
   //    does not contain an amendment number.
-  // 3. Version id — compatibility fallback only when neither of the above exists.
+  // 4. Version id — compatibility fallback only when neither of the above exists.
   // Never derive an amendment number from array/order/effective dates.
   function inferredChangeNumber(version) {
     var filename = version && (version.original_filename || version.filename || version.file);
     var fromFilename = changeNumberFromFilename(filename);
     if (fromFilename !== null) return fromFilename;
+    if (isBaseVersion(version)) return null;
 
     var explicit = version && version.change_number != null && String(version.change_number).trim() !== ''
       ? String(version.change_number).trim() : null;
@@ -51,7 +57,7 @@
   function changeNumber(version, fallback) {
     var inferred = inferredChangeNumber(version);
     if (inferred !== null) return inferred;
-    if (fallback != null && String(fallback).trim() !== '') return String(fallback).trim();
+    if (fallback != null && String(fallback).trim() !== '' && !isBaseVersion(version)) return String(fallback).trim();
     return null;
   }
 
@@ -82,16 +88,22 @@
         var filenameChange = changeNumberFromFilename(filename);
         var change = inferredChangeNumber(version);
 
-        // A number extracted from the PDF filename is immutable for this layer.
-        // Do not replace it with stale metadata, version id, or positional inference.
+        // The filename is authoritative; a base PDF is explicitly amendment-free.
         if (filenameChange !== null) {
           if (String(version.change_number || '') !== filenameChange) {
             version.change_number = filenameChange;
             changed = true;
           }
-        } else if (change !== null && String(version.change_number || '') !== change) {
-          version.change_number = change;
-          changed = true;
+        } else if (isBaseVersion(version)) {
+          if (version.change_number != null) {
+            version.change_number = null;
+            changed = true;
+          }
+        } else if (change !== null) {
+          if (String(version.change_number || '') !== change) {
+            version.change_number = change;
+            changed = true;
+          }
         }
 
         var current = isCurrent(version, norm);
@@ -129,8 +141,6 @@
       var panel = document.getElementById('normVersions-' + norm.id);
 
       if (panel) {
-        // Match each rendered row to its own visible filename. Do not use row
-        // position: sorting or legacy registry order must never change the label.
         panel.querySelectorAll('.norm-version-row').forEach(function (row) {
           var filenameNode = row.querySelector('.norm-version-file-name');
           var label = row.querySelector('.norm-version-label');
@@ -168,6 +178,8 @@
     patchRenderedRows();
   }
 
+  // The first pass is immediate; the short retry window covers asynchronous API loading.
+  normalizeAndPatch();
   var attempts = 0;
   var timer = setInterval(function () {
     attempts += 1;
@@ -175,5 +187,5 @@
     if (attempts >= 40) clearInterval(timer);
   }, 300);
 
-  console.log('[VKS Expert AI][Norms] metadata compatibility fix v10 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v11 loaded');
 })();
