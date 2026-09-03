@@ -41,8 +41,22 @@ def formula_score(query: str, item: dict) -> float:
 
 
 def lexical_tokens(text: str) -> list[str]:
-    """Return meaningful Cyrillic/Latin/numeric tokens for lexical retrieval."""
-    return [token for token in re.findall(r"[\w№]+", str(text or "").lower()) if len(token) >= 3]
+    """Return normalized tokens, including simple Russian inflection normalization."""
+    tokens = [token for token in re.findall(r"[\w№]+", str(text or "").lower()) if len(token) >= 3]
+    normalized = []
+    for token in tokens:
+        if token.startswith("№"):
+            normalized.append(token)
+            continue
+        # Lightweight suffix normalization is intentional here: normative
+        # queries frequently use cases such as "диаметру" while the clause
+        # contains "диаметр". It avoids adding a morphology dependency.
+        for suffix in ("иями", "ами", "ями", "ого", "ему", "ому", "ими", "ыми", "ее", "ие", "ые", "ое", "ей", "ий", "ый", "ой", "ем", "им", "ым", "ом", "ам", "ям", "ах", "ях", "ов", "ев", "ы", "и", "а", "я", "у", "ю", "е", "о"):
+            if len(token) - len(suffix) >= 4 and token.endswith(suffix):
+                token = token[:-len(suffix)]
+                break
+        normalized.append(token)
+    return normalized
 
 
 def lexical_score(query: str, item: dict) -> float:
@@ -57,12 +71,12 @@ def lexical_score(query: str, item: dict) -> float:
     if not overlap:
         return 0.0
     coverage = len(overlap) / len(query_tokens)
-    score = 0.22 * coverage
+    score = 0.30 * coverage
     normalized_query = " ".join(lexical_tokens(query))
     normalized_text = " ".join(lexical_tokens(text))
     if normalized_query and normalized_query in normalized_text:
         score += 0.16
-    return min(score, 0.38)
+    return min(score, 0.46)
 
 
 class Retriever:
@@ -127,9 +141,6 @@ class Retriever:
                 final_score += 0.30
             merged[idx] = {"item": item, "score": final_score, "source": "faiss"}
 
-        # Also inspect metadata outside the FAISS shortlist. This catches exact
-        # normative terms (e.g. "диаметр", "условный проход") when the semantic
-        # embedding ranks introductory/adjacent text above the actual clause.
         lexical_candidates = []
         for idx, item in enumerate(self.metadata):
             score = lexical_score(query, item)
