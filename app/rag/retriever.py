@@ -107,7 +107,8 @@ class Retriever:
         self.document_id = self._resolve_document_id(document_id)
         self.version = self._resolve_version(version_id)
         self.version_id = str(self.version.get("id") or version_id or "")
-        self.version_label = self._version_label(self.version)
+        self.version_metadata = self.storage.get_version_metadata(self.document_id, self.version_id)
+        self.version_label = self._version_label(self.version, self.version_metadata)
         self.paths = self.storage.paths(self.document_id, self.version_id)
         self.index_file = self.paths.embeddings / "index.faiss"
         self.metadata_file = self.paths.embeddings / "metadata.json"
@@ -144,18 +145,25 @@ class Retriever:
         return self.storage.get_current_version(self.document_id)
 
     @staticmethod
-    def _version_label(version: dict) -> str:
-        """Build a stable human-readable version label from registry metadata."""
-        change_number = version.get("change_number")
+    def _version_label(version: dict, metadata: dict | None = None) -> str:
+        """Build a stable human-readable version label from authoritative storage metadata."""
+        metadata = metadata or {}
+        change_number = metadata.get("change_number") or version.get("change_number")
         if change_number not in (None, "", 0, "0"):
             value = str(change_number).strip()
             match = re.search(r"\d+", value)
             if match:
                 return f"Изменение №{match.group(0)}"
-        filename = str(version.get("file") or "")
-        match = re.search(r"(?:изм|изменени[ея])\s*\.?\s*№?\s*(\d+)", filename, re.IGNORECASE)
-        if match:
-            return f"Изменение №{match.group(1)}"
+        filenames = (
+            metadata.get("original_filename"),
+            metadata.get("filename"),
+            version.get("original_filename"),
+            version.get("file"),
+        )
+        for filename in filenames:
+            match = re.search(r"(?:изм|изменени[ея])\s*\.?\s*№?\s*(\d+)", str(filename or ""), re.IGNORECASE)
+            if match:
+                return f"Изменение №{match.group(1)}"
         return "Без изменений"
 
     @staticmethod
