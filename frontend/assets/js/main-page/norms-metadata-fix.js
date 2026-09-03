@@ -15,13 +15,16 @@
     return match ? match[1] : null;
   }
 
-  function changeNumber(version) {
+  function changeNumber(version, fallback) {
     if (version && version.change_number != null && String(version.change_number).trim() !== '') {
       return String(version.change_number).trim();
     }
     var fromFilename = changeNumberFromFilename(version && (version.original_filename || version.filename || version.file));
     if (fromFilename !== null) return fromFilename;
-    return changeNumberFromVersionId(version);
+    var fromVersionId = changeNumberFromVersionId(version);
+    if (fromVersionId !== null) return fromVersionId;
+    if (fallback != null && String(fallback).trim() !== '') return String(fallback).trim();
+    return null;
   }
 
   function isCurrent(version, norm) {
@@ -32,7 +35,7 @@
   }
 
   function labelFor(version, norm) {
-    var change = changeNumber(version);
+    var change = changeNumber(version, norm && norm.current_change_number);
     return (change === null ? 'Без изменений' : 'Изменение №' + change)
       + (isCurrent(version, norm) ? ' · действующая' : ' · архивная');
   }
@@ -43,7 +46,7 @@
     data.forEach(function (norm) {
       var versions = Array.isArray(norm.versions) ? norm.versions : [];
       versions.forEach(function (version) {
-        var change = changeNumber(version);
+        var change = changeNumber(version, norm.current_change_number);
         if (change !== null && String(version.change_number || '') !== change) {
           version.change_number = change;
           changed = true;
@@ -60,7 +63,7 @@
       });
       var currentVersion = versions.find(function (v) { return isCurrent(v, norm); });
       if (currentVersion) {
-        norm.current_change_number = changeNumber(currentVersion);
+        norm.current_change_number = changeNumber(currentVersion, norm.current_change_number);
         norm.version_id = currentVersion.version_id || currentVersion.id;
       }
     });
@@ -87,7 +90,7 @@
         var current = versions.find(function (v) { return isCurrent(v, norm); });
         if (title) {
           var number = norm.number || norm.id;
-          var change = current ? changeNumber(current) : null;
+          var change = current ? changeNumber(current, norm.current_change_number) : null;
           title.textContent = number + (current ? (change === null ? ' — Без изменений' : ' — Изменение №' + change) : ' — Действующая редакция не выбрана');
         }
       }
@@ -106,5 +109,5 @@
     if (attempts >= 40) clearInterval(timer);
   }, 300);
 
-  console.log('[VKS Expert AI][Norms] metadata compatibility fix v4 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v5 loaded');
 })();
