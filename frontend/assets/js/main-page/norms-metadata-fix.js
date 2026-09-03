@@ -13,7 +13,7 @@
     var selectedId = norm && norm.version_id != null ? String(norm.version_id) : '';
     var versionId = String(version && (version.version_id || version.id) || '');
     if (selectedId) return versionId === selectedId;
-    return !!(version && version.status === 'current' && version.current_selected_by_user === true);
+    return !!(version && String(version.status || '').toLowerCase() === 'current');
   }
 
   function labelFor(version, norm) {
@@ -38,14 +38,12 @@
           changed = true;
         }
         var current = isCurrent(version, norm);
-        if (current && (version.status !== 'current' || version.current_selected_by_user !== true)) {
+        if (current && version.status !== 'current') {
           version.status = 'current';
-          version.current_selected_by_user = true;
           changed = true;
         }
-        if (!current && (version.status === 'current' || version.current_selected_by_user === true)) {
+        if (!current && version.status === 'current') {
           version.status = 'superseded';
-          version.current_selected_by_user = false;
           changed = true;
         }
       });
@@ -55,6 +53,7 @@
           ? String(currentVersion.change_number)
           : changeNumberFromFilename(currentVersion.original_filename || currentVersion.filename);
         norm.current_change_number = currentChange;
+        norm.version_id = currentVersion.version_id || currentVersion.id;
       }
     });
     if (changed && typeof window.renderNorms === 'function') window.renderNorms();
@@ -80,12 +79,16 @@
         var current = versions.find(function (v) { return isCurrent(v, norm); });
         if (title) {
           var number = norm.number || norm.id;
-          var change = current ? changeNumberFromFilename(current.original_filename || current.filename) : null;
-          if (current && current.change_number != null) change = String(current.change_number);
+          var change = current ? versionChangeNumber(current) : null;
           title.textContent = number + (current ? (change === null ? ' — Без изменений' : ' — Изменение №' + change) : ' — Действующая редакция не выбрана');
         }
       }
     });
+  }
+
+  function versionChangeNumber(version) {
+    if (version && version.change_number != null && String(version.change_number).trim() !== '') return String(version.change_number).trim();
+    return changeNumberFromFilename(version && (version.original_filename || version.filename));
   }
 
   function normalizeAndPatch() {
@@ -100,5 +103,5 @@
     if (attempts >= 40) clearInterval(timer);
   }, 300);
 
-  console.log('[VKS Expert AI][Norms] legacy metadata compatibility fix v2 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v3 loaded');
 })();
