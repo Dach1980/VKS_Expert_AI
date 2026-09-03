@@ -68,6 +68,12 @@ function formatContent(content) {
   return escapeHtml(content);
 }
 
+function formatSourceDocument(source) {
+  const document = source?.document || 'unknown';
+  const version = source?.version_label || source?.normative_version || '';
+  return version && version !== document ? version : document;
+}
+
 function addDiagnosticsToChat(diagnostics, notice) {
   if (!diagnostics) return;
   const retrieved = Array.isArray(diagnostics.retrieved) ? diagnostics.retrieved : [];
@@ -78,7 +84,7 @@ function addDiagnosticsToChat(diagnostics, notice) {
 
   const rows = retrieved.map((item, index) => `
     <div class="rag-debug-item">
-      <div><strong>#${index + 1}</strong> · ${escapeHtml(item.document || 'unknown')} · стр. ${escapeHtml(item.page || 0)} · score ${Number(item.score || 0).toFixed(3)}</div>
+      <div><strong>#${index + 1}</strong> · ${escapeHtml(formatSourceDocument(item))} · стр. ${escapeHtml(item.page || 0)} · score ${Number(item.score || 0).toFixed(3)}</div>
       <div class="rag-debug-type">${escapeHtml(item.type || 'text')} · ${escapeHtml(item.source || 'faiss')}</div>
       <div class="rag-debug-text">${formatContent(item.content)}</div>
     </div>`).join('');
@@ -86,7 +92,7 @@ function addDiagnosticsToChat(diagnostics, notice) {
   const rejectedRows = rejected.map((item, index) => {
     const reason = item.reason || item.reasons || item.message || 'без указанной причины';
     const source = item.item || {};
-    return `<div class="rag-debug-item"><strong>Отклонено #${index + 1}</strong> · ${escapeHtml(source.document || '')} · стр. ${escapeHtml(source.page || 0)}<div class="rag-debug-text">Причина: ${escapeHtml(typeof reason === 'object' ? JSON.stringify(reason) : reason)}</div></div>`;
+    return `<div class="rag-debug-item"><strong>Отклонено #${index + 1}</strong> · ${escapeHtml(formatSourceDocument(source))} · стр. ${escapeHtml(source.page || 0)}<div class="rag-debug-text">Причина: ${escapeHtml(typeof reason === 'object' ? JSON.stringify(reason) : reason)}</div></div>`;
   }).join('');
 
   const block = document.createElement('details');
@@ -100,7 +106,7 @@ function addDiagnosticsToChat(diagnostics, notice) {
       <div class="rag-debug-meta"><b>Enhanced query:</b><pre>${escapeHtml(diagnostics.enhanced_query || '')}</pre></div>
       <div class="rag-debug-meta"><b>Проверенный контекст:</b><pre>${escapeHtml(diagnostics.context || '[пусто]')}</pre></div>
       <div class="rag-debug-section"><b>Сырые результаты Retriever (${retrieved.length})</b>${rows || '<div class="rag-debug-empty">Retriever не вернул результатов.</div>'}</div>
-      <div class="rag-debug-section"><b>Принятые evidence (${accepted.length})</b>${accepted.map(item => `<div class="rag-debug-item">${escapeHtml(item.document || '')} · стр. ${escapeHtml(item.page || 0)} · score ${Number(item.score || 0).toFixed(3)}<div class="rag-debug-text">${formatContent(item.content)}</div></div>`).join('') || '<div class="rag-debug-empty">Нет принятых evidence.</div>'}</div>
+      <div class="rag-debug-section"><b>Принятые evidence (${accepted.length})</b>${accepted.map(item => `<div class="rag-debug-item">${escapeHtml(formatSourceDocument(item))} · стр. ${escapeHtml(item.page || 0)} · score ${Number(item.score || 0).toFixed(3)}<div class="rag-debug-text">${formatContent(item.content)}</div></div>`).join('') || '<div class="rag-debug-empty">Нет принятых evidence.</div>'}</div>
       <div class="rag-debug-section"><b>Отклонённые evidence (${rejected.length})</b>${rejectedRows || '<div class="rag-debug-empty">Нет отклонённых evidence.</div>'}</div>
     </div>`;
 
@@ -118,7 +124,7 @@ function addMessageToChat(role, content, sources = null) {
   const avatar = role === 'user' ? 'Вы' : 'AI';
   let sourcesHTML = '';
   if (sources && sources.length > 0) {
-    sourcesHTML = `<div class="sources-block"><div class="sources-title">Источники</div>${sources.map(source => `<div class="source-item"><span class="source-doc">${escapeHtml(source.document)}</span><div>Страница: ${escapeHtml(source.page)}<br>Релевантность: ${Number(source.score || 0).toFixed(3)}</div></div>`).join('')}</div>`;
+    sourcesHTML = `<div class="sources-block"><div class="sources-title">Источники</div>${sources.map(source => `<div class="source-item"><span class="source-doc">${escapeHtml(formatSourceDocument(source))}</span><div>Страница: ${escapeHtml(source.page)}<br>Релевантность: ${Number(source.score || 0).toFixed(3)}</div></div>`).join('')}</div>`;
   }
   messageDiv.innerHTML = `<div class="message-avatar">${avatar}</div><div class="message-content">${content || ''}${sourcesHTML}</div>`;
   chatMessages.appendChild(messageDiv);
