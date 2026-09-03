@@ -13,145 +13,63 @@
       <aside class="left-sidebar" id="leftSidebar">
         <div class="sidebar-header">
           <button class="home-btn" onclick="goToHome()">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
             На главную
           </button>
           <button class="new-chat-btn" onclick="newChat()">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
             Новая тема
           </button>
         </div>
-
         <div class="sidebar-content">
           <div class="sidebar-section">
             <div class="sidebar-section-title">Навигация</div>
             <div class="chat-list">
-              <div class="chat-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
-                Проекты
-              </div>
-              <div class="chat-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                Память
-              </div>
-              <div class="chat-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-                Навыки
-              </div>
+              <div class="chat-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>Проекты</div>
+              <div class="chat-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>Память</div>
+              <div class="chat-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>Навыки</div>
             </div>
           </div>
-
           <div class="sidebar-section">
             <div class="sidebar-section-title">Чаты</div>
             <div class="chat-list" id="chatHistory">
-              <div class="chat-item active">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                Ассистент по нормам ВК
-              </div>
+              <div class="chat-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>Ассистент по нормам ВК</div>
             </div>
           </div>
         </div>
-
         <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="user-avatar">ДЧ</div>
-            <div class="user-details">
-              <div class="user-name">Дмитрий Черкашин</div>
-              <div class="user-org">Da! Development</div>
-            </div>
-          </div>
+          <div class="user-info"><div class="user-avatar">ДЧ</div><div class="user-details"><div class="user-name">Дмитрий Черкашин</div><div class="user-org">Da! Development</div></div></div>
         </div>
       </aside>
 
       <main class="main-content">
         <header class="chat-header">
           <div class="chat-header-left">
-            <button class="toggle-btn" onclick="toggleLeftSidebar()" title="Свернуть левую панель">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
+            <button class="toggle-btn" onclick="toggleLeftSidebar()" title="Свернуть левую панель"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg></button>
             <h1>База знаний</h1>
           </div>
-          <button class="toggle-btn" onclick="toggleRightPanel()" title="Свернуть правую панель">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            </svg>
-          </button>
+          <button class="toggle-btn" onclick="toggleRightPanel()" title="Свернуть правую панель"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg></button>
         </header>
-
         <div class="chat-messages" id="chatMessages">
           <div class="welcome-screen" id="welcomeScreen">
-            <div class="welcome-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <div class="welcome-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg></div>
             <h2>База знаний</h2>
-            <p>
-              Задайте вопрос по нормативным документам или проектной документации. Система найдёт релевантную информацию и предоставит ответ с ссылками на источники.
-            </p>
-
+            <p>Задайте вопрос по нормативным документам или проектной документации. Система найдёт релевантную информацию и предоставит ответ с ссылками на источники.</p>
             <div class="example-queries">
-              <div class="example-query" onclick="sendExample('Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?')">
-                Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?
-              </div>
-              <div class="example-query" onclick="sendExample('Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?')">
-                Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?
-              </div>
-              <div class="example-query" onclick="sendExample('Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?')">
-                Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?
-              </div>
+              <div class="example-query" onclick="sendExample('Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?')">Какие требования к диаметру труб для внутреннего водопровода согласно СП 30.13330.2020?</div>
+              <div class="example-query" onclick="sendExample('Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?')">Что говорит СП 30.13330.2020 о скорости воды в трубах и как её рассчитать?</div>
+              <div class="example-query" onclick="sendExample('Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?')">Как рассчитать потери напора в трубопроводе по формуле Дарси-Вейсбаха?</div>
             </div>
           </div>
         </div>
-
         <div class="chat-input-area">
           <div class="chat-options">
-            <label class="option-checkbox">
-              <input type="checkbox" id="searchInNorms" checked />
-              <span>Искать в нормативной документации</span>
-            </label>
-            <label class="option-checkbox">
-              <input type="checkbox" id="searchInDocs" checked />
-              <span>Искать в проектной документации</span>
-            </label>
+            <label class="option-checkbox"><input type="checkbox" id="searchInNorms" checked /><span>Искать в нормативной документации</span></label>
+            <label class="option-checkbox"><input type="checkbox" id="searchInDocs" checked /><span>Искать в проектной документации</span></label>
           </div>
           <div class="chat-input-wrapper">
             <textarea id="chatInput" class="chat-input" placeholder="Введите запрос..." rows="1" onkeydown="handleInputKeydown(event)" oninput="autoResizeInput(this)"></textarea>
-            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
-            </button>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg></button>
           </div>
         </div>
       </main>
@@ -159,32 +77,15 @@
       <aside class="right-panel" id="rightPanel">
         <div class="right-panel-header">Контекст</div>
         <div class="right-panel-content">
-          <div class="right-section">
-            <div class="right-section-title">Память</div>
-            <div class="memory-item">Предпочитает тёмную тему</div>
-            <div class="memory-item">Работает с разделом ВК</div>
-            <div class="memory-item">Использует СП 30.13330.2020</div>
-          </div>
-          <div class="right-section">
-            <div class="right-section-title">Подключённые навыки</div>
-            <div class="skill-item">dashboard</div>
-            <div class="skill-item">neuro-skills</div>
-            <div class="skill-item">memory</div>
-          </div>
-          <div class="right-section">
-            <div class="right-section-title">Закреплённые положения</div>
-            <div style="font-size: 13px; color: var(--text-secondary); padding: 8px 12px;">Положений пока нет</div>
-          </div>
+          <div class="right-section"><div class="right-section-title">Память</div><div class="memory-item">Предпочитает тёмную тему</div><div class="memory-item">Работает с разделом ВК</div><div class="memory-item">Использует СП 30.13330.2020</div></div>
+          <div class="right-section"><div class="right-section-title">Подключённые навыки</div><div class="skill-item">dashboard</div><div class="skill-item">neuro-skills</div><div class="skill-item">memory</div></div>
+          <div class="right-section"><div class="right-section-title">Закреплённые положения</div><div style="font-size: 13px; color: var(--text-secondary); padding: 8px 12px;">Положений пока нет</div></div>
         </div>
-        <div class="right-panel-footer">
-          <button class="footer-btn">️ Настройки</button>
-          <button class="footer-btn">❓ Помощь</button>
-          <button class="footer-btn">Аналитика</button>
-          <button class="footer-btn">🛡️ Безопасность</button>
-        </div>
+        <div class="right-panel-footer"><button class="footer-btn">️ Настройки</button><button class="footer-btn">❓ Помощь</button><button class="footer-btn">Аналитика</button><button class="footer-btn">🛡️ Безопасность</button></div>
       </aside>
     </div>
 
     <script src="assets/js/knowledge-base/vks-chat.js?v=20260903-2"></script>
+    <script src="assets/js/knowledge-base/vks-chat-final-presentation.js?v=20260903-1"></script>
   </body>
 </html>
