@@ -12,7 +12,7 @@ import numpy as np
 from app.knowledge.storage import KnowledgeStorage
 from app.rag.embedding_client import EmbeddingClient
 
-DEFAULT_DOCUMENT = "SP_30.13330"
+DEFAULT_DOCUMENT_NUMBER = "СП 30.13330.2020"
 TOP_K = 10
 
 
@@ -41,13 +41,13 @@ def formula_score(query: str, item: dict) -> float:
 
 
 class Retriever:
-    """FAISS retrieval against a concrete indexed normative version."""
+    """FAISS retrieval against the registry-selected normative version."""
 
-    def __init__(self, document_id: str = DEFAULT_DOCUMENT, version_id: str | None = None, storage: KnowledgeStorage | None = None):
+    def __init__(self, document_id: str | None = None, version_id: str | None = None, storage: KnowledgeStorage | None = None):
         self.storage = storage or KnowledgeStorage()
-        self.document_id = document_id
-        self.version_id = version_id or self.storage.get_current_version(document_id).get("id")
-        self.paths = self.storage.paths(document_id, self.version_id)
+        self.document_id = self._resolve_document_id(document_id)
+        self.version_id = version_id or self.storage.get_current_version(self.document_id).get("id")
+        self.paths = self.storage.paths(self.document_id, self.version_id)
         self.index_file = self.paths.embeddings / "index.faiss"
         self.metadata_file = self.paths.embeddings / "metadata.json"
         if not self.index_file.exists():
@@ -64,6 +64,25 @@ class Retriever:
 
         self.metadata = json.loads(self.metadata_file.read_text(encoding="utf-8-sig"))
         self.client = EmbeddingClient()
+
+    def _resolve_document_id(self, document_id: str | None) -> str:
+        if document_id and self.storage.registry.get_document(document_id) is not None:
+            return document_id
+        target = self._number_group(document_id or DEFAULT_DOCUMENT_NUMBER)
+        candidates = [
+            document for document in self.storage.registry.get_all_documents()
+            if self._number_group(document.get("number", "")) == target
+        ]
+        if not candidates:
+            raise ValueError(f"Нормативный документ не найден в реестре: {document_id or DEFAULT_DOCUMENT_NUMBER}")
+        candidates.sort(key=lambda item: len(item.get("versions", [])), reverse=True)
+        return str(candidates[0].get("id"))
+
+    @staticmethod
+    def _number_group(value: str) -> str:
+        normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+        match = re.search(r"(?:сп|гост(?: р)?|снип|тр|фз)\s*[0-9]+\.[0-9]+", normalized, re.IGNORECASE)
+        return re.sub(r"\s+", " ", match.group(0)).strip() if match else normalized
 
     def search(self, query: str, top_k: int = TOP_K) -> list[dict]:
         if self.index.ntotal == 0:
@@ -95,24 +114,25 @@ class Retriever:
             "source": r["source"],
             "score": r["score"],
             "content": r["item"].get("content", ""),
-            # Keep parser metadata available to the normative requirement layer.
-            # It may contain the clause/section when the text chunk itself does not.
             "metadata": r["item"].get("metadata", {}),
             "chunk_id": r["item"].get("chunk_id"),
         } for r in merged[:top_k]]
 
 
-def load_index(document_id: str = DEFAULT_DOCUMENT, version_id: str | None = None):
+def load_index(document_id: str | None = None, version_id: str | None = None):
     return Retriever(document_id, version_id).index
 
 
-def load_metadata(document_id: str = DEFAULT_DOCUMENT, version_id: str | None = None):
+def load_metadata(document_id: str | None = None, version_id: str | None = None):
     return Retriever(document_id, version_id).metadata
 
 
 def main():
     query = input("\nSEARCH QUERY:\n\n")
-    for i, result in enumerate(Retriever().search(query), 1):
+    retriever = Retriever()
+    print(f"DOCUMENT: {retriever.document_id}")
+    print(f"VERSION: {retriever.version_id}")
+    for i, result in enumerate(retriever.search(query), 1):
         content = result.get("content", {})
         text = content.get("text", "") if isinstance(content, dict) else str(content)
         print(f"\nRESULT #{i} | page={result.get('page')} | score={result.get('score', 0):.5f}")
