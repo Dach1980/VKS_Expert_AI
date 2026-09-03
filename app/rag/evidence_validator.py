@@ -69,7 +69,7 @@ class EvidenceValidator:
             score = self._safe_float(item.get("score", 0.0))
             relevance = self._calculate_relevance(searchable_text, intent)
             query_relevance = self._calculate_query_relevance(searchable_text, query)
-            direct_normative = self._direct_normative_evidence(searchable_text, query, normative_query)
+            direct_normative = self._direct_normative_evidence(text, query, normative_query)
             has_formula = bool(formula.strip())
             is_formula_context = item.get("type") == "formula_context"
             formula_bonus = 0.10 if is_formula_context and has_formula else (0.05 if has_formula else 0.0)
@@ -241,11 +241,6 @@ class EvidenceValidator:
             return False
         normalized_query = self._normalize(query)
         query_uses_diameter = any(term in normalized_query for term in ("диаметр", "диаметру", "диаметры", "диаметр труб", "диаметр трубы"))
-
-        # For concept-specific normative questions, generic engineering words
-        # are not sufficient. A clause about pipes, for example, is not direct
-        # evidence for a question about diameter unless the diameter concept is
-        # itself present in the same local normative clause.
         if query_uses_diameter:
             anchors = ("диаметр", "условный проход", "dn", "ду")
         else:
@@ -253,13 +248,16 @@ class EvidenceValidator:
         if not anchors:
             return False
 
-        for anchor in anchors:
-            for anchor_match in re.finditer(re.escape(anchor), text):
-                start = max(0, anchor_match.start() - 120)
-                end = min(len(text), anchor_match.end() + 160)
-                window = text[start:end]
-                if any(re.search(pattern, window) for pattern in self.DIRECT_NORMATIVE_PATTERNS):
-                    return True
+        # Direct evidence must be self-contained in the primary text clause.
+        # Do not use formula/continuation fields here: continuation may contain
+        # unrelated following clauses and can create false cross-clause matches.
+        normalized_text = self._normalize(text)
+        clauses = [part.strip() for part in re.split(r"(?<=[.!?;])\s+|\n{2,}", normalized_text) if part.strip()]
+        for clause in clauses:
+            if not any(re.search(rf"(?<![a-zа-я]){re.escape(anchor)}(?![a-zа-я])", clause) for anchor in anchors):
+                continue
+            if any(re.search(pattern, clause) for pattern in self.DIRECT_NORMATIVE_PATTERNS):
+                return True
         return False
 
     def _safe_float(self, value) -> float:
