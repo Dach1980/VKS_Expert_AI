@@ -69,9 +69,118 @@ function formatContent(content) {
 }
 
 function formatSourceDocument(source) {
-  const document = source?.document || 'unknown';
+  const document = source?.document_number || source?.document || 'unknown';
   const version = source?.version_label || source?.normative_version || '';
-  return version && version !== document ? version : document;
+  if (!version || version === document) return document;
+  if (version.toLowerCase().includes(document.toLowerCase())) return version;
+  return `${document} — ${version}`;
+}
+
+function installAnswerStyles() {
+  if (document.getElementById('vksAnswerStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'vksAnswerStyles';
+  style.textContent = `
+    .vks-answer { line-height: 1.65; }
+    .vks-answer h3 { margin: 18px 0 9px; font-size: 16px; font-weight: 700; }
+    .vks-answer h3:first-child { margin-top: 0; }
+    .vks-answer p { margin: 7px 0; }
+    .vks-answer ul { margin: 8px 0 10px 20px; }
+    .vks-answer li { margin: 4px 0; }
+    .vks-answer .answer-highlight { margin: 10px 0 14px; padding: 12px 14px; border-radius: 10px; background: var(--bg-secondary, rgba(127,127,127,.08)); font-weight: 600; }
+    .vks-answer .answer-table-wrap { overflow-x: auto; margin: 10px 0 14px; }
+    .vks-answer table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .vks-answer th, .vks-answer td { padding: 9px 10px; border: 1px solid var(--border-color, rgba(127,127,127,.22)); text-align: left; vertical-align: top; }
+    .vks-answer th { font-weight: 700; background: var(--bg-secondary, rgba(127,127,127,.08)); }
+    .vks-answer .answer-conclusion { margin-top: 16px; padding: 13px 15px; border-radius: 10px; border: 1px solid var(--border-color, rgba(127,127,127,.22)); }
+    .vks-answer .answer-conclusion strong { display: block; margin-bottom: 5px; }
+    .sources-block { margin-top: 18px; }
+    .sources-table-wrap { overflow-x: auto; margin-top: 9px; }
+    .sources-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .sources-table th, .sources-table td { padding: 8px 9px; border: 1px solid var(--border-color, rgba(127,127,127,.22)); text-align: left; }
+    .sources-table th { font-weight: 700; background: var(--bg-secondary, rgba(127,127,127,.08)); }
+  `;
+  document.head.appendChild(style);
+}
+
+function renderAnswer(answer) {
+  installAnswerStyles();
+  let text = String(answer == null ? '' : answer).trim();
+  if (!text) return '<div class="vks-answer"><p>Ответ не получен.</p></div>';
+
+  // The current model output uses section labels without markdown headings.
+  // Normalize them first so the UI remains readable even before the prompt is upgraded.
+  text = text
+    .replace(/\s*Краткий вывод\s*/i, '\n\n### Краткий вывод\n')
+    .replace(/\s*Расчет\s*\/\s*требования\s*/i, '\n\n### Требования\n')
+    .replace(/\s*Источник\s*СП\s*/i, '\n\n### Источник СП\n');
+
+  const lines = text.split(/\r?\n/);
+  let html = '<div class="vks-answer">';
+  let paragraph = [];
+  let inList = false;
+  let tableRows = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const value = paragraph.join(' ').trim();
+    if (value) html += `<p>${formatInline(value)}</p>`;
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!inList) return;
+    html += '</ul>';
+    inList = false;
+  };
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    const rows = tableRows.filter(row => row.length && !/^\s*[-:|\s]+$/.test(row.join('')));
+    if (rows.length) {
+      const header = rows[0];
+      const body = rows.slice(1);
+      html += '<div class="answer-table-wrap"><table><thead><tr>' + header.map(cell => `<th>${formatInline(cell)}</th>`).join('') + '</tr></thead><tbody>';
+      body.forEach(row => { html += '<tr>' + row.map(cell => `<td>${formatInline(cell)}</td>`).join('') + '</tr>'; });
+      html += '</tbody></table></div>';
+    }
+    tableRows = [];
+  };
+
+  const formatInline = value => escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  lines.forEach(raw => {
+    const line = raw.trim();
+    if (!line) { flushParagraph(); flushList(); flushTable(); return; }
+    if (/^\|.*\|$/.test(line)) {
+      flushParagraph(); flushList();
+      tableRows.push(line.replace(/^\||\|$/g, '').split('|').map(cell => cell.trim()));
+      return;
+    }
+    if (/^###\s+/.test(line)) {
+      flushParagraph(); flushList(); flushTable();
+      const title = line.replace(/^###\s+/, '').trim();
+      html += `<h3>${escapeHtml(title)}</h3>`;
+      return;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      flushParagraph(); flushTable();
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${formatInline(line.replace(/^[-*]\s+/, ''))}</li>`;
+      return;
+    }
+    flushList(); flushTable();
+    paragraph.push(line);
+  });
+  flushParagraph(); flushList(); flushTable();
+  html += '</div>';
+
+  // Emphasize the short conclusion when the answer starts with it.
+  const answerRoot = document.createElement('div');
+  answerRoot.innerHTML = html;
+  const firstParagraph = answerRoot.querySelector('.vks-answer p');
+  if (firstParagraph) firstParagraph.classList.add('answer-highlight');
+  return answerRoot.innerHTML;
 }
 
 function addDiagnosticsToChat(diagnostics, notice) {
@@ -124,9 +233,10 @@ function addMessageToChat(role, content, sources = null) {
   const avatar = role === 'user' ? 'Вы' : 'AI';
   let sourcesHTML = '';
   if (sources && sources.length > 0) {
-    sourcesHTML = `<div class="sources-block"><div class="sources-title">Источники</div>${sources.map(source => `<div class="source-item"><span class="source-doc">${escapeHtml(formatSourceDocument(source))}</span><div>Страница: ${escapeHtml(source.page)}<br>Релевантность: ${Number(source.score || 0).toFixed(3)}</div></div>`).join('')}</div>`;
+    sourcesHTML = `<div class="sources-block"><div class="sources-title">Источники</div><div class="sources-table-wrap"><table class="sources-table"><thead><tr><th>Нормативный документ</th><th>Страница</th><th>Релевантность</th></tr></thead><tbody>${sources.map(source => `<tr><td class="source-doc">${escapeHtml(formatSourceDocument(source))}</td><td>${escapeHtml(source.page)}</td><td>${Number(source.score || 0).toFixed(3)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
-  messageDiv.innerHTML = `<div class="message-avatar">${avatar}</div><div class="message-content">${content || ''}${sourcesHTML}</div>`;
+  const body = role === 'ai' ? renderAnswer(content) : escapeHtml(content || '');
+  messageDiv.innerHTML = `<div class="message-avatar">${avatar}</div><div class="message-content">${body}${sourcesHTML}</div>`;
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -153,7 +263,7 @@ async function sendMessage() {
 
   const searchInNorms = document.getElementById('searchInNorms')?.checked ?? true;
   const searchInDocs = document.getElementById('searchInDocs')?.checked ?? false;
-  addMessageToChat('user', escapeHtml(message));
+  addMessageToChat('user', message);
   input.value = '';
   input.style.height = 'auto';
   showTypingIndicator();
