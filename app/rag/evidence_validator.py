@@ -257,7 +257,12 @@ class EvidenceValidator:
         raw_clauses = [part.strip() for part in re.split(r"[.!?;]+|\n{2,}", str(text)) if part.strip()]
         clauses = [self._normalize(part) for part in raw_clauses]
         for clause in clauses:
-            if not any(re.search(rf"(?<![a-zа-я]){re.escape(anchor)}(?![a-zа-я])", clause) for anchor in anchors):
+            def has_anchor(anchor: str) -> bool:
+                if anchor == "диаметр":
+                    return bool(re.search(r"(?<![a-zа-я])диаметр(?:а|у|ы|ов|ом|ах)?(?![a-zа-я])", clause))
+                return bool(re.search(rf"(?<![a-zа-я]){re.escape(anchor)}(?![a-zа-я])", clause))
+
+            if not any(has_anchor(anchor) for anchor in anchors):
                 continue
             if any(re.search(pattern, clause) for pattern in self.DIRECT_NORMATIVE_PATTERNS):
                 return True
