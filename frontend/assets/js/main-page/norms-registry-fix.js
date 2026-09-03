@@ -8,6 +8,14 @@
   function isCurrent(version) {
     return !!(version && String(version.status || '').toLowerCase() === 'current' && version.current_selected_by_user === true);
   }
+  function changeNumber(version) {
+    if (version && version.change_number != null && String(version.change_number).trim() !== '') {
+      return String(version.change_number).trim();
+    }
+    var filename = String((version && (version.original_filename || version.filename || version.file)) || '');
+    var match = filename.replace(/[_-]+/g, ' ').match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
+    return match ? match[1] : null;
+  }
   function normalize(data) {
     var groups = new Map();
     (Array.isArray(data) ? data : []).forEach(function (item) {
@@ -36,7 +44,7 @@
       base.id = base.document_id;
       base.versions = versions;
       base.version_id = current.length === 1 ? current[0].version_id : null;
-      base.current_change_number = current.length === 1 ? (current[0].change_number || null) : null;
+      base.current_change_number = current.length === 1 ? changeNumber(current[0]) : null;
       base.effective_from = current.length === 1 ? (current[0].effective_from || null) : null;
       base.processing = current.length === 1 ? (current[0].processing || {}) : {};
       result.push(base);
