@@ -120,19 +120,14 @@ class RAGPipeline:
         }
 
     def _current_version_label(self) -> str:
-        """Return a human-readable label for the registry-selected version."""
-        try:
-            document = self.retriever.storage.registry.get_document(self.retriever.document_id) or {}
-            version = next(
-                (item for item in document.get("versions", []) if item.get("id") == self.retriever.version_id),
-                {},
-            )
-            change_number = version.get("change_number")
-            if change_number is not None and str(change_number).strip():
-                return f"{document.get('number', self.retriever.document_id)} — Изменение №{change_number}"
-            return str(document.get("number") or self.retriever.document_id)
-        except Exception:
-            return str(self.retriever.document_id or "")
+        """Return the authoritative label already resolved by Retriever."""
+        label = str(getattr(self.retriever, "version_label", "") or "").strip()
+        if label:
+            document = str(getattr(self.retriever, "document_id", "") or "").strip()
+            if " — " in label or not document:
+                return label
+            return f"{document} — {label}"
+        return str(getattr(self.retriever, "document_id", "") or "")
 
     def _build_enhanced_query(self, question: str, intent) -> str:
         discipline = getattr(intent, "discipline", "")
@@ -167,7 +162,13 @@ class RAGPipeline:
             result.setdefault("type", "text")
             result.setdefault("content", {})
             result.setdefault("score", result.get("faiss_score", 0.0))
-            result["version_label"] = self._current_version_label()
+            # Retriever is the authoritative source for the selected version.
+            # Preserve a valid per-source label instead of replacing it with a
+            # registry-only fallback that can lose amendment metadata.
+            result["version_label"] = result.get("version_label") or self._current_version_label()
+            document = str(result.get("document") or self.retriever.document_id)
+            if "document_display_name" not in result or not result.get("document_display_name"):
+                result["document_display_name"] = f"{document} — {result['version_label']}"
             validated.append(result)
         return validated
 
