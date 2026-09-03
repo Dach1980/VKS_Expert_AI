@@ -6,6 +6,8 @@ RAG Pipeline v1.6
 Engineering RAG pipeline with evidence validation.
 """
 
+from time import perf_counter
+
 from app.rag.retriever import Retriever
 from app.rag.context_builder import ContextBuilder
 from app.rag.query_classifier import QueryClassifier
@@ -29,6 +31,8 @@ class RAGPipeline:
         print("Pipeline ready")
 
     def ask(self, question: str, top_k: int = 5):
+        total_started = perf_counter()
+        timings = {}
         question = str(question or "").strip()
         if not question:
             return {
@@ -40,7 +44,10 @@ class RAGPipeline:
 
         print("\nQUESTION:")
         print(question)
+
+        started = perf_counter()
         intent = self.classifier.classify(question)
+        timings["classifier"] = perf_counter() - started
         print("\nINTENT:")
         print(intent)
         enhanced_query = self._build_enhanced_query(question, intent)
@@ -48,14 +55,18 @@ class RAGPipeline:
         print(enhanced_query)
         print("==========================")
 
+        started = perf_counter()
         results = self.retriever.search(enhanced_query, top_k=top_k) or []
+        timings["retrieval"] = perf_counter() - started
         print("\n===== RETRIEVER RESULTS =====")
         print("Retrieved:", len(results))
         for i, result in enumerate(results, 1):
             self._print_retriever_result(i, result)
         print("==============================")
 
+        started = perf_counter()
         evidence = self.validator.validate(results, intent=intent, query=question, top_k=top_k)
+        timings["validation"] = perf_counter() - started
         print("\n===== EVIDENCE RESULT =====")
         print("Confidence:", evidence.confidence)
         print("Sufficient:", evidence.sufficient)
@@ -64,9 +75,11 @@ class RAGPipeline:
         print("===========================")
 
         validated_results = self._prepare_validated_results(evidence.accepted)
+        started = perf_counter()
         context = ""
         if validated_results:
             context = str(self.context_builder.build(validated_results) or "").strip()
+        timings["context"] = perf_counter() - started
         if not context:
             print("\nWARNING: validated evidence produced an empty context.")
 
@@ -79,10 +92,17 @@ class RAGPipeline:
         print(context if context else "[EMPTY VERIFIED CONTEXT]")
         print("================================")
 
+        started = perf_counter()
         answer = self.llm.chat(
             prompt=user_prompt, system_prompt=system_prompt,
             temperature=0.1, max_tokens=2048, enable_thinking=False,
         )
+        timings["llm"] = perf_counter() - started
+        timings["total"] = perf_counter() - total_started
+        print("\n===== RAG TIMING =====")
+        for stage in ("classifier", "retrieval", "validation", "context", "llm", "total"):
+            print(f"{stage}: {timings[stage]:.3f}s")
+        print("======================")
 
         return {
             "question": question, "intent": intent, "answer": answer,
@@ -94,6 +114,7 @@ class RAGPipeline:
             "rejected_count": len(evidence.rejected),
             "evidence_rejected": evidence.rejected,
             "context": context,
+            "timings": timings,
         }
 
     def _build_enhanced_query(self, question: str, intent) -> str:
