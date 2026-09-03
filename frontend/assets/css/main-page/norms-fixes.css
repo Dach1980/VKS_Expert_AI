@@ -1,4 +1,7 @@
 /* Normative version list layout — stable on desktop and narrow cards. */
+.norms-grid { align-items: start !important; }
+.norm-card { align-self: start !important; height: fit-content !important; min-height: 0 !important; }
+
 .norm-versions-panel {
   width: 100%;
   min-width: 0;
