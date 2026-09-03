@@ -15,22 +15,24 @@ function toast(message, type) {
   else console.log('[Norms]', message);
 }
 
-// Amendment metadata is owned by the uploaded filename. Accept the common
-// forms "Изм.5", "Изм 5", "Изм. 5" and the full "Изменение №5" form.
 function changeNumberFromFilename(filename) {
   var stem = String(filename || '').replace(/[_-]+/g, ' ');
   var match = stem.match(/(?:\bизм(?:енение|енения)?\.?|\bизменени[ея]|\bamendment)\s*№?\s*\.?\s*(\d+)\b/i);
   return match ? match[1] : null;
 }
+function versionFilename(version) {
+  return String((version && (version.original_filename || version.filename)) || '').trim();
+}
 function versionChangeNumber(version) {
   if (version && version.change_number != null && String(version.change_number).trim() !== '') return String(version.change_number).trim();
   return changeNumberFromFilename(versionFilename(version));
 }
+
+// The API is the source of truth: status=current means this version is the
+// selected current edition. Older code additionally required a frontend-only
+// flag, which made the current version invisible in the card title.
 function isUserCurrent(version) {
-  return !!(version && version.status === 'current' && version.current_selected_by_user === true);
-}
-function versionFilename(version) {
-  return String((version && (version.original_filename || version.filename)) || '').trim();
+  return !!(version && String(version.status || '').toLowerCase() === 'current');
 }
 function versionLabel(version) {
   var change = versionChangeNumber(version);
@@ -83,7 +85,9 @@ function renderVersionActions(norm, version) {
 }
 function toggleNormVersions(id) {
   var panel = document.getElementById('normVersions-' + id);
-  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (!panel) return;
+  var isOpen = !panel.hasAttribute('hidden');
+  panel.toggleAttribute('hidden', isOpen);
 }
 function renderNormVersions(norm) {
   var versions = Array.isArray(norm.versions) ? norm.versions.slice() : [];
@@ -93,7 +97,7 @@ function renderNormVersions(norm) {
     if (!isUserCurrent(a) && isUserCurrent(b)) return 1;
     return String(b.effective_from || '').localeCompare(String(a.effective_from || ''));
   });
-  var html = '<div id="normVersions-' + esc(norm.id) + '" class="norm-versions-panel" style="display:none">'
+  var html = '<div id="normVersions-' + esc(norm.id) + '" class="norm-versions-panel" hidden>'
     + '<div class="norm-versions-title">Загруженные документы</div>';
   versions.forEach(function (version) {
     var sid = version.document_id || norm.id;
@@ -161,7 +165,7 @@ async function loadNorms(expandIds) {
         }); }), raw: item };
     }));
     renderNorms();
-    (expandIds || []).forEach(function (id) { var panel = document.getElementById('normVersions-' + id); if (panel) panel.style.display = 'block'; });
+    (expandIds || []).forEach(function (id) { var panel = document.getElementById('normVersions-' + id); if (panel) panel.removeAttribute('hidden'); });
     if (typeof window.updateKnowledgeBaseCounters === 'function') window.updateKnowledgeBaseCounters();
     return getNormsData();
   } catch (error) { toast('Не удалось получить нормативную базу: ' + error.message, 'error'); return []; }
@@ -201,7 +205,7 @@ function pollNormStatus(cardId, sourceId, versionId) {
       version.processing = data.processing || {};
       if (version.processing.error) { clearInterval(normsPollTimers[key]); delete normsPollTimers[key]; toast('Индексация завершилась с ошибкой: ' + version.processing.error, 'error'); }
       else if (isIndexed(version)) { clearInterval(normsPollTimers[key]); delete normsPollTimers[key]; toast('Индексация выбранной версии завершена', 'success'); }
-      renderNorms(); var panel = document.getElementById('normVersions-' + cardId); if (panel) panel.style.display = 'block';
+      renderNorms(); var panel = document.getElementById('normVersions-' + cardId); if (panel) panel.removeAttribute('hidden');
     } catch (error) { console.warn('[Norms] status', error); }
   }, 1500);
 }
@@ -232,5 +236,5 @@ async function uploadNormFile(file) {
 window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms;
 window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop;
 window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.deleteNorm = deleteNorm; window.toggleNormVersions = toggleNormVersions;
-console.log('[VKS Expert AI][Norms] norms.js v9 loaded');
+console.log('[VKS Expert AI][Norms] norms.js v10 loaded');
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { loadNorms(); }, { once: true }); else loadNorms();
