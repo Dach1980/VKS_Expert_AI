@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -15,7 +16,16 @@ RECOVERY_PROMPT = """Выполни короткий визуальный про
 
 
 def _log(message: str, *args: Any) -> None:
-    LOGGER.info("[NORMCONTROL] " + message, *args)
+    rendered = message % args if args else message
+    line = "[NORMCONTROL] " + rendered
+    try:
+        print(line, file=sys.stdout, flush=True)
+    except Exception:
+        pass
+    try:
+        LOGGER.info(line)
+    except Exception:
+        pass
 
 
 def run_traced_resilient_check(document_id: str, normative_number: str, progress_callback: Callable[[dict[str, Any]], None] | None = None, skill_id: str = "vk_wastewater") -> dict[str, Any]:
