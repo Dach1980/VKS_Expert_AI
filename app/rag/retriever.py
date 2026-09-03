@@ -40,6 +40,31 @@ def formula_score(query: str, item: dict) -> float:
     return min(score, 0.5)
 
 
+def lexical_tokens(text: str) -> list[str]:
+    """Return meaningful Cyrillic/Latin/numeric tokens for lexical retrieval."""
+    return [token for token in re.findall(r"[\w№]+", str(text or "").lower()) if len(token) >= 3]
+
+
+def lexical_score(query: str, item: dict) -> float:
+    """Small lexical signal to recover exact normative terms missed by embeddings."""
+    content = item.get("content", {})
+    text = content.get("text", "") if isinstance(content, dict) else content
+    query_tokens = set(lexical_tokens(query))
+    if not query_tokens:
+        return 0.0
+    text_tokens = set(lexical_tokens(text))
+    overlap = query_tokens & text_tokens
+    if not overlap:
+        return 0.0
+    coverage = len(overlap) / len(query_tokens)
+    score = 0.22 * coverage
+    normalized_query = " ".join(lexical_tokens(query))
+    normalized_text = " ".join(lexical_tokens(text))
+    if normalized_query and normalized_query in normalized_text:
+        score += 0.16
+    return min(score, 0.38)
+
+
 class Retriever:
     """FAISS retrieval against the registry-selected normative version."""
 
@@ -89,23 +114,43 @@ class Retriever:
             return []
         vector = np.asarray([self.client.embed(query)], dtype="float32")
         faiss.normalize_L2(vector)
-        scores, ids = self.index.search(vector, min(top_k, self.index.ntotal))
-        merged = []
+        candidate_k = min(max(top_k * 4, 20), self.index.ntotal)
+        scores, ids = self.index.search(vector, candidate_k)
+        merged = {}
         formula_mode = is_formula_query(query)
         for score, idx in zip(scores[0], ids[0]):
             if idx < 0 or idx >= len(self.metadata):
                 continue
             item = self.metadata[idx]
-            final_score = float(score)
+            final_score = float(score) + lexical_score(query, item)
             if formula_mode and item.get("type") == "formula_context":
                 final_score += 0.30
-            merged.append({"item": item, "score": final_score, "source": "faiss"})
+            merged[idx] = {"item": item, "score": final_score, "source": "faiss"}
+
+        # Also inspect metadata outside the FAISS shortlist. This catches exact
+        # normative terms (e.g. "диаметр", "условный проход") when the semantic
+        # embedding ranks introductory/adjacent text above the actual clause.
+        lexical_candidates = []
+        for idx, item in enumerate(self.metadata):
+            score = lexical_score(query, item)
+            if score > 0:
+                lexical_candidates.append((score, idx, item))
+        lexical_candidates.sort(key=lambda row: row[0], reverse=True)
+        for score, idx, item in lexical_candidates[: max(top_k * 3, 20)]:
+            current = merged.get(idx)
+            candidate = {"item": item, "score": score + 0.35, "source": "lexical"}
+            if current is None or candidate["score"] > current["score"]:
+                merged[idx] = candidate
+
         if formula_mode:
-            for item in self.metadata:
+            for idx, item in enumerate(self.metadata):
                 score = formula_score(query, item)
                 if score > 0:
-                    merged.append({"item": item, "score": score + 0.35, "source": "formula"})
-        merged.sort(key=lambda x: x["score"], reverse=True)
+                    candidate = {"item": item, "score": score + 0.35, "source": "formula"}
+                    current = merged.get(idx)
+                    if current is None or candidate["score"] > current["score"]:
+                        merged[idx] = candidate
+        ranked = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
         return [{
             "document": r["item"].get("document", self.document_id),
             "version": self.version_id,
@@ -116,7 +161,7 @@ class Retriever:
             "content": r["item"].get("content", ""),
             "metadata": r["item"].get("metadata", {}),
             "chunk_id": r["item"].get("chunk_id"),
-        } for r in merged[:top_k]]
+        } for r in ranked[:top_k]]
 
 
 def load_index(document_id: str | None = None, version_id: str | None = None):
