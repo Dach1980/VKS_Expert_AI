@@ -1,7 +1,6 @@
-
 """
 VKS Expert AI
-RAG Pipeline v1.6
+RAG Pipeline v1.7
 
 Engineering RAG pipeline with evidence validation.
 """
@@ -83,10 +82,12 @@ class RAGPipeline:
         if not context:
             print("\nWARNING: validated evidence produced an empty context.")
 
-        system_prompt = self._build_system_prompt(evidence)
+        version_label = self._current_version_label()
+        system_prompt = self._build_system_prompt(evidence, version_label=version_label)
         user_prompt = self._build_user_prompt(
             question=question, context=context,
             confidence=evidence.confidence, sufficient=evidence.sufficient,
+            version_label=version_label,
         )
         print("\n===== CONTEXT SENT TO LLM =====")
         print(context if context else "[EMPTY VERIFIED CONTEXT]")
@@ -115,7 +116,23 @@ class RAGPipeline:
             "evidence_rejected": evidence.rejected,
             "context": context,
             "timings": timings,
+            "normative_version": version_label,
         }
+
+    def _current_version_label(self) -> str:
+        """Return a human-readable label for the registry-selected version."""
+        try:
+            document = self.retriever.storage.registry.get_document(self.retriever.document_id) or {}
+            version = next(
+                (item for item in document.get("versions", []) if item.get("id") == self.retriever.version_id),
+                {},
+            )
+            change_number = version.get("change_number")
+            if change_number is not None and str(change_number).strip():
+                return f"{document.get('number', self.retriever.document_id)} — Изменение №{change_number}"
+            return str(document.get("number") or self.retriever.document_id)
+        except Exception:
+            return str(self.retriever.document_id or "")
 
     def _build_enhanced_query(self, question: str, intent) -> str:
         discipline = getattr(intent, "discipline", "")
@@ -150,23 +167,38 @@ class RAGPipeline:
             result.setdefault("type", "text")
             result.setdefault("content", {})
             result.setdefault("score", result.get("faiss_score", 0.0))
+            result["version_label"] = self._current_version_label()
             validated.append(result)
         return validated
 
-    def _build_system_prompt(self, evidence):
+    def _build_system_prompt(self, evidence, version_label: str = ""):
         system_prompt = """
 Ты являешься инженерным AI-ассистентом VKS Expert AI.
 
 Отвечай только на русском языке и только на основании предоставленного
 проверенного нормативного контекста. Не придумывай требования, формулы,
-коэффициенты или номера пунктов СП. Если информации недостаточно, прямо
-сообщи об этом. Указывай источник, если он присутствует в контексте.
+коэффициенты или номера пунктов СП. Если информация подтверждается найденным
+фрагментом, обязательно используй это подтверждение в ответе.
 
-Критически важно: отсутствие нужного требования в предоставленном контексте
-НЕ доказывает, что такого требования нет во всём нормативном документе.
-Никогда не делай вывод «в документе отсутствует», «СП не содержит» или
-аналогичное отрицательное утверждение только потому, что релевантный фрагмент
-не был найден Retriever. В таком случае формулируй вывод строго как:
+Критически важно: если в проверенном контексте есть явная нормативная
+формулировка вроде «следует принимать», «должен», «не менее», «не допускается»
+или аналогичная, это является прямым нормативным требованием и его НЕЛЬЗЯ
+заменять выводом «конкретное требование не найдено». Сначала извлеки такие
+прямые требования из контекста и ответь по ним, даже если другие найденные
+фрагменты являются общими или косвенными.
+
+Особенно для вопросов о диаметрах труб: если контекст содержит слова
+«диаметр/диаметры» вместе с нормативной формулировкой и числовым значением,
+обязательно укажи это значение, область его применения и номер пункта, если
+номер пункта присутствует в самом фрагменте. Не обобщай частное требование
+на всю систему, если оно относится только к вводам, отдельным участкам или
+конкретным приборам.
+
+Отсутствие нужного требования в предоставленном контексте НЕ доказывает,
+что такого требования нет во всём нормативном документе. Никогда не делай
+вывод «в документе отсутствует», «СП не содержит» или аналогичное отрицательное
+утверждение только потому, что часть релевантных фрагментов не была найдена.
+Если прямого подтверждения действительно нет, формулируй вывод строго как:
 «В проверенном нормативном контексте конкретное требование не найдено» и,
 если это уместно, укажи, что для подтверждения необходимо расширить поиск.
 
@@ -180,6 +212,8 @@ class RAGPipeline:
 
 Источник СП
 """
+        if version_label:
+            system_prompt += f"\n\nТекущая выбранная версия нормативного документа: {version_label}."
         if not evidence.sufficient:
             system_prompt += """
 
@@ -190,11 +224,14 @@ class RAGPipeline:
 """
         return system_prompt.strip()
 
-    def _build_user_prompt(self, question: str, context: str, confidence: float, sufficient: bool) -> str:
+    def _build_user_prompt(self, question: str, context: str, confidence: float, sufficient: bool, version_label: str = "") -> str:
         verified_context = context or "[Проверенный нормативный контекст отсутствует]"
         return f"""
 Вопрос:
 {question}
+
+Проверенная версия нормативного документа:
+{version_label or '[не определена]'}
 
 Проверенный нормативный контекст:
 {verified_context}
@@ -204,6 +241,12 @@ Evidence confidence:
 
 Evidence sufficient:
 {sufficient}
+
+Правило ответа: сначала найди в контексте прямые нормативные формулировки
+(например, «следует принимать», «не менее», «должен»). Если такая формулировка
+есть, обязательно отрази её в ответе с числовым значением и номером пункта,
+если они присутствуют. Не говори, что требование не найдено, когда оно прямо
+приведено в проверенном контексте.
 
 Ответ дай только на основании проверенного нормативного контекста.
 Не интерпретируй отсутствие фрагмента как доказательство отсутствия требования
@@ -217,6 +260,8 @@ Evidence sufficient:
         print(f"\n#{index}")
         print("PAGE:", result.get("page"))
         print("DOCUMENT:", result.get("document"))
+        print("VERSION:", result.get("version"))
+        print("VERSION LABEL:", result.get("version_label"))
         print("TYPE:", result.get("type"))
         print("SCORE:", result.get("score"))
         content = result.get("content", {})
