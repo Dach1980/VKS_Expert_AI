@@ -1,7 +1,7 @@
 """
 VKS Expert AI
 
-Evidence Validator v1.5
+Evidence Validator v1.6
 
 Prioritizes direct normative requirements over generic semantic matches.
 """
@@ -77,29 +77,33 @@ class EvidenceValidator:
             direct_bonus = 0.20 if direct_normative else 0.0
             final_score = min(score * 0.55 + relevance * 0.15 + query_relevance * 0.15 + completeness * 0.05 + formula_bonus + direct_bonus, 1.0)
 
-            has_relevance = relevance >= self.min_relevance or query_relevance >= self.min_query_relevance
-            strong_query_match = query_relevance >= 0.35
             faiss_ok = score >= self.min_faiss_score
             query_gate = max(self.min_query_relevance, 0.10) if normative_query and not direct_normative else self.min_query_relevance
             if normative_query and not direct_normative:
-                has_relevance = relevance >= self.min_relevance or query_relevance >= query_gate
+                # For normative questions, subject/query relevance is a hard gate.
+                # Generic engineering relevance must never compensate for a weak
+                # match to the actual question concept.
+                has_relevance = query_relevance >= query_gate
+            else:
+                has_relevance = relevance >= self.min_relevance or query_relevance >= self.min_query_relevance
 
             reasons = []
             if not faiss_ok:
                 reasons.append("faiss_score_below_threshold")
-            if not has_relevance:
-                reasons.append("no_direct_relevance")
             if normative_query and not direct_normative and query_relevance < query_gate:
-                reasons.append("normative_query_relevance_below_threshold")
+                reasons.append("normative_query_relevance_below_threshold_for_non_direct_evidence")
+            elif not normative_query and not has_relevance:
+                reasons.append("no_direct_relevance")
+            elif normative_query and direct_normative is False and not has_relevance:
+                reasons.append("no_query_relevance")
             if final_score < self.min_score:
                 reasons.append("evidence_score_below_threshold")
-            if not has_relevance and strong_query_match and faiss_ok:
-                has_relevance = True
-                reasons = [reason for reason in reasons if reason != "no_direct_relevance"]
 
             accepted_flag = faiss_ok and has_relevance and final_score >= self.min_score
-            if normative_query and not direct_normative and query_relevance < query_gate:
-                accepted_flag = False
+            # A direct normative clause is deliberately allowed to pass the
+            # stricter query-relevance gate: it is the highest-value evidence.
+            if normative_query and direct_normative:
+                accepted_flag = faiss_ok and final_score >= self.min_score
 
             item["evidence_score"] = round(final_score, 3)
             item["relevance_score"] = round(relevance, 3)
@@ -120,7 +124,7 @@ class EvidenceValidator:
         sufficient = bool(accepted) and confidence >= self.min_confidence
 
         print()
-        print("===== EVIDENCE VALIDATION v1.5 =====")
+        print("===== EVIDENCE VALIDATION v1.6 =====")
         print("Input:", len(results))
         print("Accepted:", len(accepted))
         print("Rejected:", len(rejected))
@@ -236,11 +240,19 @@ class EvidenceValidator:
         if not normative_query:
             return False
         normalized_query = self._normalize(query)
-        anchors = [anchor for anchor in self.QUERY_ANCHORS if anchor in normalized_query]
+        query_uses_diameter = any(term in normalized_query for term in ("диаметр", "диаметру", "диаметры", "диаметр труб", "диаметр трубы"))
+
+        # For concept-specific normative questions, generic engineering words
+        # are not sufficient. A clause about pipes, for example, is not direct
+        # evidence for a question about diameter unless the diameter concept is
+        # itself present in the same local normative clause.
+        if query_uses_diameter:
+            anchors = ("диаметр", "условный проход", "dn", "ду")
+        else:
+            anchors = [anchor for anchor in self.QUERY_ANCHORS if anchor in normalized_query]
         if not anchors:
             return False
-        # Direct evidence requires the queried concept and normative wording
-        # to occur in the same local clause, not merely somewhere on the page.
+
         for anchor in anchors:
             for anchor_match in re.finditer(re.escape(anchor), text):
                 start = max(0, anchor_match.start() - 120)
