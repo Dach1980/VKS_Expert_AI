@@ -1,6 +1,11 @@
 """Project Expert AI — Knowledge Base API."""
 
-from fastapi import APIRouter, Depends
+from __future__ import annotations
+
+import traceback
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_rag_pipeline
@@ -16,18 +21,108 @@ class KnowledgeQuery(BaseModel):
     search_in_norms: bool = True
     search_in_docs: bool = False
     top_k: int = Field(default=5, ge=1, le=20)
-    diagnostics: bool = False
+    diagnostics: bool = True
+
+
+def _error_response(stage: str, error: Exception, status_code: int = 500):
+    message = str(error) or error.__class__.__name__
+    print(f"[Knowledge Base] {stage} failed: {message}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "ok": False,
+            "error": {
+                "stage": stage,
+                "type": error.__class__.__name__,
+                "message": message,
+            },
+        },
+    )
+
+
+def _get_pipeline():
+    # Resolve the cached pipeline inside the endpoint so an initialization
+    # failure is returned as JSON to the browser instead of becoming an opaque
+    # dependency 500 that hides the real RAG failure stage.
+    return get_rag_pipeline()
+
+
+@router.get("/status")
+def knowledge_base_status():
+    """Check every local dependency needed by the Knowledge Base RAG."""
+    status = {
+        "ok": True,
+        "pipeline": {"ok": False},
+        "norm_index": {"ok": False},
+        "embedding_api": {"ok": False},
+        "chat_api": {"ok": False},
+    }
+    try:
+        pipeline = _get_pipeline()
+        status["pipeline"] = {"ok": True, "type": type(pipeline).__name__}
+
+        retriever = pipeline.retriever
+        status["norm_index"] = {
+            "ok": True,
+            "document": retriever.document_id,
+            "version": retriever.version_id,
+            "index": str(retriever.index_file),
+            "vectors": int(retriever.index.ntotal),
+            "metadata": len(retriever.metadata),
+        }
+
+        embedding_ok = retriever.client.health_check()
+        status["embedding_api"] = {
+            "ok": bool(embedding_ok),
+            "model": retriever.client.model,
+            "endpoint": retriever.client.base_url,
+        }
+
+        try:
+            models = pipeline.llm.get_models()
+            available = [
+                str(item.get("id", ""))
+                for item in models.get("data", [])
+                if isinstance(item, dict) and item.get("id")
+            ]
+            chat_models = [m for m in available if "embedding" not in m.lower()]
+            status["chat_api"] = {
+                "ok": bool(chat_models),
+                "available_models": available,
+                "chat_models": chat_models,
+            }
+        except Exception as error:
+            status["chat_api"] = {
+                "ok": False,
+                "error": {"type": error.__class__.__name__, "message": str(error)},
+            }
+
+        status["ok"] = all(item.get("ok", False) for item in status.values() if isinstance(item, dict) and "ok" in item)
+        return status
+    except Exception as error:
+        status["ok"] = False
+        status["pipeline"] = {"ok": False, "error": {"type": error.__class__.__name__, "message": str(error)}}
+        return status
 
 
 @router.post("/query")
-def query_database(
-    request: KnowledgeQuery,
-    pipeline: RAGPipeline = Depends(get_rag_pipeline),
-):
-    """Run the normal RAG answer and optionally expose retrieval diagnostics."""
-    result = pipeline.ask(request.question, top_k=request.top_k)
+def query_database(request: KnowledgeQuery):
+    """Run the complete RAG answer and expose retrieval diagnostics."""
+    if not str(request.question or "").strip():
+        return _error_response("question_validation", ValueError("Вопрос не задан."), 400)
+    try:
+        pipeline = _get_pipeline()
+    except Exception as error:
+        return _error_response("pipeline_initialization", error)
+
+    try:
+        result = pipeline.ask(request.question, top_k=request.top_k)
+    except Exception as error:
+        return _error_response("rag_pipeline", error)
 
     response = {
+        "ok": True,
         "question": request.question,
         "answer": result.get("answer", ""),
         "sources": [
@@ -40,15 +135,25 @@ def query_database(
         ],
         "confidence": result.get("evidence_confidence", 0.0),
         "evidence_sufficient": result.get("evidence_sufficient", False),
+        "retrieved_count": result.get("retrieved_count", 0),
+        "accepted_count": result.get("accepted_count", 0),
+        "rejected_count": result.get("rejected_count", 0),
         "search_in_norms": request.search_in_norms,
         "search_in_docs": request.search_in_docs,
     }
 
     if request.diagnostics:
-        response["diagnostics"] = RAGDiagnostics(pipeline).run(
-            request.question,
-            top_k=request.top_k,
-        )
+        try:
+            response["diagnostics"] = RAGDiagnostics(pipeline).run(
+                request.question,
+                top_k=request.top_k,
+            )
+        except Exception as error:
+            response["diagnostics_error"] = {
+                "stage": "rag_diagnostics",
+                "type": error.__class__.__name__,
+                "message": str(error),
+            }
 
     if request.search_in_docs:
         response["diagnostic_notice"] = (
@@ -60,9 +165,12 @@ def query_database(
 
 
 @router.post("/diagnostics")
-def diagnostics_database(
-    request: KnowledgeQuery,
-    pipeline: RAGPipeline = Depends(get_rag_pipeline),
-):
+def diagnostics_database(request: KnowledgeQuery):
     """Run retrieval/evidence diagnostics without generating an LLM answer."""
-    return RAGDiagnostics(pipeline).run(request.question, top_k=request.top_k)
+    if not str(request.question or "").strip():
+        raise HTTPException(status_code=400, detail="Вопрос не задан.")
+    try:
+        pipeline = _get_pipeline()
+        return RAGDiagnostics(pipeline).run(request.question, top_k=request.top_k)
+    except Exception as error:
+        return _error_response("rag_diagnostics", error)
