@@ -251,8 +251,11 @@ class EvidenceValidator:
         # Direct evidence must be self-contained in the primary text clause.
         # Do not use formula/continuation fields here: continuation may contain
         # unrelated following clauses and can create false cross-clause matches.
-        normalized_text = self._normalize(text)
-        clauses = [part.strip() for part in re.split(r"(?<=[.!?;])\s+|\n{2,}", normalized_text) if part.strip()]
+        # Split the original text before normalization so punctuation remains
+        # available as a clause boundary. Each resulting clause is normalized
+        # independently for Unicode-safe matching.
+        raw_clauses = [part.strip() for part in re.split(r"[.!?;]+|\n{2,}", str(text)) if part.strip()]
+        clauses = [self._normalize(part) for part in raw_clauses]
         for clause in clauses:
             if not any(re.search(rf"(?<![a-zа-я]){re.escape(anchor)}(?![a-zа-я])", clause) for anchor in anchors):
                 continue
