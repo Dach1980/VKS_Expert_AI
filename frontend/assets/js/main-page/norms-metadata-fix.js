@@ -1,5 +1,5 @@
 // Project Expert AI — compatibility fix for legacy norm-version metadata.
-// Amendment numbers are derived from explicit metadata first, then the uploaded PDF filename/version id.
+// Amendment numbers are derived from the uploaded PDF filename first, then explicit metadata/version id.
 (function installNormMetadataFix() {
   function changeNumberFromFilename(filename) {
     var text = String(filename || '').replace(/[\u00A0\u202F]/g, ' ').replace(/[_-]+/g, ' ');
@@ -28,11 +28,13 @@
     return /\bбазов(?:ая|ую|ая\s+версия)\b|\bбез\s+изменений\b/i.test(filename);
   }
   function inferredChangeNumber(version, norm, versions) {
+    // The uploaded filename is authoritative: the UI must never assign a
+    // different amendment number merely because the registry field is stale.
+    var fromFilename = changeNumberFromFilename(version && (version.original_filename || version.filename || version.file));
+    if (fromFilename !== null) return fromFilename;
     var explicit = version && version.change_number != null && String(version.change_number).trim() !== ''
       ? String(version.change_number).trim() : null;
     if (explicit !== null) return explicit;
-    var fromFilename = changeNumberFromFilename(version && (version.original_filename || version.filename || version.file));
-    if (fromFilename !== null) return fromFilename;
     var fromVersionId = changeNumberFromVersionId(version);
     if (fromVersionId !== null) return fromVersionId;
     if (isBaseVersion(version)) return null;
@@ -132,5 +134,5 @@
   function normalizeAndPatch() { normalizeState(); patchRenderedRows(); }
   var attempts = 0;
   var timer = setInterval(function () { attempts += 1; normalizeAndPatch(); if (attempts >= 40) clearInterval(timer); }, 300);
-  console.log('[VKS Expert AI][Norms] metadata compatibility fix v7 loaded');
+  console.log('[VKS Expert AI][Norms] metadata compatibility fix v8 loaded');
 })();
