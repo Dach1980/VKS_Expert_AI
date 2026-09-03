@@ -56,6 +56,12 @@ def _display_document(item: dict) -> str:
         metadata = item.get("metadata") or {}
         change = metadata.get("change_number")
     if change is None or str(change).strip() == "":
+        version_label = item.get("version_label") or (item.get("metadata") or {}).get("version_label")
+        if version_label:
+            label = str(version_label).strip()
+            if label and label.lower() != document.lower():
+                return f"{document} — {label}"
+    if change is None or str(change).strip() == "":
         filename = item.get("original_filename") or item.get("filename") or ""
         match = re.search(r"(?:изм(?:енение|енения)?\.?|изменени[ея])\s*№?\s*(\d+)\b", str(filename), re.IGNORECASE)
         if match:
@@ -150,11 +156,13 @@ def query_database(request: KnowledgeQuery):
         source["document_number"] = item.get("document")
         source["change_number"] = item.get("change_number")
         source["version_id"] = item.get("version_id")
+        source["version_label"] = item.get("version_label")
         sources.append({
             "document": source["document"],
             "document_number": source.get("document_number"),
             "change_number": source.get("change_number"),
             "version_id": source.get("version_id"),
+            "version_label": source.get("version_label"),
             "page": source.get("page"),
             "score": source.get("score", 0.0),
         })
