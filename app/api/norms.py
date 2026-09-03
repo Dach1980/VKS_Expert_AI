@@ -1,4 +1,4 @@
-"""Project Expert AI — Norms API v4."""
+"""Project Expert AI — Norms API v5."""
 from __future__ import annotations
 
 import hashlib
@@ -106,6 +106,7 @@ def _version_metadata(storage: KnowledgeStorage, document_id: str, version_id: s
 def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
     versions = []
     current_meta = {}
+    current_version_id = None
     for source in payload.get("versions", []):
         source_id = str(source.get("document_id") or payload.get("document_id"))
         version_id = str(source.get("version_id") or source.get("id"))
@@ -114,6 +115,8 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         except Exception:
             meta = {}
         item = dict(source)
+        item["document_id"] = source_id
+        item["version_id"] = version_id
         item["number"] = item.get("number") or meta.get("number") or payload.get("number")
         item["title"] = item.get("title") or meta.get("title") or payload.get("title")
         item["change_number"] = meta.get("change_number") if meta.get("change_number") is not None else item.get("change_number")
@@ -122,22 +125,24 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         item["processing"] = dict(item["processing"])
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
         item["is_current"] = item.get("status") == "current"
-        item["current_selected_by_user"] = bool(item.get("current_selected_by_user") is True or item["is_current"])
         item["original_filename"] = item.get("original_filename") or item.get("filename") or Path(item.get("file", "")).name
         versions.append(item)
         if item["is_current"]:
             current_meta = meta
+            current_version_id = version_id
 
     result = dict(payload)
     if current_meta:
         result["number"] = current_meta.get("number") or result.get("number")
         result["title"] = current_meta.get("title") or result.get("title")
+        result["version_id"] = current_version_id
         result["current_change_number"] = current_meta.get("change_number")
         result["current_change_date"] = current_meta.get("change_date") or result.get("effective_from")
         result.setdefault("processing", {})
         result["processing"] = dict(result["processing"])
         result["processing"]["pages_count"] = current_meta.get("pages_count") or result["processing"].get("pages_count") or 0
     else:
+        result["version_id"] = None
         result["current_change_number"] = None
         result["current_change_date"] = None
     result["versions"] = versions
@@ -238,6 +243,7 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         filename_meta = storage._classify_uploaded_filename(filename)
         document = storage.registry.get_document(resolved_document_id)
         version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
+
         version_type, filename_change = filename_meta
         if version_type == "base":
             version["type"] = "base"
@@ -251,12 +257,14 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
             version["type"] = "edition"
             version.pop("change_number", None)
             version.pop("change_date", None)
+
         version["pages_count"] = storage._pdf_pages(saved)
         version["sha256"] = upload_hash
         version["original_filename"] = filename
         storage.registry.save()
     except (StorageError, OSError, StopIteration, RegistryError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
     return NormUploadResponse(success=True, document_id=resolved_document_id, version_id=resolved_version_id, number=resolved_number, title=resolved_title, status="uploaded", filename=filename)
 
 
