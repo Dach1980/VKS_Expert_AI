@@ -1,4 +1,4 @@
-"""Project Expert AI — version-aware FAISS retriever."""
+"""Project Expert AI — version-aware FAISS + lexical normative retriever."""
 from __future__ import annotations
 
 import json
@@ -48,9 +48,6 @@ def lexical_tokens(text: str) -> list[str]:
         if token.startswith("№"):
             normalized.append(token)
             continue
-        # Lightweight suffix normalization is intentional here: normative
-        # queries frequently use cases such as "диаметру" while the clause
-        # contains "диаметр". It avoids adding a morphology dependency.
         for suffix in ("иями", "ами", "ями", "ого", "ему", "ому", "ими", "ыми", "ее", "ие", "ые", "ое", "ей", "ий", "ый", "ой", "ем", "им", "ым", "ом", "ам", "ям", "ах", "ях", "ов", "ев", "ы", "и", "а", "я", "у", "ю", "е", "о"):
             if len(token) - len(suffix) >= 4 and token.endswith(suffix):
                 token = token[:-len(suffix)]
@@ -59,24 +56,53 @@ def lexical_tokens(text: str) -> list[str]:
     return normalized
 
 
+def _query_text(query: str) -> str:
+    """Extract the user's actual question from an enhanced RAG query."""
+    match = re.search(r"(?:^|\n)Запрос:\s*\n?(.*?)(?:\n\s*$|\Z)", str(query or ""), re.IGNORECASE | re.DOTALL)
+    return match.group(1).strip() if match else str(query or "").strip()
+
+
+def _norm_term_set(query: str) -> set[str]:
+    """Build high-value normalized search terms from the actual user question."""
+    text = _query_text(query).lower()
+    terms = set(lexical_tokens(text))
+    if any(phrase in text for phrase in (
+        "диаметр труб", "диаметр трубы", "внутренний диаметр", "наружный диаметр",
+        "условный проход", "минимальный диаметр", "принимать диаметр",
+    )):
+        terms.update(lexical_tokens("диаметр трубы условный проход"))
+    if any(term in text for term in ("диаметр", "диаметру", "диаметры")):
+        terms.update({"диаметр", "труб", "трубопровод", "условный", "проход", "ду", "dn"})
+    return terms
+
+
 def lexical_score(query: str, item: dict) -> float:
-    """Small lexical signal to recover exact normative terms missed by embeddings."""
+    """Rank exact normative terminology above generic semantic similarity."""
     content = item.get("content", {})
     text = content.get("text", "") if isinstance(content, dict) else content
-    query_tokens = set(lexical_tokens(query))
-    if not query_tokens:
-        return 0.0
-    text_tokens = set(lexical_tokens(text))
-    overlap = query_tokens & text_tokens
+    query_terms = _norm_term_set(query)
+    text_terms = set(lexical_tokens(text))
+    overlap = query_terms & text_terms
     if not overlap:
         return 0.0
-    coverage = len(overlap) / len(query_tokens)
-    score = 0.30 * coverage
-    normalized_query = " ".join(lexical_tokens(query))
-    normalized_text = " ".join(lexical_tokens(text))
+
+    score = 0.34 * (len(overlap) / max(len(query_terms), 1))
+    question = _query_text(query).lower()
+    text_lower = str(text).lower()
+
+    if any(phrase in question for phrase in ("диаметр труб", "диаметр трубы", "диаметру труб")):
+        if "диаметр" in text_lower:
+            score += 0.34
+        if any(term in text_lower for term in ("условный проход", "ду", "dn")):
+            score += 0.18
+        if any(phrase in text_lower for phrase in ("диаметр труб", "диаметры труб", "диаметр трубопровода", "принимать диаметр")):
+            score += 0.24
+
+    normalized_query = " ".join(lexical_tokens(question))
+    normalized_text = " ".join(lexical_tokens(text_lower))
     if normalized_query and normalized_query in normalized_text:
         score += 0.16
-    return min(score, 0.46)
+    return min(score, 1.0)
 
 
 class Retriever:
@@ -108,10 +134,7 @@ class Retriever:
         if document_id and self.storage.registry.get_document(document_id) is not None:
             return document_id
         target = self._number_group(document_id or DEFAULT_DOCUMENT_NUMBER)
-        candidates = [
-            document for document in self.storage.registry.get_all_documents()
-            if self._number_group(document.get("number", "")) == target
-        ]
+        candidates = [document for document in self.storage.registry.get_all_documents() if self._number_group(document.get("number", "")) == target]
         if not candidates:
             raise ValueError(f"Нормативный документ не найден в реестре: {document_id or DEFAULT_DOCUMENT_NUMBER}")
         candidates.sort(key=lambda item: len(item.get("versions", [])), reverse=True)
@@ -147,7 +170,7 @@ class Retriever:
             if score > 0:
                 lexical_candidates.append((score, idx, item))
         lexical_candidates.sort(key=lambda row: row[0], reverse=True)
-        for score, idx, item in lexical_candidates[: max(top_k * 3, 20)]:
+        for score, idx, item in lexical_candidates[: max(top_k * 5, 30)]:
             current = merged.get(idx)
             candidate = {"item": item, "score": score + 0.35, "source": "lexical"}
             if current is None or candidate["score"] > current["score"]:
@@ -161,6 +184,7 @@ class Retriever:
                     current = merged.get(idx)
                     if current is None or candidate["score"] > current["score"]:
                         merged[idx] = candidate
+
         ranked = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
         return [{
             "document": r["item"].get("document", self.document_id),
@@ -191,7 +215,7 @@ def main():
     for i, result in enumerate(retriever.search(query), 1):
         content = result.get("content", {})
         text = content.get("text", "") if isinstance(content, dict) else str(content)
-        print(f"\nRESULT #{i} | page={result.get('page')} | score={result.get('score', 0):.5f}")
+        print(f"\nRESULT #{i} | page={result.get('page')} | score={result.get('score', 0):.5f} | source={result.get('source')}")
         print(text)
         if isinstance(content, dict) and content.get("formula"):
             print("FORMULA:", normalize_formula(content["formula"]))
