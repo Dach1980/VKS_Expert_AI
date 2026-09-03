@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import traceback
 
 from fastapi import APIRouter, HTTPException
@@ -10,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_rag_pipeline
 from app.rag.rag_diagnostics import RAGDiagnostics
-from app.rag.rag_pipeline import RAGPipeline
 
 
 router = APIRouter(prefix="/api/knowledge-base", tags=["knowledge-base"])
@@ -46,6 +46,28 @@ def _get_pipeline():
     # failure is returned as JSON to the browser instead of becoming an opaque
     # dependency 500 that hides the real RAG failure stage.
     return get_rag_pipeline()
+
+
+def _display_document(item: dict) -> str:
+    """Return a human-readable source name including the normative amendment."""
+    document = str(item.get("document") or item.get("document_number") or "unknown")
+    change = item.get("change_number")
+    if change is None or str(change).strip() == "":
+        metadata = item.get("metadata") or {}
+        change = metadata.get("change_number")
+    if change is None or str(change).strip() == "":
+        filename = item.get("original_filename") or item.get("filename") or ""
+        match = re.search(r"(?:изм(?:енение|енения)?\.?|изменени[ея])\s*№?\s*(\d+)\b", str(filename), re.IGNORECASE)
+        if match:
+            change = match.group(1)
+    if change is None or str(change).strip() == "":
+        version_id = str(item.get("version_id") or "")
+        match = re.search(r"(?:^|[_\s-])(?:изм|amendment)[._\s-]*(\d+)(?:$|[_\s-])", version_id, re.IGNORECASE)
+        if match:
+            change = match.group(1)
+    if change is not None and str(change).strip() != "":
+        return f"{document} — Изменение №{str(change).strip()}"
+    return document
 
 
 @router.get("/status")
@@ -121,18 +143,27 @@ def query_database(request: KnowledgeQuery):
     except Exception as error:
         return _error_response("rag_pipeline", error)
 
+    sources = []
+    for item in result.get("sources", []):
+        source = dict(item)
+        source["document"] = _display_document(source)
+        source["document_number"] = item.get("document")
+        source["change_number"] = item.get("change_number")
+        source["version_id"] = item.get("version_id")
+        sources.append({
+            "document": source["document"],
+            "document_number": source.get("document_number"),
+            "change_number": source.get("change_number"),
+            "version_id": source.get("version_id"),
+            "page": source.get("page"),
+            "score": source.get("score", 0.0),
+        })
+
     response = {
         "ok": True,
         "question": request.question,
         "answer": result.get("answer", ""),
-        "sources": [
-            {
-                "document": item.get("document"),
-                "page": item.get("page"),
-                "score": item.get("score", 0.0),
-            }
-            for item in result.get("sources", [])
-        ],
+        "sources": sources,
         "confidence": result.get("evidence_confidence", 0.0),
         "evidence_sufficient": result.get("evidence_sufficient", False),
         "retrieved_count": result.get("retrieved_count", 0),
