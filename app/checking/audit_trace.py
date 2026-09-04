@@ -30,6 +30,7 @@ def _log(message: str, *args: Any) -> None:
 
 def run_traced_resilient_check(document_id: str, normative_number: str, progress_callback: Callable[[dict[str, Any]], None] | None = None, skill_id: str = "vk_wastewater") -> dict[str, Any]:
     from app.checking import resilient as impl
+    from app.checking import first_pass as vision_impl
     from app.skills.registry import get_skill
 
     skill = get_skill(skill_id)
@@ -62,7 +63,7 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
     os_ = {n: getattr(impl, n) for n in ["_strict_candidates", "_filter_skill_candidates", "_bbox_has_real_evidence", "retrieve_audit_context", "_multi_context", "decide_audit", "_vision_request", "_json_array"]}
 
     def vision(client, prompt, image_path, max_tokens=1200):
-        original_post = impl.requests.post
+        original_post = vision_impl.requests.post
         captured: dict[str, Any] = {}
 
         def capture_post(*args, **kwargs):
@@ -102,7 +103,7 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
                 captured["utf8_decoded_has_question_mark"] = "?" in decoded
             return response
 
-        impl.requests.post = capture_post
+        vision_impl.requests.post = capture_post
         try:
             text = os_["_vision_request"](client, prompt, image_path, max_tokens)
         except Exception as exc:
@@ -119,7 +120,7 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
             trace_log("vision_error", "Ошибка Vision-запроса", error_type=type(exc).__name__, error=str(exc), page_image=str(image_path))
             raise
         finally:
-            impl.requests.post = original_post
+            vision_impl.requests.post = original_post
 
         response_text = str(text or "")
         event = dict(captured)
