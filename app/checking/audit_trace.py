@@ -45,7 +45,6 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
         }
         event.update(data)
         trace["diagnostics_log"].append(event)
-        # Keep the persisted log bounded even for a large document.
         if len(trace["diagnostics_log"]) > 500:
             del trace["diagnostics_log"][:-500]
 
@@ -63,13 +62,77 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
     os_ = {n: getattr(impl, n) for n in ["_strict_candidates", "_filter_skill_candidates", "_bbox_has_real_evidence", "retrieve_audit_context", "_multi_context", "decide_audit", "_vision_request", "_json_array"]}
 
     def vision(client, prompt, image_path, max_tokens=1200):
+        original_post = impl.requests.post
+        captured: dict[str, Any] = {}
+
+        def capture_post(*args, **kwargs):
+            response = original_post(*args, **kwargs)
+            captured["http_status"] = getattr(response, "status_code", None)
+            captured["content_type"] = str(getattr(response, "headers", {}).get("Content-Type", ""))
+            raw_bytes = bytes(getattr(response, "content", b"") or b"")
+            captured["raw_response_bytes_length"] = len(raw_bytes)
+            try:
+                decoded = raw_bytes.decode("utf-8")
+                captured["utf8_decode_ok"] = True
+                captured["utf8_decoded_length"] = len(decoded)
+                captured["utf8_decoded_preview"] = decoded[:1000]
+                captured["utf8_decoded_repr"] = repr(decoded[:1000])
+                captured["utf8_decoded_has_replacement_char"] = "\ufffd" in decoded
+                captured["utf8_decoded_has_question_mark"] = "?" in decoded
+                try:
+                    payload = json.loads(decoded)
+                    message_content = (((payload.get("choices") or [{}])[0].get("message") or {}).get("content")) if isinstance(payload, dict) else None
+                    if message_content is not None:
+                        message_content = str(message_content)
+                        captured["message_content_length_from_raw"] = len(message_content)
+                        captured["message_content_preview_from_raw"] = message_content[:1000]
+                        captured["message_content_repr_from_raw"] = repr(message_content[:1000])
+                        captured["message_content_has_replacement_char"] = "\ufffd" in message_content
+                        captured["message_content_has_question_mark"] = "?" in message_content
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    captured["raw_json_parse_error"] = True
+            except UnicodeDecodeError as exc:
+                captured["utf8_decode_ok"] = False
+                captured["utf8_decode_error"] = str(exc)
+                decoded = raw_bytes.decode("utf-8", errors="replace")
+                captured["utf8_decoded_length"] = len(decoded)
+                captured["utf8_decoded_preview"] = decoded[:1000]
+                captured["utf8_decoded_repr"] = repr(decoded[:1000])
+                captured["utf8_decoded_has_replacement_char"] = "\ufffd" in decoded
+                captured["utf8_decoded_has_question_mark"] = "?" in decoded
+            return response
+
+        impl.requests.post = capture_post
         try:
             text = os_["_vision_request"](client, prompt, image_path, max_tokens)
         except Exception as exc:
+            event = dict(captured)
+            event.update({
+                "page_image": str(image_path),
+                "response_length": len(str(locals().get("text") or "")),
+                "response_preview": str(locals().get("text") or "")[:1000],
+                "response_repr": repr(str(locals().get("text") or "")[:1000]),
+                "response_has_replacement_char": "\ufffd" in str(locals().get("text") or ""),
+                "response_has_question_mark": "?" in str(locals().get("text") or ""),
+            })
+            trace_log("vision_transport", "Диагностика транспорта Vision при ошибке", **event)
             trace_log("vision_error", "Ошибка Vision-запроса", error_type=type(exc).__name__, error=str(exc), page_image=str(image_path))
             raise
+        finally:
+            impl.requests.post = original_post
 
-        trace_log("vision_response", "Получен ответ Vision", page_image=str(image_path), response_length=len(str(text or "")), response=str(text or "")[:12000])
+        response_text = str(text or "")
+        event = dict(captured)
+        event.update({
+            "page_image": str(image_path),
+            "response_length": len(response_text),
+            "response_preview": response_text[:1000],
+            "response_repr": repr(response_text[:1000]),
+            "response_has_replacement_char": "\ufffd" in response_text,
+            "response_has_question_mark": "?" in response_text,
+        })
+        trace_log("vision_transport", "Диагностика сырого HTTP-ответа и message.content", **event)
+        trace_log("vision_response", "Получен ответ Vision", page_image=str(image_path), response_length=len(response_text), response=response_text[:12000])
         parsed = os_["_json_array"](text)
         trace_log("vision_parsed", "Результат разбора Vision-ответа", parsed_count=len(parsed))
         valid = [x for x in parsed if str(x.get("check_id") or "") in allowed_ids and str(x.get("title") or "").strip() and str(x.get("description") or "").strip() and str(x.get("evidence_text") or "").strip() and isinstance(x.get("bbox"), (list, tuple)) and len(x.get("bbox")) == 4]
@@ -78,7 +141,7 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
         trace["raw_empty_pages"] += int(not parsed)
         trace["raw_invalid_skill_pages"] += int(bool(parsed))
         if len(trace["raw_samples"]) < 5:
-            trace["raw_samples"].append({"kind": "empty_or_invalid_skill", "response_preview": str(text or "")[:1200]})
+            trace["raw_samples"].append({"kind": "empty_or_invalid_skill", "response_preview": response_text[:1200]})
         trace_log("vision_recovery", "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery", parsed_count=len(parsed), valid_count=len(valid))
         recovery = os_["_vision_request"](client, RECOVERY_PROMPT, image_path, max(2200, max_tokens))
         trace_log("vision_recovery_response", "Получен ответ Vision recovery", page_image=str(image_path), response_length=len(str(recovery or "")), response=str(recovery or "")[:12000])
