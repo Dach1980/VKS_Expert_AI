@@ -34,9 +34,23 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
 
     skill = get_skill(skill_id)
     allowed_ids = {str(x["id"]) for x in skill["checks"]}
-    trace = {"started_at": datetime.now().isoformat(timespec="seconds"), "skill_id": skill_id, "pages": 0, "raw_visual_candidates": 0, "strict_candidates": 0, "skill_candidates": 0, "bbox_valid": 0, "bbox_rejected": 0, "rag_calls": 0, "rag_hits": 0, "requirements_seen": 0, "requirements_with_clause": 0, "decisions": 0, "violations": 0, "compliant": 0, "unchecked": 0, "visual_recovery_pages": 0, "visual_recovery_candidates": 0, "raw_empty_pages": 0, "raw_invalid_skill_pages": 0, "raw_samples": [], "drop_reasons": {}, "checks": {}}
+    trace = {"started_at": datetime.now().isoformat(timespec="seconds"), "skill_id": skill_id, "pages": 0, "raw_visual_candidates": 0, "strict_candidates": 0, "skill_candidates": 0, "bbox_valid": 0, "bbox_rejected": 0, "rag_calls": 0, "rag_hits": 0, "requirements_seen": 0, "requirements_with_clause": 0, "decisions": 0, "violations": 0, "compliant": 0, "unchecked": 0, "visual_recovery_pages": 0, "visual_recovery_candidates": 0, "raw_empty_pages": 0, "raw_invalid_skill_pages": 0, "raw_samples": [], "drop_reasons": {}, "checks": {}, "diagnostics_log": []}
+
+    def trace_log(kind: str, message: str, **data: Any) -> None:
+        """Persist diagnostic events in report.json using real UTF-8 text."""
+        event: dict[str, Any] = {
+            "time": datetime.now().isoformat(timespec="seconds"),
+            "kind": kind,
+            "message": message,
+        }
+        event.update(data)
+        trace["diagnostics_log"].append(event)
+        # Keep the persisted log bounded even for a large document.
+        if len(trace["diagnostics_log"]) > 500:
+            del trace["diagnostics_log"][:-500]
 
     _log("START document=%s skill=%s checks=%d", document_id, skill_id, len(skill["checks"]))
+    trace_log("start", "Начало проверки", document_id=document_id, skill_id=skill_id, checks=len(skill["checks"]))
 
     def bucket(c):
         k = str(c.get("check_id") or "unknown")
@@ -44,12 +58,20 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
 
     def drop(r):
         trace["drop_reasons"][r] = int(trace["drop_reasons"].get(r, 0)) + 1
+        trace_log("drop", f"Отброшено: {r}", reason=r)
 
     os_ = {n: getattr(impl, n) for n in ["_strict_candidates", "_filter_skill_candidates", "_bbox_has_real_evidence", "retrieve_audit_context", "_multi_context", "decide_audit", "_vision_request", "_json_array"]}
 
     def vision(client, prompt, image_path, max_tokens=1200):
-        text = os_["_vision_request"](client, prompt, image_path, max_tokens)
+        try:
+            text = os_["_vision_request"](client, prompt, image_path, max_tokens)
+        except Exception as exc:
+            trace_log("vision_error", "Ошибка Vision-запроса", error_type=type(exc).__name__, error=str(exc), page_image=str(image_path))
+            raise
+
+        trace_log("vision_response", "Получен ответ Vision", page_image=str(image_path), response_length=len(str(text or "")), response=str(text or "")[:12000])
         parsed = os_["_json_array"](text)
+        trace_log("vision_parsed", "Результат разбора Vision-ответа", parsed_count=len(parsed))
         valid = [x for x in parsed if str(x.get("check_id") or "") in allowed_ids and str(x.get("title") or "").strip() and str(x.get("description") or "").strip() and str(x.get("evidence_text") or "").strip() and isinstance(x.get("bbox"), (list, tuple)) and len(x.get("bbox")) == 4]
         if valid:
             return text
@@ -57,8 +79,11 @@ def run_traced_resilient_check(document_id: str, normative_number: str, progress
         trace["raw_invalid_skill_pages"] += int(bool(parsed))
         if len(trace["raw_samples"]) < 5:
             trace["raw_samples"].append({"kind": "empty_or_invalid_skill", "response_preview": str(text or "")[:1200]})
+        trace_log("vision_recovery", "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery", parsed_count=len(parsed), valid_count=len(valid))
         recovery = os_["_vision_request"](client, RECOVERY_PROMPT, image_path, max(2200, max_tokens))
+        trace_log("vision_recovery_response", "Получен ответ Vision recovery", page_image=str(image_path), response_length=len(str(recovery or "")), response=str(recovery or "")[:12000])
         recovered = os_["_json_array"](recovery)
+        trace_log("vision_recovery_parsed", "Результат разбора recovery-ответа", parsed_count=len(recovered))
         if recovered:
             trace["visual_recovery_pages"] += 1
             trace["visual_recovery_candidates"] += len(recovered)
