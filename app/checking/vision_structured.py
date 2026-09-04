@@ -10,34 +10,43 @@ import requests
 from app.llm.lmstudio_client import LMStudioClient
 
 
+# LM Studio's local structured-output implementation is more portable when the
+# root schema is an object. The page parser already accepts {"findings": [...]}.
 VISION_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
         "name": "vk_visual_evidence",
         "strict": True,
         "schema": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "check_id": {"type": "string"},
-                    "title": {"type": "string"},
-                    "description": {"type": "string"},
-                    "parameter": {"type": "string"},
-                    "project_value": {"type": "string"},
-                    "unit": {"type": "string"},
-                    "source_row": {"type": "string"},
-                    "source_context": {"type": "string"},
-                    "evidence_text": {"type": "string"},
-                    "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                },
-                "required": [
-                    "check_id", "title", "description", "parameter", "project_value", "unit",
-                    "source_row", "source_context", "evidence_text", "bbox", "confidence",
-                ],
-                "additionalProperties": False,
+            "type": "object",
+            "properties": {
+                "findings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "check_id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "description": {"type": "string"},
+                            "parameter": {"type": "string"},
+                            "project_value": {"type": "string"},
+                            "unit": {"type": "string"},
+                            "source_row": {"type": "string"},
+                            "source_context": {"type": "string"},
+                            "evidence_text": {"type": "string"},
+                            "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        },
+                        "required": [
+                            "check_id", "title", "description", "parameter", "project_value", "unit",
+                            "source_row", "source_context", "evidence_text", "bbox", "confidence",
+                        ],
+                        "additionalProperties": False,
+                    },
+                }
             },
+            "required": ["findings"],
+            "additionalProperties": False,
         },
     },
 }
@@ -49,7 +58,7 @@ def structured_vision_request(
     image_path: Path,
     max_tokens: int = 1400,
 ) -> str:
-    """Call LM Studio with a strict JSON schema so the page pipeline gets parseable evidence."""
+    """Call LM Studio with a strict object schema so the page pipeline gets parseable evidence."""
     if client.model is None:
         client.model = client._select_chat_model(client.get_models())
     image_data = "data:image/png;base64," + base64.b64encode(image_path.read_bytes()).decode("ascii")
