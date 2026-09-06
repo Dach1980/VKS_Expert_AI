@@ -11,12 +11,12 @@ import requests
 
 
 PREFERRED_CHAT_MODELS = (
+    "qwen/qwen3.5-9b",
+    "qwen3.5-9b",
+    "qwen3.5-9b-mtp",
     "qwen3-vl-4b-instruct",
     "qwen/qwen3-vl-4b-instruct",
     "qwen3.5-4b-mtp",
-    "qwen3.5-9b-mtp",
-    "qwen/qwen3.5-9b",
-    "qwen3.5-9b",
     "qwen/qwen3.5-4b",
 )
 
@@ -134,7 +134,7 @@ class LMStudioClient:
 
 
 def demo():
-    client = LMStudioClient(model="qwen3-vl-4b-instruct")
+    client = LMStudioClient(model="qwen/qwen3.5-9b")
     print("Available models:")
     for model in client.get_models().get("data", []):
         print("-", model["id"])
