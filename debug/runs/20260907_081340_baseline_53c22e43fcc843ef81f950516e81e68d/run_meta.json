@@ -1,0 +1,221 @@
+{
+  "run_id": "20260907_081340_baseline_53c22e43fcc843ef81f950516e81e68d",
+  "created_at": "2026-09-07T08:13:40",
+  "git_commit": "619504decee5cc0f3a8cc64f6f6b0668baa10742",
+  "label": "baseline",
+  "document_id": "53c22e43fcc843ef81f950516e81e68d",
+  "document_name": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись.pdf",
+  "skill_id": "vk_wastewater",
+  "skill_name": "Система водоотведения",
+  "model": "qwen3-vl-4b-instruct",
+  "quantization": "Q4_K_M",
+  "notes": "",
+  "metrics": {
+    "pages_checked": 30,
+    "pages_available": 30,
+    "limited": false,
+    "remarks": 0,
+    "compliant": 0,
+    "unchecked": 0,
+    "trace": {
+      "raw_visual_candidates": 1,
+      "strict_candidates": 1,
+      "skill_candidates": 1,
+      "bbox_valid": 1,
+      "rag_calls": 1,
+      "rag_hits": 1,
+      "requirements_seen": 4,
+      "requirements_with_clause": 2,
+      "decisions": 1,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 1,
+      "visual_recovery_pages": 0,
+      "visual_recovery_candidates": 0
+    },
+    "check_matrix": [
+      {
+        "id": "wastewater_flow",
+        "name": "Расчётные расходы",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_diameter",
+        "name": "Диаметры",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_slope",
+        "name": "Уклоны",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_ventilation",
+        "name": "Вентиляция",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_outlets",
+        "name": "Выпуски",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_cleanouts",
+        "name": "Ревизии и прочистки",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_material",
+        "name": "Материалы",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "storm_separation",
+        "name": "Разделение систем",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "noise_insulation",
+        "name": "Шумоизоляция",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "irrigation",
+        "name": "Поливочные устройства",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "meters",
+        "name": "Приборы учёта",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "emergency_outlets",
+        "name": "Аварийные решения",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "ar_coordination",
+        "name": "Координация с АР",
+        "visual_candidates": 1,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "evidence_found"
+      }
+    ]
+  }
+}
