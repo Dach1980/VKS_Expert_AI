@@ -1,4 +1,4 @@
-"""Project Expert AI — report API backed by the canonical report contract."""
+"""Project Expert AI — report API backed by timestamped result artifacts."""
 from __future__ import annotations
 
 import io
@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.documents import DOCUMENTS_ROOT
 from app.reporting.report_contract import prepare_public_report
+from app.reporting.result_store import load_results, save_result
 from app.reporting.ios31 import build_docx
 from app.reporting.ios31_pdf import build_pdf
 
@@ -18,8 +19,12 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 REPORT_TEMPLATE = "reference_normcontrol_report_ios_3.1"
 
 
+def _legacy_report_path(document_id: str) -> Path:
+    return DOCUMENTS_ROOT / document_id / "checking" / "first_pass" / "report.json"
+
+
 def _load_saved_report(document_id: str) -> dict | None:
-    path = DOCUMENTS_ROOT / document_id / "checking" / "first_pass" / "report.json"
+    path = _legacy_report_path(document_id)
     if not path.exists():
         return None
     try:
@@ -29,7 +34,7 @@ def _load_saved_report(document_id: str) -> dict | None:
 
 
 def _save_report(document_id: str, report: dict) -> None:
-    path = DOCUMENTS_ROOT / document_id / "checking" / "first_pass" / "report.json"
+    path = _legacy_report_path(document_id)
     try:
         path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
@@ -74,7 +79,6 @@ def _report_page_count(report: dict) -> int | None:
 
 
 def _enrich_report(document_id: str, report: dict) -> dict:
-    # Normalize before enrichment so every consumer sees the same report model.
     report = prepare_public_report(report)
     changed = False
     filename = _document_filename(document_id, report)
@@ -91,11 +95,41 @@ def _enrich_report(document_id: str, report: dict) -> dict:
     return report
 
 
+def _ensure_result_artifact(document_id: str, report: dict) -> dict:
+    """Materialize the legacy canonical report as a timestamped result once."""
+    document_root = DOCUMENTS_ROOT / document_id
+    existing = load_results(document_root)
+    checked_at = str(report.get("checked_at") or "")
+    if any(str(item.get("checked_at") or "") == checked_at for item in existing):
+        return report
+    try:
+        path = save_result(document_root, report)
+        report = dict(report)
+        report["result_file"] = path.name
+        report["result_id"] = path.stem
+    except OSError:
+        pass
+    return report
+
+
+def _reports_for_document(document_id: str) -> list[dict]:
+    document_root = DOCUMENTS_ROOT / document_id
+    items = load_results(document_root)
+    legacy = _load_saved_report(document_id)
+    if legacy:
+        legacy = _enrich_report(document_id, legacy)
+        legacy = _ensure_result_artifact(document_id, legacy)
+        items = load_results(document_root)
+        if not items:
+            items = [legacy]
+    return [_enrich_report(document_id, item) for item in items]
+
+
 def _report_for_document(document_id: str) -> dict:
-    report = _load_saved_report(document_id)
-    if report is None:
+    items = _reports_for_document(document_id)
+    if not items:
         raise HTTPException(status_code=404, detail="Отчёт для документа ещё не сформирован")
-    return _enrich_report(document_id, report)
+    return items[0]
 
 
 @router.get("")
@@ -104,10 +138,8 @@ def list_reports():
     if DOCUMENTS_ROOT.exists():
         for root in DOCUMENTS_ROOT.iterdir():
             if root.is_dir():
-                report = _load_saved_report(root.name)
-                if report:
-                    items.append(_enrich_report(root.name, report))
-    items.sort(key=lambda x: str(x.get("checked_at") or ""), reverse=True)
+                items.extend(_reports_for_document(root.name))
+    items.sort(key=lambda x: str(x.get("checked_at") or x.get("result_file") or ""), reverse=True)
     return {"reports": items}
 
 
