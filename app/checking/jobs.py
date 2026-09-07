@@ -5,10 +5,12 @@ import threading
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from app.checking.audit_trace import run_traced_resilient_check
 from app.checking.vision_structured import structured_vision_request
+from app.reporting.result_store import save_result
 
 _jobs: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
@@ -67,9 +69,6 @@ def _worker(job_id: str, document_id: str, skill_id: str) -> None:
         started_monotonic=time.monotonic(),
     )
     try:
-        # The tracing wrapper captures resilient._vision_request at run start.
-        # Replace it with the LM Studio JSON-schema request so both the initial
-        # page pass and the recovery pass return machine-parseable evidence.
         from app.checking import resilient
 
         original_vision_request = resilient._vision_request
@@ -84,6 +83,14 @@ def _worker(job_id: str, document_id: str, skill_id: str) -> None:
         finally:
             resilient._vision_request = original_vision_request
 
+        # The trace wrapper has already attached audit_trace/question_mark_trace.
+        # Persist one immutable, timestamped artifact for the Reports registry.
+        document_root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
+        result_path = save_result(document_root, report)
+        report = dict(report)
+        report["result_file"] = result_path.name
+        report["result_id"] = result_path.stem
+
         scope = report.get("check_scope") or {}
         pages_checked = int(scope.get("pages_checked", report.get("summary", {}).get("pages", 0)) or 0)
         pages_available = int(scope.get("pages_available", pages_checked) or pages_checked)
@@ -92,8 +99,9 @@ def _worker(job_id: str, document_id: str, skill_id: str) -> None:
             status="completed",
             percent=100,
             stage="completed",
-            message="Проверка завершена. Отчёт готов.",
+            message="Проверка завершена. Результат сохранён.",
             result=report,
+            result_file=result_path.name,
             current_page=pages_available,
             total_pages=pages_available,
             pages_completed=pages_checked,
