@@ -1,15 +1,13 @@
-"""Single public report contract shared by the UI and IOS 3.1 exporters.
-
-The checker may persist every machine result for traceability, but the user-facing
-report must contain only confirmed remarks. Unchecked and compliant observations
-remain separate datasets and are never promoted to remarks.
-"""
+"""Single public report contract shared by the UI and IOS 3.1 exporters."""
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
-REPORT_SCHEMA_VERSION = "1.1"
+from app.reporting.result_store import build_question_mark_trace
+
+REPORT_SCHEMA_VERSION = "1.2"
 
 
 def _normalise_finding(finding: dict[str, Any]) -> dict[str, Any]:
@@ -30,12 +28,6 @@ def _normalise_finding(finding: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_diagnostics(report: dict[str, Any], findings: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build a compact diagnostic view of the Skill → RAG → decision chain.
-
-    This deliberately does not turn diagnostic observations into remarks. The
-    diagnostic matrix shows where evidence exists and how many results reached
-    each downstream stage using the data persisted by the checker.
-    """
     matrix = []
     for item in report.get("check_matrix") or []:
         if not isinstance(item, dict):
@@ -116,6 +108,15 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
         "unchecked": len(review),
     }
     public["diagnostics"] = _build_diagnostics(report, findings)
+
+    document_id = str(public.get("document_id") or "").strip()
+    if document_id:
+        root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
+        try:
+            public["question_mark_trace"] = build_question_mark_trace(root, public)
+        except Exception as error:
+            public["question_mark_trace"] = {"error": str(error), "first_detected_stage": None}
+
     public["report_definition"] = {
         "remark_status": "violation",
         "remark_fields": [
@@ -126,6 +127,7 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
         "evidence_numbering": "remark_id_order",
         "review_results_excluded_from_remarks": True,
         "diagnostics_excluded_from_remarks": True,
+        "question_mark_trace_excluded_from_remarks": True,
     }
     return public
 
