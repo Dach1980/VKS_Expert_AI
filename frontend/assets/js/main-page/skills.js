@@ -18,16 +18,11 @@ async function loadSkills(){try{const r=await fetch(SKILLS_API_BASE);const data=
 function getSelectedSkillId(){return selectedSkillId}
 async function runSkillCheck(id){
   if(!id)return null;
-  if(typeof window.ensureCheckProgressUI==='function')window.ensureCheckProgressUI();
-  if(typeof window.documentsToast==='function')window.documentsToast('Проверка запущена по профилю «'+((selectedSkill()||{}).name||selectedSkillId)+'».','info');
-  try{
-    const r=await fetch(CHECKS_API_BASE_SKILLS+'/'+encodeURIComponent(id)+'?skill_id='+encodeURIComponent(selectedSkillId),{method:'POST'});const data=await r.json();
-    if(!r.ok){const err=Error(data.detail||('HTTP '+r.status));err.status=r.status;throw err}
-    if(typeof window.updateCheckProgress==='function')window.updateCheckProgress(data);
-    if(typeof window.pollCheckJob==='function'&&data.job_id)window.pollCheckJob(data.job_id);return data;
-  }catch(e){if(typeof window.closeCheckProgress==='function')window.closeCheckProgress();if(typeof window.documentsToast==='function')window.documentsToast('Ошибка проверки: '+e.message,'error');else console.error(e);return null}
+  if(typeof window.openCheckConfig==='function')return window.openCheckConfig(id);
+  if(typeof window.documentsToast==='function')window.documentsToast('Откройте конфигурацию проверки и выберите модель.','error');
+  return null;
 }
-function installSkillCheckOverrides(){window.checkDocument=runSkillCheck;window.checkSelectedDocs=function(){const docs=Array.isArray(window.docsData)?window.docsData.filter(x=>x.checked):[];if(!docs.length){if(typeof window.documentsToast==='function')window.documentsToast('Выберите хотя бы один документ.','error');return}return docs.reduce((promise,d)=>promise.then(()=>runSkillCheck(d.id)),Promise.resolve())};renderSkillSelector()}
+function installSkillCheckOverrides(){window.checkDocument=runSkillCheck;window.checkSelectedDocs=function(){const docs=Array.isArray(window.docsData)?window.docsData.filter(x=>x.checked):[];if(!docs.length){if(typeof window.documentsToast==='function')window.documentsToast('Выберите хотя бы один документ.','error');return}if(docs.length>1){if(typeof window.documentsToast==='function')window.documentsToast('Для выбранных документов настройте и запускайте проверку по одному документу.','info')}return runSkillCheck(docs[0].id)};renderSkillSelector()}
 window.loadSkills=loadSkills;window.getSelectedSkillId=getSelectedSkillId;window.renderSkillSelector=renderSkillSelector;window.runSkillCheck=runSkillCheck;window.installSkillCheckOverrides=installSkillCheckOverrides;
 function initSkills(){installSkillCheckOverrides();loadSkills()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initSkills,{once:true});else setTimeout(initSkills,150);
