@@ -15,11 +15,7 @@ from app.reporting.result_store import save_result
 
 _jobs: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
-_STAGE_LABELS = {
-    "queued": "Ожидание запуска", "preparing": "Подготовка документа", "visual": "Визуальный анализ страниц",
-    "normative": "Нормативная проверка через RAG", "retry": "Повторная попытка страницы",
-    "completed": "Формирование отчёта", "partial": "Частичный результат", "cancelled": "Проверка остановлена", "error": "Ошибка проверки",
-}
+_STAGE_LABELS = {"queued":"Ожидание запуска","preparing":"Подготовка документа","visual":"Визуальный анализ страниц","normative":"Нормативная проверка через RAG","retry":"Повторная попытка страницы","completed":"Формирование отчёта","partial":"Частичный результат","cancelled":"Проверка остановлена","error":"Ошибка проверки"}
 
 
 def _update(job_id: str, **fields: Any) -> None:
@@ -28,8 +24,7 @@ def _update(job_id: str, **fields: Any) -> None:
         if job is None:
             return
         job.update(fields)
-        stage = str(job.get("stage", "queued"))
-        job["stage_label"] = _STAGE_LABELS.get(stage, stage)
+        job["stage_label"] = _STAGE_LABELS.get(str(job.get("stage", "queued")), str(job.get("stage", "queued")))
         started = job.get("started_monotonic")
         total_pages = int(job.get("total_pages", 0) or 0)
         completed_pages = int(job.get("pages_completed", 0) or 0)
@@ -58,7 +53,7 @@ def _progress(job_id: str, data: dict[str, Any]) -> None:
     _update(job_id, **fields)
 
 
-def _worker(job_id: str, document_id: str, skill_id: str, model: str, selected_pages: list[int]) -> None:
+def _worker(job_id: str, document_id: str, skill_id: str, model: str, selected_pages: list[int], total_pages: int) -> None:
     with _lock:
         cancel_event = _jobs[job_id]["cancel_event"]
     _update(job_id, status="running", started_at=datetime.now().isoformat(timespec="seconds"), started_monotonic=time.monotonic(), model=model, requested_pages=selected_pages)
@@ -79,7 +74,7 @@ def _worker(job_id: str, document_id: str, skill_id: str, model: str, selected_p
         report.setdefault("model", {"requested": model, "actual": model})
         if status == "partial":
             checked = int((report.get("check_scope") or {}).get("pages_checked", 0) or 0)
-            _update(job_id, status="cancelled", stage="cancelled", percent=checked / max(len(selected_pages), 1) * 100, message="Проверка остановлена. Текущий результат можно зафиксировать.", result=report, pages_completed=checked, pages_checked=checked, pages_available=len(selected_pages), total_pages=len(selected_pages), finished_at=datetime.now().isoformat(timespec="seconds"))
+            _update(job_id, status="cancelled", stage="cancelled", percent=checked / max(len(selected_pages), 1) * 100, message="Проверка остановлена. Текущий результат можно зафиксировать.", result=report, pages_completed=checked, pages_checked=checked, pages_available=total_pages, total_pages=total_pages, finished_at=datetime.now().isoformat(timespec="seconds"))
             return
 
         document_root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
@@ -88,24 +83,26 @@ def _worker(job_id: str, document_id: str, skill_id: str, model: str, selected_p
         report["result_id"] = result_path.stem
         scope = report.get("check_scope") or {}
         pages_checked = int(scope.get("pages_checked", 0) or 0)
-        pages_available = int(scope.get("pages_available", len(selected_pages)) or len(selected_pages))
+        pages_available = int(scope.get("pages_available", total_pages) or total_pages)
         _update(job_id, status="completed", percent=100, stage="completed", message="Проверка завершена. Результат сохранён.", result=report, result_file=result_path.name, current_page=max(selected_pages), total_pages=pages_available, pages_completed=pages_checked, pages_checked=pages_checked, pages_available=pages_available, failed_pages=scope.get("failed_pages", []), report_url=f"/api/reports/{document_id}", report_pdf_url="/api/reports/pdf", report_docx_url="/api/reports/docx", finished_at=datetime.now().isoformat(timespec="seconds"), estimated_remaining_seconds=0)
     except CheckCancelled:
-        _update(job_id, status="cancelled", stage="cancelled", message="Проверка остановлена пользователем. Текущий результат можно зафиксировать.", finished_at=datetime.now().isoformat(timespec="seconds"))
+        _update(job_id, status="cancelled", stage="cancelled", message="Проверка остановлена пользователем. Текущий результат можно зафиксировать.", total_pages=total_pages, pages_available=total_pages, finished_at=datetime.now().isoformat(timespec="seconds"))
     except Exception as error:
         _update(job_id, status="error", stage="error", percent=100, message=f"Ошибка проверки: {error}", error=str(error), finished_at=datetime.now().isoformat(timespec="seconds"), estimated_remaining_seconds=0)
 
 
-def start_check_job(document_id: str, skill_id: str = "vk_wastewater", model: str = "", selected_pages: list[int] | None = None) -> dict[str, Any]:
+def start_check_job(document_id: str, skill_id: str = "vk_wastewater", model: str = "", selected_pages: list[int] | None = None, total_pages: int = 0) -> dict[str, Any]:
     if not model:
         raise ValueError("Модель для проверки не выбрана")
     if not selected_pages:
         raise ValueError("Не выбраны страницы для проверки")
+    if total_pages < max(selected_pages):
+        raise ValueError("Некорректное общее количество страниц")
     job_id = uuid.uuid4().hex
     cancel_event = threading.Event()
     with _lock:
-        _jobs[job_id] = {"job_id": job_id, "document_id": document_id, "skill_id": skill_id, "model": model, "requested_pages": selected_pages, "status": "queued", "stage": "queued", "stage_label": _STAGE_LABELS["queued"], "percent": 0, "current_page": 0, "total_pages": 0, "pages_completed": 0, "pages_checked": 0, "pages_available": None, "message": "Проверка поставлена в очередь…", "estimated_remaining_seconds": None, "average_seconds_per_page": None, "elapsed_seconds": 0, "created_at": datetime.now().isoformat(timespec="seconds"), "cancel_event": cancel_event}
-    thread = threading.Thread(target=_worker, args=(job_id, document_id, skill_id, model, selected_pages), daemon=True, name=f"check-{job_id[:8]}")
+        _jobs[job_id] = {"job_id":job_id,"document_id":document_id,"skill_id":skill_id,"model":model,"requested_pages":selected_pages,"status":"queued","stage":"queued","stage_label":_STAGE_LABELS["queued"],"percent":0,"current_page":0,"total_pages":total_pages,"pages_completed":0,"pages_checked":0,"pages_available":total_pages,"message":"Проверка поставлена в очередь…","estimated_remaining_seconds":None,"average_seconds_per_page":None,"elapsed_seconds":0,"created_at":datetime.now().isoformat(timespec="seconds"),"cancel_event":cancel_event}
+    thread = threading.Thread(target=_worker, args=(job_id, document_id, skill_id, model, selected_pages, total_pages), daemon=True, name=f"check-{job_id[:8]}")
     with _lock:
         _jobs[job_id]["thread"] = thread
     thread.start()
@@ -118,7 +115,7 @@ def cancel_check_job(job_id: str) -> dict[str, Any] | None:
         if not job:
             return None
         if str(job.get("status")) in {"completed", "error", "cancelled"}:
-            return {k: v for k, v in job.items() if k not in {"started_monotonic", "cancel_event", "thread"}}
+            return {k:v for k,v in job.items() if k not in {"started_monotonic","cancel_event","thread"}}
         job["cancel_requested"] = True
         event = job.get("cancel_event")
         if event:
@@ -152,4 +149,4 @@ def get_check_job(job_id: str) -> dict[str, Any] | None:
         job = _jobs.get(job_id)
         if not job:
             return None
-        return {k: v for k, v in job.items() if k not in {"started_monotonic", "cancel_event", "thread"}}
+        return {k:v for k,v in job.items() if k not in {"started_monotonic","cancel_event","thread"}}
