@@ -24,13 +24,7 @@ def available_models():
 
 
 @router.post("/{document_id}")
-def check_document(
-    document_id: str,
-    skill_id: str = Query("vk_wastewater", description="Профиль экспертной проверки"),
-    model: str = Query("", description="Явно выбранная модель LM Studio"),
-    whole_document: bool = Query(True, description="Проверять весь документ"),
-    page_ranges: str = Query("", description="Диапазоны страниц, например 1-3, 7, 12-15"),
-):
+def check_document(document_id: str, skill_id: str = Query("vk_wastewater"), model: str = Query(""), whole_document: bool = Query(True), page_ranges: str = Query("")):
     root = DOCUMENTS_ROOT / document_id
     parsed = root / "parsed.json"
     source = root / "source.pdf"
@@ -44,11 +38,10 @@ def check_document(
         selected_pages = normalize_page_scope(total_pages, whole_document, page_ranges)
         if not model:
             raise ValueError("Перед началом проверки необходимо выбрать модель")
-        client = LMStudioClient()
-        available = [str(item.get("id")) for item in client.get_models().get("data", []) if isinstance(item, dict) and item.get("id") and "embedding" not in str(item.get("id")).lower()]
+        available = [str(item.get("id")) for item in LMStudioClient().get_models().get("data", []) if isinstance(item, dict) and item.get("id") and "embedding" not in str(item.get("id")).lower()]
         if model not in available:
             raise ValueError(f"Выбранная модель недоступна в LM Studio: {model}")
-        return {"success": True, "skill_id": skill["id"], "skill_name": skill["name"], "normative_documents": skill["normative_documents"], "total_pages": total_pages, "requested_pages": selected_pages, "model": {"requested": model}, **start_check_job(document_id, skill_id, model, selected_pages)}
+        return {"success": True, "skill_id": skill["id"], "skill_name": skill["name"], "normative_documents": skill["normative_documents"], "total_pages": total_pages, "requested_pages": selected_pages, "model": {"requested": model}, **start_check_job(document_id, skill_id, model, selected_pages, total_pages)}
     except KeyError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except ValueError as error:
@@ -66,7 +59,7 @@ def check_job_status(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Задача проверки не найдена")
     payload = {"success": True, **job}
-    if payload.get("status") == "completed" and isinstance(payload.get("result"), dict):
+    if payload.get("status") in {"completed", "cancelled"} and isinstance(payload.get("result"), dict):
         payload["result"] = prepare_job_result(payload["result"])
     return payload
 
