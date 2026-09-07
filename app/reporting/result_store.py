@@ -86,7 +86,9 @@ def build_question_mark_trace(document_root: Path, result: dict[str, Any]) -> di
     stages["rag"] = {"count": count_rag, "samples": samples_rag}
     stages["requirements"] = {"count": count_req, "samples": samples_req}
 
-    count, samples = _scan_question_marks(result)
+    final_payload = dict(result)
+    final_payload.pop("question_mark_trace", None)
+    count, samples = _scan_question_marks(final_payload)
     stages["final_result"] = {"count": count, "samples": samples}
 
     first_stage = None
