@@ -45,7 +45,7 @@ def _scan_question_marks(value: Any, path: str = "$", samples: list[dict[str, st
     return count, samples
 
 
-def _question_mark_provenance(document_root: Path, result: dict[str, Any]) -> dict[str, Any]:
+def build_question_mark_trace(document_root: Path, result: dict[str, Any]) -> dict[str, Any]:
     """Build a stage-oriented '?' trace without changing the checking decision."""
     stages: dict[str, dict[str, Any]] = {}
 
@@ -65,8 +65,7 @@ def _question_mark_provenance(document_root: Path, result: dict[str, Any]) -> di
     for event in trace_log:
         if not isinstance(event, dict):
             continue
-        kind = str(event.get("kind") or "")
-        if kind.startswith("vision"):
+        if str(event.get("kind") or "").startswith("vision"):
             vision_values.append(event)
     count, samples = _scan_question_marks(vision_values)
     stages["vision"] = {"count": count, "events": len(vision_values), "samples": samples}
@@ -109,7 +108,7 @@ def save_result(document_root: Path, result: dict[str, Any]) -> Path:
     """Write an immutable timestamped result artifact with provenance diagnostics."""
     directory = results_dir(document_root)
     payload = dict(result)
-    payload["question_mark_trace"] = _question_mark_provenance(document_root, payload)
+    payload["question_mark_trace"] = build_question_mark_trace(document_root, payload)
     stamp = _timestamp(str(payload.get("checked_at") or ""))
     path = directory / f"result_{stamp}.json"
     if path.exists():
