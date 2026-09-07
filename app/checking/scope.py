@@ -10,6 +10,10 @@ except ImportError:  # pragma: no cover
     fitz = None
 
 
+class CheckCancelled(RuntimeError):
+    """Raised when a running document check is cooperatively cancelled."""
+
+
 _RANGE_RE = re.compile(r"^(\d+)(?:\s*-\s*(\d+))?$")
 
 
