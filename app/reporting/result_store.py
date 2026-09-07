@@ -70,13 +70,17 @@ def build_question_mark_trace(document_root: Path, result: dict[str, Any]) -> di
     count, samples = _scan_question_marks(vision_values)
     stages["vision"] = {"count": count, "events": len(vision_values), "samples": samples}
 
-    findings = result.get("results") or result.get("checks") or []
+    findings: list[Any] = []
+    for key in ("results", "compliant_results", "review_results", "checks"):
+        value = result.get(key)
+        if isinstance(value, list):
+            findings.extend(value)
     count, samples = _scan_question_marks(findings)
     stages["candidate_and_decision"] = {"count": count, "samples": samples}
 
     requirements: list[Any] = []
     rag_sources: list[Any] = []
-    for finding in findings if isinstance(findings, list) else []:
+    for finding in findings:
         if not isinstance(finding, dict):
             continue
         requirements.extend(finding.get("normative_requirements") or [])
