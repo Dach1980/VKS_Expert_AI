@@ -1,6 +1,6 @@
 """
 VKS Expert AI
-LM Studio Client v2.0
+LM Studio Client v2.1
 
 Communication with LM Studio local server.
 """
@@ -24,15 +24,17 @@ PREFERRED_CHAT_MODELS = (
 class LMStudioClient:
     """Client for LM Studio OpenAI-compatible API.
 
-    timeout=None is intentional: long local-document checks must not be
-    terminated by an arbitrary wall-clock limit. The API exposes checks as
-    background jobs, so the browser no longer waits for the model request.
+    A user-started check should pass an explicit model. Automatic model
+    selection remains available only for legacy/internal callers that omit it.
+    When a cancellation event is supplied, chat uses streaming so the HTTP
+    connection can be closed cooperatively while LM Studio is generating.
     """
 
-    def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: Optional[float] = None):
+    def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: Optional[float] = None, cancel_event=None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self.cancel_event = cancel_event
 
     def get_models(self):
         response = requests.get(f"{self.base_url}/models", timeout=self.timeout)
@@ -88,7 +90,53 @@ class LMStudioClient:
                 pass
         return raw
 
+    def _cancelled(self) -> bool:
+        return bool(self.cancel_event is not None and self.cancel_event.is_set())
+
+    def _chat_stream(self, url: str, payload: dict) -> str:
+        response = requests.post(url, json=payload, timeout=self.timeout, stream=True)
+        try:
+            response.raise_for_status()
+            parts: list[str] = []
+            reasoning_parts: list[str] = []
+            for line in response.iter_lines(decode_unicode=True):
+                if self._cancelled():
+                    response.close()
+                    raise RuntimeError("Проверка отменена пользователем")
+                if not line:
+                    continue
+                text = str(line)
+                if text.startswith("data:"):
+                    text = text[5:].strip()
+                if text == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(text)
+                except json.JSONDecodeError:
+                    continue
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = (choices[0] or {}).get("delta") or {}
+                content = delta.get("content") or ""
+                reasoning = delta.get("reasoning_content") or ""
+                if content:
+                    parts.append(str(content))
+                if reasoning:
+                    reasoning_parts.append(str(reasoning))
+            content = "".join(parts).strip()
+            reasoning = "".join(reasoning_parts).strip()
+            if content:
+                return self._extract_json_array(content) if "JSON-массив" in payload["messages"][-1]["content"] else content
+            if reasoning:
+                return "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+            return "LLM вернул пустой ответ."
+        finally:
+            response.close()
+
     def chat(self, prompt: str, system_prompt: str = None, temperature: float = 0.1, max_tokens: int = 2048, enable_thinking: bool = False) -> str:
+        if self._cancelled():
+            raise RuntimeError("Проверка отменена пользователем")
         if self.model is None:
             self.model = self._select_chat_model(self.get_models())
         messages = []
@@ -118,6 +166,9 @@ class LMStudioClient:
             }
         print("\nLM STUDIO REQUEST:")
         print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking, "structured_json": "response_format" in payload, "timeout": self.timeout})
+        if self.cancel_event is not None:
+            payload["stream"] = True
+            return self._chat_stream(f"{self.base_url}/chat/completions", payload)
         response = requests.post(f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
