@@ -1,6 +1,6 @@
 """
 VKS Expert AI
-LM Studio Client v2.1
+LM Studio Client v2.2
 
 Communication with LM Studio local server.
 """
@@ -24,10 +24,10 @@ PREFERRED_CHAT_MODELS = (
 class LMStudioClient:
     """Client for LM Studio OpenAI-compatible API.
 
-    A user-started check should pass an explicit model. Automatic model
-    selection remains available only for legacy/internal callers that omit it.
+    User-started checks pass an explicit model. If LM Studio reports a
+    different model in its completion response, the request is rejected.
     When a cancellation event is supplied, chat uses streaming so the HTTP
-    connection can be closed cooperatively while LM Studio is generating.
+    connection can be closed cooperatively during generation.
     """
 
     def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: Optional[float] = None, cancel_event=None):
@@ -35,6 +35,7 @@ class LMStudioClient:
         self.model = model
         self.timeout = timeout
         self.cancel_event = cancel_event
+        self.actual_model: Optional[str] = None
 
     def get_models(self):
         response = requests.get(f"{self.base_url}/models", timeout=self.timeout)
@@ -43,21 +44,13 @@ class LMStudioClient:
 
     @staticmethod
     def _select_chat_model(models: dict) -> str:
-        available = [
-            str(item.get("id", ""))
-            for item in models.get("data", [])
-            if isinstance(item, dict) and item.get("id")
-        ]
+        available = [str(item.get("id", "")) for item in models.get("data", []) if isinstance(item, dict) and item.get("id")]
         if not available:
             raise RuntimeError("No models available")
         for preferred in PREFERRED_CHAT_MODELS:
             if preferred in available:
                 return preferred
-        candidates = [
-            model for model in available
-            if "embedding" not in model.lower()
-            and any(token in model.lower() for token in ("qwen", "llama", "mistral", "gemma"))
-        ]
+        candidates = [model for model in available if "embedding" not in model.lower() and any(token in model.lower() for token in ("qwen", "llama", "mistral", "gemma"))]
         if candidates:
             return candidates[0]
         candidates = [model for model in available if "embedding" not in model.lower()]
@@ -93,12 +86,19 @@ class LMStudioClient:
     def _cancelled(self) -> bool:
         return bool(self.cancel_event is not None and self.cancel_event.is_set())
 
+    def _verify_actual_model(self, actual: Optional[str]) -> None:
+        if actual:
+            self.actual_model = str(actual)
+            if self.model and self.actual_model != self.model:
+                raise RuntimeError(f"LM Studio вернул другую модель: запрошена «{self.model}», фактически «{self.actual_model}»")
+
     def _chat_stream(self, url: str, payload: dict) -> str:
         response = requests.post(url, json=payload, timeout=self.timeout, stream=True)
         try:
             response.raise_for_status()
             parts: list[str] = []
             reasoning_parts: list[str] = []
+            seen_model = None
             for line in response.iter_lines(decode_unicode=True):
                 if self._cancelled():
                     response.close()
@@ -114,6 +114,8 @@ class LMStudioClient:
                     chunk = json.loads(text)
                 except json.JSONDecodeError:
                     continue
+                self._verify_actual_model(chunk.get("model"))
+                seen_model = seen_model or chunk.get("model")
                 choices = chunk.get("choices") or []
                 if not choices:
                     continue
@@ -124,6 +126,8 @@ class LMStudioClient:
                     parts.append(str(content))
                 if reasoning:
                     reasoning_parts.append(str(reasoning))
+            if seen_model:
+                self._verify_actual_model(seen_model)
             content = "".join(parts).strip()
             reasoning = "".join(reasoning_parts).strip()
             if content:
@@ -143,27 +147,9 @@ class LMStudioClient:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "extra_body": {"chat_template_kwargs": {"enable_thinking": enable_thinking}},
-        }
+        payload = {"model": self.model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "extra_body": {"chat_template_kwargs": {"enable_thinking": enable_thinking}}}
         if "JSON-массив" in prompt or "JSON-массив" in str(system_prompt or ""):
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "document_check_results", "strict": True,
-                    "schema": {"type": "array", "items": {"type": "object", "properties": {
-                        "type": {"type": "string", "enum": ["violation", "compliant", "unchecked"]},
-                        "title": {"type": "string"}, "description": {"type": "string"}, "recommendation": {"type": "string"},
-                        "sheet": {"type": "string"}, "norm": {"type": "string"},
-                        "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
-                        "page": {"type": "integer"}, "bbox": {"type": ["array", "null"]},
-                    }, "required": ["type", "title", "description", "recommendation", "sheet", "norm", "severity", "page", "bbox"], "additionalProperties": False}}
-                }
-            }
+            payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "document_check_results", "strict": True, "schema": {"type": "array", "items": {"type": "object", "properties": {"type": {"type": "string", "enum": ["violation", "compliant", "unchecked"]}, "title": {"type": "string"}, "description": {"type": "string"}, "recommendation": {"type": "string"}, "sheet": {"type": "string"}, "norm": {"type": "string"}, "severity": {"type": "string", "enum": ["critical", "major", "minor"]}, "page": {"type": "integer"}, "bbox": {"type": ["array", "null"]}}, "required": ["type", "title", "description", "recommendation", "sheet", "norm", "severity", "page", "bbox"], "additionalProperties": False}}}}
         print("\nLM STUDIO REQUEST:")
         print({"model": self.model, "temperature": temperature, "max_tokens": max_tokens, "thinking": enable_thinking, "structured_json": "response_format" in payload, "timeout": self.timeout})
         if self.cancel_event is not None:
@@ -172,6 +158,7 @@ class LMStudioClient:
         response = requests.post(f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
+        self._verify_actual_model(data.get("model"))
         message = data["choices"][0]["message"]
         content = message.get("content", "") or ""
         reasoning = message.get("reasoning_content", "") or ""
@@ -189,11 +176,7 @@ def demo():
     print("Available models:")
     for model in client.get_models().get("data", []):
         print("-", model["id"])
-    answer = client.chat(
-        "Объясни назначение СП 30.13330.2020 для проектирования внутренних систем водоснабжения.",
-        system_prompt="Ты инженерный AI-ассистент VKS Expert AI. Отвечай только на русском языке. Не показывай внутренние рассуждения модели.",
-        temperature=0.1, max_tokens=2048, enable_thinking=False,
-    )
+    answer = client.chat("Объясни назначение СП 30.13330.2020 для проектирования внутренних систем водоснабжения.", system_prompt="Ты инженерный AI-ассистент VKS Expert AI. Отвечай только на русском языке. Не показывай внутренние рассуждения модели.", temperature=0.1, max_tokens=2048, enable_thinking=False)
     print("\nANSWER:\n", answer)
 
 
