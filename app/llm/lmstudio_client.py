@@ -1,34 +1,23 @@
 """
 VKS Expert AI
-LM Studio Client v2.2
-
-Communication with LM Studio local server.
+LM Studio Client v2.3
 """
 
 from typing import Optional
 import json
 import requests
 
+from app.checking.scope import CheckCancelled
+
 
 PREFERRED_CHAT_MODELS = (
-    "qwen/qwen3.5-9b",
-    "qwen3.5-9b",
-    "qwen3.5-9b-mtp",
-    "qwen3-vl-4b-instruct",
-    "qwen/qwen3-vl-4b-instruct",
-    "qwen3.5-4b-mtp",
-    "qwen/qwen3.5-4b",
+    "qwen/qwen3.5-9b", "qwen3.5-9b", "qwen3.5-9b-mtp", "qwen3-vl-4b-instruct",
+    "qwen/qwen3-vl-4b-instruct", "qwen3.5-4b-mtp", "qwen/qwen3.5-4b",
 )
 
 
 class LMStudioClient:
-    """Client for LM Studio OpenAI-compatible API.
-
-    User-started checks pass an explicit model. If LM Studio reports a
-    different model in its completion response, the request is rejected.
-    When a cancellation event is supplied, chat uses streaming so the HTTP
-    connection can be closed cooperatively during generation.
-    """
+    """Client for LM Studio OpenAI-compatible API with explicit model control."""
 
     def __init__(self, base_url: str = "http://localhost:1234/v1", model: Optional[str] = None, timeout: Optional[float] = None, cancel_event=None):
         self.base_url = base_url.rstrip("/")
@@ -50,10 +39,10 @@ class LMStudioClient:
         for preferred in PREFERRED_CHAT_MODELS:
             if preferred in available:
                 return preferred
-        candidates = [model for model in available if "embedding" not in model.lower() and any(token in model.lower() for token in ("qwen", "llama", "mistral", "gemma"))]
+        candidates = [m for m in available if "embedding" not in m.lower() and any(t in m.lower() for t in ("qwen", "llama", "mistral", "gemma"))]
         if candidates:
             return candidates[0]
-        candidates = [model for model in available if "embedding" not in model.lower()]
+        candidates = [m for m in available if "embedding" not in m.lower()]
         if candidates:
             return candidates[0]
         raise RuntimeError("No chat-capable model available; only embedding models are loaded")
@@ -71,8 +60,7 @@ class LMStudioClient:
                 return json.dumps(parsed["results"], ensure_ascii=False)
         except json.JSONDecodeError:
             pass
-        start = raw.find("[")
-        end = raw.rfind("]")
+        start, end = raw.find("["), raw.rfind("]")
         if start >= 0 and end > start:
             candidate = raw[start:end + 1].strip()
             try:
@@ -93,16 +81,14 @@ class LMStudioClient:
                 raise RuntimeError(f"LM Studio вернул другую модель: запрошена «{self.model}», фактически «{self.actual_model}»")
 
     def _chat_stream(self, url: str, payload: dict) -> str:
-        response = requests.post(url, json=payload, timeout=self.timeout, stream=True)
+        response = requests.Session().post(url, json=payload, timeout=self.timeout, stream=True)
         try:
             response.raise_for_status()
             parts: list[str] = []
             reasoning_parts: list[str] = []
-            seen_model = None
             for line in response.iter_lines(decode_unicode=True):
                 if self._cancelled():
-                    response.close()
-                    raise RuntimeError("Проверка отменена пользователем")
+                    raise CheckCancelled("Проверка отменена пользователем")
                 if not line:
                     continue
                 text = str(line)
@@ -115,23 +101,18 @@ class LMStudioClient:
                 except json.JSONDecodeError:
                     continue
                 self._verify_actual_model(chunk.get("model"))
-                seen_model = seen_model or chunk.get("model")
                 choices = chunk.get("choices") or []
                 if not choices:
                     continue
                 delta = (choices[0] or {}).get("delta") or {}
-                content = delta.get("content") or ""
-                reasoning = delta.get("reasoning_content") or ""
-                if content:
-                    parts.append(str(content))
-                if reasoning:
-                    reasoning_parts.append(str(reasoning))
-            if seen_model:
-                self._verify_actual_model(seen_model)
+                if delta.get("content"):
+                    parts.append(str(delta["content"]))
+                if delta.get("reasoning_content"):
+                    reasoning_parts.append(str(delta["reasoning_content"]))
             content = "".join(parts).strip()
             reasoning = "".join(reasoning_parts).strip()
             if content:
-                return self._extract_json_array(content) if "JSON-массив" in payload["messages"][-1]["content"] else content
+                return self._extract_json_array(content) if "JSON-массив" in payload["messages"][-1].get("content", "") else content
             if reasoning:
                 return "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
             return "LLM вернул пустой ответ."
@@ -140,7 +121,7 @@ class LMStudioClient:
 
     def chat(self, prompt: str, system_prompt: str = None, temperature: float = 0.1, max_tokens: int = 2048, enable_thinking: bool = False) -> str:
         if self._cancelled():
-            raise RuntimeError("Проверка отменена пользователем")
+            raise CheckCancelled("Проверка отменена пользователем")
         if self.model is None:
             self.model = self._select_chat_model(self.get_models())
         messages = []
@@ -162,23 +143,8 @@ class LMStudioClient:
         message = data["choices"][0]["message"]
         content = message.get("content", "") or ""
         reasoning = message.get("reasoning_content", "") or ""
-        if reasoning.strip():
-            print("WARNING: reasoning_content received from model")
         if content.strip():
             return self._extract_json_array(content) if "JSON-массив" in prompt else content.strip()
         if reasoning.strip():
             return "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
         return "LLM вернул пустой ответ."
-
-
-def demo():
-    client = LMStudioClient(model="qwen/qwen3.5-9b")
-    print("Available models:")
-    for model in client.get_models().get("data", []):
-        print("-", model["id"])
-    answer = client.chat("Объясни назначение СП 30.13330.2020 для проектирования внутренних систем водоснабжения.", system_prompt="Ты инженерный AI-ассистент VKS Expert AI. Отвечай только на русском языке. Не показывай внутренние рассуждения модели.", temperature=0.1, max_tokens=2048, enable_thinking=False)
-    print("\nANSWER:\n", answer)
-
-
-if __name__ == "__main__":
-    demo()
