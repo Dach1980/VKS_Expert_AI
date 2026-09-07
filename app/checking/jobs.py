@@ -65,19 +65,21 @@ def _worker(job_id: str, document_id: str, skill_id: str, model: str, selected_p
     try:
         from app.checking import resilient
         original_vision_request = resilient._vision_request
+        original_run = resilient.run_resilient_check
         resilient._vision_request = structured_vision_request
+        resilient.run_resilient_check = lambda doc_id, normative_number="СП 30.13330.2020", progress_callback=None, skill_id=skill_id: original_run(doc_id, normative_number=normative_number, progress_callback=progress_callback, skill_id=skill_id, model=model, selected_pages=selected_pages, cancel_event=cancel_event)
         try:
-            report = run_traced_resilient_check(
-                document_id, normative_number="СП 30.13330.2020", progress_callback=lambda data: _progress(job_id, data),
-                skill_id=skill_id, model=model, selected_pages=selected_pages, cancel_event=cancel_event,
-            )
+            report = run_traced_resilient_check(document_id, normative_number="СП 30.13330.2020", progress_callback=lambda data: _progress(job_id, data), skill_id=skill_id)
         finally:
+            resilient.run_resilient_check = original_run
             resilient._vision_request = original_vision_request
 
         report = dict(report)
         status = str(report.get("status") or "completed")
+        report.setdefault("model", {"requested": model, "actual": model})
         if status == "partial":
-            _update(job_id, status="cancelled", stage="cancelled", percent=int(report.get("summary", {}).get("pages", 0) or 0) / max(len(selected_pages), 1) * 100, message="Проверка остановлена. Текущий результат можно зафиксировать.", result=report, pages_checked=report.get("check_scope", {}).get("pages_checked", 0), pages_available=len(selected_pages), finished_at=datetime.now().isoformat(timespec="seconds"))
+            checked = int((report.get("check_scope") or {}).get("pages_checked", 0) or 0)
+            _update(job_id, status="cancelled", stage="cancelled", percent=checked / max(len(selected_pages), 1) * 100, message="Проверка остановлена. Текущий результат можно зафиксировать.", result=report, pages_completed=checked, pages_checked=checked, pages_available=len(selected_pages), total_pages=len(selected_pages), finished_at=datetime.now().isoformat(timespec="seconds"))
             return
 
         document_root = Path(__file__).resolve().parents[2] / "knowledge" / "project_documents" / document_id
@@ -102,13 +104,7 @@ def start_check_job(document_id: str, skill_id: str = "vk_wastewater", model: st
     job_id = uuid.uuid4().hex
     cancel_event = threading.Event()
     with _lock:
-        _jobs[job_id] = {
-            "job_id": job_id, "document_id": document_id, "skill_id": skill_id, "model": model, "requested_pages": selected_pages,
-            "status": "queued", "stage": "queued", "stage_label": _STAGE_LABELS["queued"], "percent": 0,
-            "current_page": 0, "total_pages": 0, "pages_completed": 0, "pages_checked": 0, "pages_available": None,
-            "message": "Проверка поставлена в очередь…", "estimated_remaining_seconds": None, "average_seconds_per_page": None,
-            "elapsed_seconds": 0, "created_at": datetime.now().isoformat(timespec="seconds"), "cancel_event": cancel_event,
-        }
+        _jobs[job_id] = {"job_id": job_id, "document_id": document_id, "skill_id": skill_id, "model": model, "requested_pages": selected_pages, "status": "queued", "stage": "queued", "stage_label": _STAGE_LABELS["queued"], "percent": 0, "current_page": 0, "total_pages": 0, "pages_completed": 0, "pages_checked": 0, "pages_available": None, "message": "Проверка поставлена в очередь…", "estimated_remaining_seconds": None, "average_seconds_per_page": None, "elapsed_seconds": 0, "created_at": datetime.now().isoformat(timespec="seconds"), "cancel_event": cancel_event}
     thread = threading.Thread(target=_worker, args=(job_id, document_id, skill_id, model, selected_pages), daemon=True, name=f"check-{job_id[:8]}")
     with _lock:
         _jobs[job_id]["thread"] = thread
@@ -121,8 +117,7 @@ def cancel_check_job(job_id: str) -> dict[str, Any] | None:
         job = _jobs.get(job_id)
         if not job:
             return None
-        status = str(job.get("status"))
-        if status in {"completed", "error", "cancelled"}:
+        if str(job.get("status")) in {"completed", "error", "cancelled"}:
             return {k: v for k, v in job.items() if k not in {"started_monotonic", "cancel_event", "thread"}}
         job["cancel_requested"] = True
         event = job.get("cancel_event")
