@@ -117,7 +117,7 @@ def _page_number_from_image(value: Any) -> int | None:
 
 
 def _build_vision_diagnostics(result: dict[str, Any], requested_pages: list[int]) -> dict[str, Any]:
-    """Aggregate the existing Vision audit events into an explicit per-page lifecycle."""
+    """Aggregate existing Vision audit events into an explicit per-page lifecycle."""
     trace = result.get("audit_trace") or {}
     events = trace.get("diagnostics_log") if isinstance(trace, dict) else []
     pages: dict[int, dict[str, Any]] = {}
@@ -218,14 +218,9 @@ def _enrich_pipeline_telemetry(document_root: Path, result: dict[str, Any]) -> d
     if str(payload.get("status") or "") == "completed" and requested:
         processed = requested
 
-    pages_with_candidates = sorted({
-        int(x.get("page")) for x in (payload.get("_pipeline_findings") or [])
-        if isinstance(x, dict) and x.get("page")
-    })
     scope.update({
         "pages_requested": requested,
         "pages_processed": sorted(set(processed) - set(failed)),
-        "pages_with_candidates": pages_with_candidates,
         "pages_failed": failed,
         "pages_checked": len(sorted(set(processed) - set(failed))),
         "requested_pages": requested,
@@ -233,7 +228,10 @@ def _enrich_pipeline_telemetry(document_root: Path, result: dict[str, Any]) -> d
         "failed_pages": failed,
     })
     payload["check_scope"] = scope
-    payload["vision_diagnostics"] = _build_vision_diagnostics(payload, requested)
+    vision_diagnostics = _build_vision_diagnostics(payload, requested)
+    scope["pages_with_candidates"] = vision_diagnostics["pages_with_candidates"]
+    payload["check_scope"] = scope
+    payload["vision_diagnostics"] = vision_diagnostics
 
     # Rebuild the public contract once telemetry and audit_trace are complete.
     from app.reporting.report_contract import prepare_public_report
