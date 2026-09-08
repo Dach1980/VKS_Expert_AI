@@ -236,6 +236,19 @@ def _enrich_pipeline_telemetry(document_root: Path, result: dict[str, Any]) -> d
     # Rebuild the public contract once telemetry and audit_trace are complete.
     from app.reporting.report_contract import prepare_public_report
     payload = prepare_public_report(payload)
+    if payload.get("diagnostics", {}).get("source") == "audit_trace.checks":
+        payload["check_matrix"] = [
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "candidates": item["visual_candidates"],
+                "violations": item["decisions"]["violation"],
+                "compliant": item["decisions"]["compliant"],
+                "unchecked": item["decisions"]["unchecked"],
+                "status": item["status"],
+            }
+            for item in payload["diagnostics"].get("matrix", [])
+        ]
     payload.pop("_pipeline_findings", None)
     return payload
 
