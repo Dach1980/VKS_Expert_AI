@@ -42,18 +42,29 @@ def _json_object(text: str) -> dict[str, Any]:
 
 def _json_array(text: str) -> list[dict[str, Any]]:
     raw = str(text or "").strip().replace("```json", "").replace("```", "").strip()
-    try:
-        value = json.loads(raw)
-        if isinstance(value, list):
-            return [x for x in value if isinstance(x, dict)]
+
+    def normalize(value: Any) -> list[dict[str, Any]]:
         if isinstance(value, dict) and isinstance(value.get("findings"), list):
             return [x for x in value["findings"] if isinstance(x, dict)]
+        if isinstance(value, list):
+            findings: list[dict[str, Any]] = []
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                if isinstance(item.get("findings"), list):
+                    findings.extend(x for x in item["findings"] if isinstance(x, dict))
+                else:
+                    findings.append(item)
+            return findings
+        return []
+
+    try:
+        return normalize(json.loads(raw))
     except json.JSONDecodeError:
         start, end = raw.find("["), raw.rfind("]")
         if start >= 0 and end > start:
             try:
-                value = json.loads(raw[start:end + 1])
-                return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+                return normalize(json.loads(raw[start:end + 1]))
             except json.JSONDecodeError:
                 pass
     return []
