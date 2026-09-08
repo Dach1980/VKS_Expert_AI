@@ -28,14 +28,16 @@ def _update(job_id: str, **fields: Any) -> None:
         started = job.get("started_monotonic")
         total_pages = int(job.get("total_pages", 0) or 0)
         completed_pages = int(job.get("pages_completed", 0) or 0)
+        requested_pages = job.get("requested_pages") or []
+        target_pages = len(requested_pages) if requested_pages else total_pages
         if started:
             elapsed = max(0.0, time.monotonic() - started)
             job["elapsed_seconds"] = round(elapsed)
-            if total_pages > 0 and completed_pages > 0 and completed_pages < total_pages:
+            if target_pages > 0 and completed_pages > 0 and completed_pages < target_pages:
                 spp = elapsed / completed_pages
                 job["average_seconds_per_page"] = round(spp, 1)
-                job["estimated_remaining_seconds"] = round(spp * (total_pages - completed_pages))
-            elif total_pages > 0 and completed_pages >= total_pages:
+                job["estimated_remaining_seconds"] = round(spp * (target_pages - completed_pages))
+            elif target_pages > 0 and completed_pages >= target_pages:
                 job["average_seconds_per_page"] = round(elapsed / max(completed_pages, 1), 1)
                 job["estimated_remaining_seconds"] = 0
             else:
