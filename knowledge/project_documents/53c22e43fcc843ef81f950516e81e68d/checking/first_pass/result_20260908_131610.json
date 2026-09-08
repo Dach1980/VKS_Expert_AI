@@ -1,0 +1,803 @@
+{
+  "template": "reference_normcontrol_report_ios_3.1",
+  "document_id": "53c22e43fcc843ef81f950516e81e68d",
+  "document_name": "source.pdf",
+  "skill_id": "vk_wastewater",
+  "skill_name": "Система водоотведения",
+  "checked_at": "2026-09-08T13:16:10",
+  "status": "completed",
+  "model": {
+    "requested": "qwen3.5-4b",
+    "actual": "qwen3.5-4b"
+  },
+  "normative_document": "СП 30.13330.2020, СП 31.13330.2021, СП 32.13330.2018",
+  "normative_version": "СП_30.13330.2020_20260901_131114_071565, СП_31.13330.2021_20260902_084832_463150, СП_32.13330.2018_20260902_103742_199423",
+  "normative_basis": [
+    {
+      "number": "СП 30.13330.2020",
+      "version": "СП_30.13330.2020_20260901_131114_071565",
+      "title": "Внутренний водопровод и канализация зданий"
+    },
+    {
+      "number": "СП 31.13330.2021",
+      "version": "СП_31.13330.2021_20260902_084832_463150",
+      "title": "Внутренний водопровод и канализация зданий"
+    },
+    {
+      "number": "СП 32.13330.2018",
+      "version": "СП_32.13330.2018_20260902_103742_199423",
+      "title": "Внутренний водопровод и канализация зданий"
+    }
+  ],
+  "results": [],
+  "check_matrix": [
+    {
+      "id": "wastewater_flow",
+      "name": "Расчётные расходы",
+      "candidates": 1,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 1,
+      "status": "evidence_found"
+    },
+    {
+      "id": "sewer_diameter",
+      "name": "Диаметры",
+      "candidates": 2,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 2,
+      "status": "evidence_found"
+    },
+    {
+      "id": "sewer_slope",
+      "name": "Уклоны",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "sewer_ventilation",
+      "name": "Вентиляция",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "sewer_outlets",
+      "name": "Выпуски",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "sewer_cleanouts",
+      "name": "Ревизии и прочистки",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "sewer_material",
+      "name": "Материалы",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "storm_separation",
+      "name": "Разделение систем",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "noise_insulation",
+      "name": "Шумоизоляция",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "irrigation",
+      "name": "Поливочные устройства",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "meters",
+      "name": "Приборы учёта",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "emergency_outlets",
+      "name": "Аварийные решения",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    },
+    {
+      "id": "ar_coordination",
+      "name": "Координация с АР",
+      "candidates": 0,
+      "violations": 0,
+      "compliant": 0,
+      "unchecked": 0,
+      "status": "no_evidence_candidate"
+    }
+  ],
+  "summary": {
+    "pages": 1,
+    "pages_available": 30,
+    "total": 0,
+    "violations": 0,
+    "critical": 0,
+    "major": 0,
+    "minor": 0,
+    "compliant": 0,
+    "unchecked": 0
+  },
+  "check_scope": {
+    "total_pages": 30,
+    "pages_checked": 1,
+    "pages_available": 30,
+    "limited": true,
+    "mode": "selected",
+    "requested_pages": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "checked_pages": [
+      8
+    ],
+    "failed_pages": []
+  },
+  "schema_version": "1.2",
+  "remarks": [],
+  "compliant_results": [],
+  "review_results": [],
+  "diagnostics": {
+    "chain": [
+      "Skill",
+      "visual_candidates",
+      "RAG",
+      "normative_requirements",
+      "decision",
+      "remark"
+    ],
+    "matrix": [
+      {
+        "id": "wastewater_flow",
+        "name": "Расчётные расходы",
+        "visual_candidates": 1,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "evidence_found"
+      },
+      {
+        "id": "sewer_diameter",
+        "name": "Диаметры",
+        "visual_candidates": 2,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "evidence_found"
+      },
+      {
+        "id": "sewer_slope",
+        "name": "Уклоны",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_ventilation",
+        "name": "Вентиляция",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_outlets",
+        "name": "Выпуски",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_cleanouts",
+        "name": "Ревизии и прочистки",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "sewer_material",
+        "name": "Материалы",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "storm_separation",
+        "name": "Разделение систем",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "noise_insulation",
+        "name": "Шумоизоляция",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "irrigation",
+        "name": "Поливочные устройства",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "meters",
+        "name": "Приборы учёта",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "emergency_outlets",
+        "name": "Аварийные решения",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      },
+      {
+        "id": "ar_coordination",
+        "name": "Координация с АР",
+        "visual_candidates": 0,
+        "rag_candidates": 0,
+        "normative_requirements": 0,
+        "decisions": {
+          "violation": 0,
+          "compliant": 0,
+          "unchecked": 0
+        },
+        "remarks": 0,
+        "status": "no_evidence_candidate"
+      }
+    ],
+    "note": "Диагностика не является частью замечаний. Отсутствие кандидата или нормативного требования означает необходимость проверки цепочки, а не нарушение проекта."
+  },
+  "question_mark_trace": {
+    "parser": {
+      "count": 0,
+      "source": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\parsed.json",
+      "samples": []
+    },
+    "vision": {
+      "count": 0,
+      "events": 36,
+      "samples": []
+    },
+    "candidate_and_decision": {
+      "count": 0,
+      "samples": []
+    },
+    "rag": {
+      "count": 0,
+      "samples": []
+    },
+    "requirements": {
+      "count": 0,
+      "samples": []
+    },
+    "final_result": {
+      "count": 0,
+      "samples": []
+    },
+    "first_detected_stage": null,
+    "interpretation": "В сохранённых стадиях literal '?' не найден; если он виден в браузере, проверять UI/шрифт/декодирование ответа API."
+  },
+  "report_definition": {
+    "remark_status": "violation",
+    "remark_fields": [
+      "id",
+      "page",
+      "sheet",
+      "parameter",
+      "project_value_raw",
+      "normative_requirement",
+      "norm",
+      "clause",
+      "type",
+      "severity",
+      "recommendation",
+      "evidence_image",
+      "image"
+    ],
+    "evidence_numbering": "remark_id_order",
+    "review_results_excluded_from_remarks": true,
+    "diagnostics_excluded_from_remarks": true,
+    "question_mark_trace_excluded_from_remarks": true
+  },
+  "audit_trace": {
+    "started_at": "2026-09-08T13:11:24",
+    "skill_id": "vk_wastewater",
+    "pages": 30,
+    "raw_visual_candidates": 4,
+    "strict_candidates": 4,
+    "skill_candidates": 3,
+    "bbox_valid": 3,
+    "bbox_rejected": 0,
+    "rag_calls": 3,
+    "rag_hits": 3,
+    "requirements_seen": 12,
+    "requirements_with_clause": 0,
+    "decisions": 3,
+    "violations": 0,
+    "compliant": 0,
+    "unchecked": 3,
+    "visual_recovery_pages": 1,
+    "visual_recovery_candidates": 4,
+    "raw_empty_pages": 3,
+    "raw_invalid_skill_pages": 3,
+    "raw_samples": [
+      {
+        "kind": "empty_or_invalid_skill",
+        "response_preview": "```json\n{\n  \"findings\": []\n}\n```"
+      },
+      {
+        "kind": "recovery_empty",
+        "response_preview": "```json\n{\"findings\":[]}\n```"
+      },
+      {
+        "kind": "empty_or_invalid_skill",
+        "response_preview": "```json\n[\n  {\n    \"check_id\": \"\",\n    \"title\": \"\",\n    \"description\": \"\",\n    \"parameter\": \"\",\n    \"project_value\": \"\",\n    \"unit\": \"\",\n    \"source_row\": \"\",\n    \"source_context\": \"\",\n    \"evidence_text\": \"\",\n    \"bbox\": [],\n    \"confidence\": 0.0\n  }\n]\n```"
+      },
+      {
+        "kind": "recovery_empty",
+        "response_preview": "```json\n{\n  \"findings\": []\n}\n```"
+      },
+      {
+        "kind": "empty_or_invalid_skill",
+        "response_preview": "```json\n[{\"findings\":[]}]\n```"
+      }
+    ],
+    "drop_reasons": {},
+    "checks": {
+      "wastewater_flow": {
+        "raw_visual_candidates": 1,
+        "strict_candidates": 1,
+        "skill_candidates": 1,
+        "bbox_valid": 0,
+        "bbox_rejected": 0,
+        "rag_calls": 1,
+        "rag_hits": 1,
+        "requirements": 4,
+        "requirements_with_clause": 0,
+        "decisions": 1,
+        "violations": 0,
+        "compliant": 0,
+        "unchecked": 1
+      },
+      "sewer_diameter": {
+        "raw_visual_candidates": 3,
+        "strict_candidates": 3,
+        "skill_candidates": 2,
+        "bbox_valid": 0,
+        "bbox_rejected": 0,
+        "rag_calls": 2,
+        "rag_hits": 2,
+        "requirements": 8,
+        "requirements_with_clause": 0,
+        "decisions": 2,
+        "violations": 0,
+        "compliant": 0,
+        "unchecked": 2
+      }
+    },
+    "diagnostics_log": [
+      {
+        "time": "2026-09-08T13:11:24",
+        "kind": "start",
+        "message": "Начало проверки",
+        "document_id": "53c22e43fcc843ef81f950516e81e68d",
+        "skill_id": "vk_wastewater",
+        "checks": 13
+      },
+      {
+        "time": "2026-09-08T13:11:40",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0005.png",
+        "response_length": 32,
+        "response_preview": "```json\n{\n  \"findings\": []\n}\n```",
+        "response_repr": "'```json\\n{\\n  \"findings\": []\\n}\\n```'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:11:40",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0005.png",
+        "response_length": 32,
+        "response": "```json\n{\n  \"findings\": []\n}\n```"
+      },
+      {
+        "time": "2026-09-08T13:11:40",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:11:40",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 0,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:11:58",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0005.png",
+        "response_length": 27,
+        "response": "```json\n{\"findings\":[]}\n```"
+      },
+      {
+        "time": "2026-09-08T13:11:58",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:12:11",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0006.png",
+        "response_length": 256,
+        "response_preview": "```json\n[\n  {\n    \"check_id\": \"\",\n    \"title\": \"\",\n    \"description\": \"\",\n    \"parameter\": \"\",\n    \"project_value\": \"\",\n    \"unit\": \"\",\n    \"source_row\": \"\",\n    \"source_context\": \"\",\n    \"evidence_text\": \"\",\n    \"bbox\": [],\n    \"confidence\": 0.0\n  }\n]\n```",
+        "response_repr": "'```json\\n[\\n  {\\n    \"check_id\": \"\",\\n    \"title\": \"\",\\n    \"description\": \"\",\\n    \"parameter\": \"\",\\n    \"project_value\": \"\",\\n    \"unit\": \"\",\\n    \"source_row\": \"\",\\n    \"source_context\": \"\",\\n    \"evidence_text\": \"\",\\n    \"bbox\": [],\\n    \"confidence\": 0.0\\n  }\\n]\\n```'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:12:11",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0006.png",
+        "response_length": 256,
+        "response": "```json\n[\n  {\n    \"check_id\": \"\",\n    \"title\": \"\",\n    \"description\": \"\",\n    \"parameter\": \"\",\n    \"project_value\": \"\",\n    \"unit\": \"\",\n    \"source_row\": \"\",\n    \"source_context\": \"\",\n    \"evidence_text\": \"\",\n    \"bbox\": [],\n    \"confidence\": 0.0\n  }\n]\n```"
+      },
+      {
+        "time": "2026-09-08T13:12:11",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 1
+      },
+      {
+        "time": "2026-09-08T13:12:11",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 1,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:12:29",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0006.png",
+        "response_length": 32,
+        "response": "```json\n{\n  \"findings\": []\n}\n```"
+      },
+      {
+        "time": "2026-09-08T13:12:29",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:12:39",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0007.png",
+        "response_length": 29,
+        "response_preview": "```json\n[{\"findings\":[]}]\n```",
+        "response_repr": "'```json\\n[{\"findings\":[]}]\\n```'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:12:39",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0007.png",
+        "response_length": 29,
+        "response": "```json\n[{\"findings\":[]}]\n```"
+      },
+      {
+        "time": "2026-09-08T13:12:39",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 1
+      },
+      {
+        "time": "2026-09-08T13:12:39",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 1,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:12:46",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0007.png",
+        "response_length": 28,
+        "response": "```json\n{\"findings\": []}\n```"
+      },
+      {
+        "time": "2026-09-08T13:12:46",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:13:06",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0008.png",
+        "response_length": 84,
+        "response_preview": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio.",
+        "response_repr": "'LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio.'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:13:06",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0008.png",
+        "response_length": 84,
+        "response": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+      },
+      {
+        "time": "2026-09-08T13:13:06",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:13:06",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 0,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:13:29",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0008.png",
+        "response_length": 2334,
+        "response": "```json\n[\n  {\n    \"check_id\": \"wastewater_flow\",\n    \"title\": \"Flow rates of domestic sewage\",\n    \"description\": \"Domestic sewage from sanitary fixtures and KUIs, technical showers, etc., is discharged in quantities of...\",\n    \"parameter\": \"Total flow / Individual flows\",\n    \"project_value\": \"3,58 Ð»/Ñ, 4,34 Ð¼3/Ñ, 8,48 Ð¼3/ÑÑÑ\",\n    \"unit\": \"l/s, m3/h, m3/day\",\n    \"source_row\": 160,\n    \"source_context\": \"Paragraph starting with 'ÐÑÑÐ¾Ð²ÑÐµ ÑÑÐ¾ÐºÐ¸ Ð¾Ñ Ð¿ÑÐ¸Ð±Ð¾ÑÐ¾Ð² Ð² ÑÐ°Ð½ÑÐ· Ð¸ ÐÐ£Ð...'\",\n    \"evidence_text\": \"...Ð² ÐºÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ðµ 3,58 Ð»/Ñ, 4,34 Ð¼3/Ñ, 8,48 Ð¼3/ÑÑÑ...\",\n    \"bbox\": [200, 670, 900, 710],\n    \"confidence\": 0.95\n  },\n  {\n    \"check_id\": \"sewer_diameter\",\n    \"title\": \"Diameter of internal sewage outlets\",\n    \"description\": \"Five outlets with diameter...\",\n    \"parameter\": \"Outlet diameter\",\n    \"project_value\": \"Ã110Ð¼Ð¼\",\n    \"unit\": \"mm\",\n    \"source_row\": 175,\n    \"source_context\": \"Text segment describing the discharge system into internal network.\",\n    \"evidence_text\": \"...Ð¿Ð¾ Ð¿ÑÑÐ¸ Ð²ÑÐ¿ÑÑÐºÐ°Ð¼ Ã110Ð¼Ð¼ Ð² Ð²Ð½ÑÑÑÐ¸Ð¿Ð»Ð¾ÑÐ°Ð´Ð¾ÑÐ½ÑÑ ÑÐµÑÑ...\",\n    \"bbox\": [280, 690, 550, 710],\n    \"confidence\": 0.95\n  },\n  {\n    \"check_id\": \"sewer_diameter\",\n    \"title\": \"Diameter of internal network connection\",\n    \"description\": \"Connection to the internal area sewage network...\",\n    \"parameter\": \"Network diameter\",\n    \"project_value\": \"Ã160 Ð¼Ð¼\",\n    \"unit\": \"mm\",\n    \"source_row\": 185,\n    \"source_context\": \"End of paragraph describing discharge into internal network.\",\n    \"evidence_text\": \"...Ð²Ð½ÑÑÑÐ¸Ð¿Ð»Ð¾ÑÐ°Ð´Ð¾ÑÐ½ÑÑ ÑÐµÑÑ Ð±ÑÑÐ¾Ð²Ð¾Ð¹ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸ Ã160 Ð¼Ð¼.\",\n    \"bbox\": [280, 715, 900, 735],\n    \"confidence\": 0.95\n  },\n  {\n    \"check_id\": \"sewer_diameter\",\n    \"title\": \"Diameter of external sewage network connection\",\n    \"description\": \"Connection to the outside area sewage network...\",\n    \"parameter\": \"Network diameter\",\n    \"project_value\": \"Ã160 Ð¼Ð¼\",\n    \"unit\": \"mm\",\n    \"source_row\": 50,\n    \"source_context\": \"First paragraph describing connection to external network.\",\n    \"evidence_text\": \"...Ð²Ð½ÐµÐ¿Ð»Ð¾ÑÐ°Ð´Ð¾ÑÐ½Ð¾Ð¹ ÑÐµÑÐ¸ Ð±ÑÑÐ¾Ð²Ð¾Ð¹ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸ Ã160 Ð² Ð±Ð»Ð¸Ð¶Ð°Ð¹ÑÐ¸Ð¹ ÐºÐ¾Ð»Ð¾Ð´ÐµÑ...\",\n    \"bbox\": [280, 50, 700, 90],\n    \"confidence\": 0.95\n  }\n]\n```"
+      },
+      {
+        "time": "2026-09-08T13:13:29",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 4
+      },
+      {
+        "time": "2026-09-08T13:14:49",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0009.png",
+        "response_length": 908,
+        "response_preview": "[{\"findings\":[{\"check_id\":\"wastewater_flow\",\"title\":\"Ð Ð°ÑÑÑÑÐ½ÑÐµ â ÑÐ°ÑÑÑÑÐ½ÑÐ¹ ÑÑÐ¾Ñ Ð²Ð¾Ð´\",\"description\":\"Ð£ÐºÐ°Ð·Ð°Ð½ ÑÐ°ÑÑÐµÑÐ½ÑÐ¹ Ð¾Ð±ÑÐµÐ¼ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸.\",\"parameter\":\"ÑÑÑÐ¾ÑÐ½ÑÐ¹ Ð¾Ð±ÑÑÐ¼\",\"project_value\":\"8,48 Ð¼3/ÑÑÑ\",\"unit\":\"Ð¼3/ÑÑÑ\",\"source_row\":\"Ð Ð°ÑÑÐµÑÐ½Ð¾Ðµ ÐºÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ð¾ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸, ÑÐ¾ÑÑÐ°Ð²Ð¸Ñ 8,48 Ð¼3/ÑÑÑ, 2103,04 Ð¼3/Ð³Ð¾Ð´.\",\"source_context\":\"Ð¢ÐµÐºÑÑ Ð¾Ð¿Ð¸ÑÑÐ²Ð°ÐµÑ Ð²Ð²Ð¾Ð´ Ð´Ð»Ñ ÑÐ°ÑÑÐµÑÐ°.\",\"evidence_text\":\"Ð Ð°ÑÑÐµÑÐ½Ð¾Ðµ ÐºÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ð¾ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸, ÑÐ¾ÑÑÐ°Ð²Ð¸Ñ 8,48 Ð¼3/ÑÑÑ\",\"bbox\":[215,260,745,290],\"confidence\":0.9}]}]",
+        "response_repr": "'[{\"findings\":[{\"check_id\":\"wastewater_flow\",\"title\":\"Ð\\xa0Ð°Ñ\\x81Ñ\\x87Ñ\\x91Ñ\\x82Ð½Ñ\\x8bÐµ â\\x80\\x94 Ñ\\x80Ð°Ñ\\x81Ñ\\x87Ñ\\x91Ñ\\x82Ð½Ñ\\x8bÐ¹ Ñ\\x81Ñ\\x82Ð¾Ñ\\x87 Ð²Ð¾Ð´\",\"description\":\"Ð£ÐºÐ°Ð·Ð°Ð½ Ñ\\x80Ð°Ñ\\x81Ñ\\x87ÐµÑ\\x82Ð½Ñ\\x8bÐ¹ Ð¾Ð±Ñ\\x8aÐµÐ¼ Ð±Ñ\\x8b Ñ\\x81Ñ\\x82Ð¾ÐºÐ¾Ð² Ð¾Ñ\\x82 Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾Ñ\\x81Ñ\\x82Ñ\\x83Ð¿Ð° Ð² Ð½Ð°Ñ\\x80Ñ\\x83Ð¶Ð½Ñ\\x8bÐµ Ñ\\x81ÐµÑ\\x82Ð¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°Ñ\\x86Ð¸Ð¸.\",\"parameter\":\"Ñ\\x81Ñ\\x83Ñ\\x82Ð¾Ñ\\x87Ð½Ñ\\x8bÐ¹ Ð¾Ð±Ñ\\x8aÑ\\x91Ð¼\",\"project_value\":\"8,48 Ð¼3/Ñ\\x81Ñ\\x83Ñ\\x82\",\"unit\":\"Ð¼3/Ñ\\x81Ñ\\x83Ñ\\x82\",\"source_row\":\"Ð\\xa0Ð°Ñ\\x81Ñ\\x87ÐµÑ\\x82Ð½Ð¾Ðµ ÐºÐ¾Ð»Ð¸Ñ\\x87ÐµÑ\\x81Ñ\\x82Ð²Ð¾ Ð±Ñ\\x8b Ñ\\x81Ñ\\x82Ð¾ÐºÐ¾Ð² Ð¾Ñ\\x82 Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾Ñ\\x81Ñ\\x82Ñ\\x83Ð¿Ð° Ð² Ð½Ð°Ñ\\x80Ñ\\x83Ð¶Ð½Ñ\\x8bÐµ Ñ\\x81ÐµÑ\\x82Ð¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°Ñ\\x86Ð¸Ð¸, Ñ\\x81Ð¾Ñ\\x81Ñ\\x82Ð°Ð²Ð¸Ñ\\x82 8,48 Ð¼3/Ñ\\x81Ñ\\x83Ñ\\x82, 2103,04 Ð¼3/Ð³Ð¾Ð´.\",\"source_context\":\"Ð¢ÐµÐºÑ\\x81Ñ\\x82 Ð¾Ð¿Ð¸Ñ\\x81Ñ\\x8bÐ²Ð°ÐµÑ\\x82 Ð²Ð²Ð¾Ð´ Ð´Ð»Ñ\\x8f Ñ\\x80Ð°Ñ\\x81Ñ\\x87ÐµÑ\\x82Ð°.\",\"evidence_text\":\"Ð\\xa0Ð°Ñ\\x81Ñ\\x87ÐµÑ\\x82Ð½Ð¾Ðµ ÐºÐ¾Ð»Ð¸Ñ\\x87ÐµÑ\\x81Ñ\\x82Ð²Ð¾ Ð±Ñ\\x8b Ñ\\x81Ñ\\x82Ð¾ÐºÐ¾Ð² Ð¾Ñ\\x82 Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾Ñ\\x81Ñ\\x82Ñ\\x83Ð¿Ð° Ð² Ð½Ð°Ñ\\x80Ñ\\x83Ð¶Ð½Ñ\\x8bÐµ Ñ\\x81ÐµÑ\\x82Ð¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°Ñ\\x86Ð¸Ð¸, Ñ\\x81Ð¾Ñ\\x81Ñ\\x82Ð°Ð²Ð¸Ñ\\x82 8,48 Ð¼3/Ñ\\x81Ñ\\x83Ñ\\x82\",\"bbox\":[215,260,745,290],\"confidence\":0.9}]}]'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:14:49",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0009.png",
+        "response_length": 908,
+        "response": "[{\"findings\":[{\"check_id\":\"wastewater_flow\",\"title\":\"Ð Ð°ÑÑÑÑÐ½ÑÐµ â ÑÐ°ÑÑÑÑÐ½ÑÐ¹ ÑÑÐ¾Ñ Ð²Ð¾Ð´\",\"description\":\"Ð£ÐºÐ°Ð·Ð°Ð½ ÑÐ°ÑÑÐµÑÐ½ÑÐ¹ Ð¾Ð±ÑÐµÐ¼ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸.\",\"parameter\":\"ÑÑÑÐ¾ÑÐ½ÑÐ¹ Ð¾Ð±ÑÑÐ¼\",\"project_value\":\"8,48 Ð¼3/ÑÑÑ\",\"unit\":\"Ð¼3/ÑÑÑ\",\"source_row\":\"Ð Ð°ÑÑÐµÑÐ½Ð¾Ðµ ÐºÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ð¾ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸, ÑÐ¾ÑÑÐ°Ð²Ð¸Ñ 8,48 Ð¼3/ÑÑÑ, 2103,04 Ð¼3/Ð³Ð¾Ð´.\",\"source_context\":\"Ð¢ÐµÐºÑÑ Ð¾Ð¿Ð¸ÑÑÐ²Ð°ÐµÑ Ð²Ð²Ð¾Ð´ Ð´Ð»Ñ ÑÐ°ÑÑÐµÑÐ°.\",\"evidence_text\":\"Ð Ð°ÑÑÐµÑÐ½Ð¾Ðµ ÐºÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ð¾ Ð±Ñ ÑÑÐ¾ÐºÐ¾Ð² Ð¾Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹, Ð¿Ð¾ÑÑÑÐ¿Ð° Ð² Ð½Ð°ÑÑÐ¶Ð½ÑÐµ ÑÐµÑÐ¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ð¸, ÑÐ¾ÑÑÐ°Ð²Ð¸Ñ 8,48 Ð¼3/ÑÑÑ\",\"bbox\":[215,260,745,290],\"confidence\":0.9}]}]"
+      },
+      {
+        "time": "2026-09-08T13:14:49",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 1
+      },
+      {
+        "time": "2026-09-08T13:14:49",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 1,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:15:18",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0009.png",
+        "response_length": 84,
+        "response": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+      },
+      {
+        "time": "2026-09-08T13:15:18",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:15:40",
+        "kind": "vision_transport",
+        "message": "Диагностика сырого HTTP-ответа и message.content",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0010.png",
+        "response_length": 84,
+        "response_preview": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio.",
+        "response_repr": "'LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio.'",
+        "response_has_replacement_char": false,
+        "response_has_question_mark": false
+      },
+      {
+        "time": "2026-09-08T13:15:40",
+        "kind": "vision_response",
+        "message": "Получен ответ Vision",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0010.png",
+        "response_length": 84,
+        "response": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+      },
+      {
+        "time": "2026-09-08T13:15:40",
+        "kind": "vision_parsed",
+        "message": "Результат разбора Vision-ответа",
+        "parsed_count": 0
+      },
+      {
+        "time": "2026-09-08T13:15:40",
+        "kind": "vision_recovery",
+        "message": "Основной Vision-ответ не дал валидных Skill-кандидатов; запускается recovery",
+        "parsed_count": 0,
+        "valid_count": 0
+      },
+      {
+        "time": "2026-09-08T13:16:10",
+        "kind": "vision_recovery_response",
+        "message": "Получен ответ Vision recovery",
+        "page_image": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\checking\\first_pass\\page_0010.png",
+        "response_length": 84,
+        "response": "LLM вернул только внутреннее рассуждение. Проверьте режим Qwen thinking в LM Studio."
+      },
+      {
+        "time": "2026-09-08T13:16:10",
+        "kind": "vision_recovery_parsed",
+        "message": "Результат разбора recovery-ответа",
+        "parsed_count": 0
+      }
+    ],
+    "saved_findings": 3,
+    "saved_violations": 0,
+    "saved_compliant": 0,
+    "saved_unchecked": 3,
+    "finished_at": "2026-09-08T13:16:10"
+  },
+  "result_file": "result_20260908_131610.json",
+  "result_id": "result_20260908_131610"
+}
