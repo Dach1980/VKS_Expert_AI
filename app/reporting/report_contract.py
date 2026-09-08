@@ -126,9 +126,13 @@ def prepare_public_report(report: dict[str, Any]) -> dict[str, Any]:
     public["compliant_results"] = compliant
     public["review_results"] = review
 
-    # Keep the complete internal decision set available to a second preparation
-    # pass. It is not a user-facing report section and is removed before save.
-    public["_pipeline_findings"] = findings
+    # A second normalization pass may occur after audit_trace is attached.
+    # Preserve the complete internal decision set only when the input has not
+    # yet been split into the public result buckets.
+    if not ("compliant_results" in report or "review_results" in report):
+        public["_pipeline_findings"] = findings
+    else:
+        public.pop("_pipeline_findings", None)
 
     scope = report.get("check_scope") or {}
     source_summary = report.get("summary") or {}
