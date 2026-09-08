@@ -82,6 +82,7 @@ class LMStudioClient:
 
     def _chat_stream(self, url: str, payload: dict) -> str:
         response = requests.Session().post(url, json=payload, timeout=self.timeout, stream=True)
+        response.encoding = "utf-8"
         try:
             response.raise_for_status()
             parts: list[str] = []
