@@ -1,49 +1,30 @@
-# Step 6 — Experiment 001 Evaluation
+# Training / Engineering Knowledge
 
-## Status
+This module is the experimental knowledge layer for Project Expert AI.
 
-`EXP001-BM-v0` remains a **provisional benchmark**. Step 6 verified the first real Golden decision: `EXP001-G001` is a verified `violation` concerning an outdated normative reference. A verified `compliant` case is still missing, so the benchmark is not yet a complete three-way decision benchmark.
+## Purpose
 
-## Current benchmark set
+The module stores engineering audit datasets, checklists, expert cases and evaluation artifacts. It is intentionally separated from the production checking pipeline.
 
-- `EXP001-C001` — `unchecked`: 8.48 м³/сут without a verified applicable requirement.
-- `EXP001-C002` — `unchecked`: Ø160 мм K1 without a verified applicable requirement.
-- `EXP001-C003` — `unchecked`: Ø110 мм internal domestic sewer outlets without a verified applicable requirement.
-- `EXP001-G001` — `violation`: project explicitly cites replaced `СП 30.13330.2012` as the normative basis for an internal wastewater ventilation decision.
-- `EXP001-N001` — `unchecked`, negative: `колодец №63` is an object identifier, not a measurement.
-- `EXP001-N002` — `unchecked`, negative: a numeric/time fragment without proven applicability must not become a requirement.
+The first experiment is based on the current VK project and `СП 30.13330.2020`. ТЗ and ТУ will be added in a later experiment after the normative report is stable.
 
-## Step 6 rule
+## Principle
 
-A case enters the Golden Dataset only when project evidence, normative requirement, applicability and expert decision are all verified. If a numerical conclusion depends on an unproven condition, the case remains `unchecked`.
+Training data is not the same as model fine-tuning. The dataset may be used for prompt engineering, few-shot examples, RAG evaluation, agentic reasoning and, later, possible fine-tuning.
 
-## Critical rule
+## Current scope — Step 1
 
-Any `violation` prediction for either negative case is a benchmark failure.
+Step 1 creates the module structure and a functional UI shell. It does not change Vision, RAG, Checking or Report logic.
 
-## Metrics
+## Planned dataset entities
 
-Primary:
+- `engineering_fact` — an observed fact from project documentation.
+- `normative_requirement` — a normative requirement with applicability and requirement type.
+- `checklist` — an engineering question/check definition.
+- `audit_case` — a complete expert-reviewed engineering situation.
 
-- decision accuracy;
-- false violation rate.
+## Experiment 001
 
-Additional:
+`training/datasets/experiment_001/` is reserved for the first Golden Dataset based on the current VK project and `СП 30.13330.2020`.
 
-- unsupported-violation rate;
-- unchecked precision/recall;
-- normative applicability accuracy;
-- evidence trace completeness.
-
-## Golden gate
-
-The benchmark becomes a meaningful three-way decision benchmark only after it contains at least:
-
-- one verified `compliant` case;
-- one verified `violation` case.
-
-The second condition is now satisfied by `EXP001-G001`; the first is still open.
-
-## Architecture boundary
-
-Step 6 only verifies and records Training cases. It does **not** modify the production Vision, RAG, Checking or Reporting pipeline.
+No expert cases are populated yet; schemas are defined before data collection starts.

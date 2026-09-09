@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "checklist.schema.json",
+  "title": "Engineering Checklist Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["check_id", "discipline", "question"],
+  "properties": {
+    "check_id": {"type": "string"},
+    "discipline": {"type": "string"},
+    "system": {"type": "string"},
+    "object": {"type": "string"},
+    "parameter": {"type": "string"},
+    "question": {"type": "string"},
+    "required_evidence": {"type": "array", "items": {"type": "string"}},
+    "applicable_sources": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "string"}
+  }
+}
