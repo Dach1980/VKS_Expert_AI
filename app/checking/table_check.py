@@ -63,10 +63,21 @@ def deterministic_numeric_comparison(candidate: dict[str, Any], decision: dict[s
         norm = _normalized(requirement_raw, parameter, text)
         if norm.value is None:
             continue
-        if project.unit and norm.unit and project.unit != norm.unit:
-            continue
-        if project.kind != norm.kind and not ({project.kind, norm.kind} <= {"number", "length"}):
-            continue
+
+        # A numeric comparison is valid only for the same physical kind and
+        # compatible explicit units. If they are incompatible, the decision
+        # must not retain an LLM-produced violation/compliance result.
+        if project.kind != norm.kind or (project.unit and norm.unit and project.unit != norm.unit):
+            updated = dict(decision)
+            updated["type"] = "unchecked"
+            updated["comparison"] = "не определено"
+            updated["normative_value"] = requirement_raw
+            updated["normative_unit"] = normative_unit or str(decision.get("normative_unit") or "")
+            updated["normative_requirement"] = text
+            updated["norm"] = str(requirement.get("norm") or decision.get("norm") or "")
+            updated["clause"] = str(requirement.get("clause") or decision.get("clause") or "")
+            return updated
+
         if operator == ">=":
             ok, comparison = project.value >= norm.value, ("в пределах" if project.value >= norm.value else "ниже")
         elif operator == "<=":
