@@ -3,211 +3,52 @@ const TRAINING_SECTION_ID = 'trainingSection';
 const TRAINING_CASES_KEY = 'projectExpertAI.training.cases.v1';
 
 const TRAINING_CASE_SEED = [
-  {
-    case_id: 'EXP001-C001', discipline: 'ВК', check_id: 'wastewater_flow', status: 'unchecked', negative_case: false,
-    project_evidence: [{ fact_id: 'EXP001-F003', source_page: 9, evidence_text: 'Расчетное количество бытовых стоков от зданий, поступающих в наружные сети канализации, составит 8,48 м³/сут', context: '' }],
-    normative_evidence: [],
-    expert_analysis: 'Проектный факт подтверждает наличие суточного объёма стоков, однако применимое требование с сопоставимым параметром и единицей измерения не подтверждено.',
-    decision_reason: 'Недостаточно подтверждённого нормативного основания для сравнения 8,48 м³/сут.',
-    evidence_sufficient: false,
-    notes: 'Не считать нарушение только на основании семантически похожего нормативного фрагмента.'
-  },
-  {
-    case_id: 'EXP001-C002', discipline: 'ВК', check_id: 'sewer_diameter', status: 'unchecked', negative_case: false,
-    project_evidence: [{ fact_id: 'EXP001-F004', source_page: 8, evidence_text: 'Ø160 мм', context: 'Диаметр трубопровода системы К1.' }],
-    normative_evidence: [],
-    expert_analysis: 'Проектный диаметр идентифицирован как инженерный числовой параметр. Применимое требование именно к данному участку канализации не подтверждено.',
-    decision_reason: 'Нет проверенного нормативного требования, однозначно относящегося к данному объекту и параметру.',
-    evidence_sufficient: false,
-    notes: 'Кейс предназначен для обучения границе между обнаружением факта и нормативным решением.'
-  },
-  {
-    case_id: 'EXP001-C003', discipline: 'ВК', check_id: 'sewer_diameter', status: 'unchecked', negative_case: false,
-    project_evidence: [{ fact_id: 'EXP001-F005', source_page: 8, evidence_text: 'по пяти выпускам Ø110 мм', context: 'Выпуски внутренней бытовой канализации.' }],
-    normative_evidence: [],
-    expert_analysis: 'Диаметр выпусков зафиксирован в проекте. Для решения требуется требование, применимое именно к внутренним бытовым выпускам.',
-    decision_reason: 'Применимое нормативное требование не подтверждено.',
-    evidence_sufficient: false,
-    notes: 'Не смешивать требования к колодцам, наружным сетям и другим системам.'
-  },
-  {
-    case_id: 'EXP001-N001', discipline: 'ВК', check_id: 'meters', status: 'unchecked', negative_case: true,
-    project_evidence: [{ fact_id: 'EXP001-F007', source_page: 29, evidence_text: 'Узел учёта сточных вод установить в водоотводной камере или павильоне колодец № 63', context: '' }],
-    normative_evidence: [{ document: 'СП 32.13330.2018', applicability: 'not_proven', requirement_text: 'Семантически близкий нормативный фрагмент не подтверждает числовое требование для узла учёта сточных вод.' }],
-    expert_analysis: 'Идентификатор колодца № 63 является проектным обозначением объекта, а не измеряемым инженерным параметром. Его нельзя сравнивать с произвольным числом из нормативного текста.',
-    decision_reason: 'Нормативное основание для численного сравнения отсутствует; проектное число является идентификатором.',
-    evidence_sufficient: true,
-    notes: 'Контрольный отрицательный пример для предотвращения ложного VIOLATION из generic number.'
-  },
-  {
-    case_id: 'EXP001-N002', discipline: 'ВК', check_id: 'wastewater_flow', status: 'unchecked', negative_case: true,
-    project_evidence: [{ fact_id: 'EXP001-F003', source_page: 9, evidence_text: 'Расчетное количество бытовых стоков от зданий, поступающих в наружные сети канализации, составит 8,48 м³/сут', context: '' }],
-    normative_evidence: [{ document: 'СП 30.13330.2020', applicability: 'not_proven', requirement_text: 'Фрагмент с другим объектом или параметром, содержащий числовое значение и единицу времени.' }],
-    expert_analysis: 'Наличие числа и единицы, связанных со временем, недостаточно для применения требования к суточному объёму стоков.',
-    decision_reason: 'Применимость найденного нормативного фрагмента не доказана.',
-    evidence_sufficient: false,
-    notes: 'Контрольный пример для будущего applicability gate в RAG.'
-  },
-  {
-    case_id: 'EXP001-G001', discipline: 'ВК', check_id: 'normative_reference_currency', status: 'violation', negative_case: false,
-    project_evidence: [{ fact_id: 'EXP001-F007', source_page: 10, evidence_text: 'Сеть бытовой канализации здания вентилируется через вытяжные участки стояков, которые выведены выше кровли на 0,2 м, согласно п. 8.2.15 СП 30.13330.2012.', context: 'Лист 3.1-10, текстовое обоснование вентиляции бытовой канализации.' }],
-    normative_evidence: [{ requirement_id: 'EXP001-R001', clause: 'предисловие / статус документа', document: 'СП 30.13330.2020', requirement_text: 'СП 30.13330.2020 введен в действие с 1 июля 2021 г.; СП 30.13330.2012 является замененным документом.', requirement_type: 'normative_reference', applicability_reason: 'Проект содержит прямую ссылку на СП 30.13330.2012 как нормативное основание.' }],
-    expert_analysis: 'Проект прямо использует СП 30.13330.2012 как нормативное основание. Для текущей нормативной базы применим СП 30.13330.2020, который заменил СП 30.13330.2012. Нарушение относится к актуальности нормативной ссылки, а не к высоте 0,2 м.',
-    decision_reason: 'Прямая ссылка на замененный СП 30.13330.2012 при проверке по действующему СП 30.13330.2020.',
-    evidence_sufficient: true,
-    notes: 'Числовой вывод по 0,2 м без доказанного типа кровли не используется.'
-  }
+  { case_id:'EXP001-C001', discipline:'ВК', check_id:'wastewater_flow', status:'unchecked', negative_case:false, project_evidence:[{fact_id:'EXP001-F003',source_page:9,evidence_text:'Расчетное количество бытовых стоков от зданий, поступающих в наружные сети канализации, составит 8,48 м³/сут',context:''}], normative_evidence:[], expert_analysis:'Проектный факт подтверждает наличие суточного объёма стоков, однако применимое требование с сопоставимым параметром и единицей измерения не подтверждено.', decision_reason:'Недостаточно подтверждённого нормативного основания для сравнения 8,48 м³/сут.', evidence_sufficient:false, notes:'Не считать нарушение только на основании семантически похожего нормативного фрагмента.' },
+  { case_id:'EXP001-C002', discipline:'ВК', check_id:'sewer_diameter', status:'unchecked', negative_case:false, project_evidence:[{fact_id:'EXP001-F004',source_page:8,evidence_text:'Ø160 мм',context:'Диаметр трубопровода системы К1.'}], normative_evidence:[], expert_analysis:'Проектный диаметр идентифицирован как инженерный числовой параметр. Применимое требование именно к данному участку канализации не подтверждено.', decision_reason:'Нет проверенного нормативного требования, однозначно относящегося к данному объекту и параметру.', evidence_sufficient:false, notes:'Кейс предназначен для обучения границе между обнаружением факта и нормативным решением.' },
+  { case_id:'EXP001-C003', discipline:'ВК', check_id:'sewer_diameter', status:'unchecked', negative_case:false, project_evidence:[{fact_id:'EXP001-F005',source_page:8,evidence_text:'по пяти выпускам Ø110 мм',context:'Выпуски внутренней бытовой канализации.'}], normative_evidence:[], expert_analysis:'Диаметр выпусков зафиксирован в проекте. Для решения требуется требование, применимое именно к внутренним бытовым выпускам.', decision_reason:'Применимое нормативное требование не подтверждено.', evidence_sufficient:false, notes:'Не смешивать требования к колодцам, наружным сетям и другим системам.' },
+  { case_id:'EXP001-N001', discipline:'ВК', check_id:'meters', status:'unchecked', negative_case:true, project_evidence:[{fact_id:'EXP001-F007',source_page:29,evidence_text:'Узел учёта сточных вод установить в водоотводной камере или павильоне колодец № 63',context:''}], normative_evidence:[{document:'СП 32.13330.2018',applicability:'not_proven',requirement_text:'Семантически близкий нормативный фрагмент не подтверждает числовое требование для узла учёта сточных вод.'}], expert_analysis:'Идентификатор колодца № 63 является проектным обозначением объекта, а не измеряемым инженерным параметром. Его нельзя сравнивать с произвольным числом из нормативного текста.', decision_reason:'Нормативное основание для численного сравнения отсутствует; проектное число является идентификатором.', evidence_sufficient:true, notes:'Контрольный отрицательный пример для предотвращения ложного VIOLATION из generic number.' },
+  { case_id:'EXP001-N002', discipline:'ВК', check_id:'wastewater_flow', status:'unchecked', negative_case:true, project_evidence:[{fact_id:'EXP001-F003',source_page:9,evidence_text:'Расчетное количество бытовых стоков от зданий, поступающих в наружные сети канализации, составит 8,48 м³/сут',context:''}], normative_evidence:[{document:'СП 30.13330.2020',applicability:'not_proven',requirement_text:'Фрагмент с другим объектом или параметром, содержащий числовое значение и единицу времени.'}], expert_analysis:'Наличие числа и единицы, связанных со временем, недостаточно для применения требования к суточному объёму стоков.', decision_reason:'Применимость найденного нормативного фрагмента не доказана.', evidence_sufficient:false, notes:'Контрольный пример для будущего applicability gate в RAG.' },
+  { case_id:'EXP001-G001', discipline:'ВК', check_id:'normative_reference_currency', status:'violation', negative_case:false, project_evidence:[{fact_id:'EXP001-F007',source_page:10,evidence_text:'Сеть бытовой канализации здания вентилируется через вытяжные участки стояков, которые выведены выше кровли на 0,2 м, согласно п. 8.2.15 СП 30.13330.2012.',context:'Лист 3.1-10, текстовое обоснование вентиляции бытовой канализации.'}], normative_evidence:[{requirement_id:'EXP001-R001',clause:'предисловие / статус документа',document:'СП 30.13330.2020',requirement_text:'СП 30.13330.2020 введен в действие с 1 июля 2021 г.; СП 30.13330.2012 является замененным документом.',requirement_type:'normative_reference',applicability_reason:'Проект содержит прямую ссылку на СП 30.13330.2012 как нормативное основание.'}], expert_analysis:'Проект прямо использует СП 30.13330.2012 как нормативное основание. Для текущей нормативной базы применим СП 30.13330.2020, который заменил СП 30.13330.2012. Нарушение относится к актуальности нормативной ссылки, а не к высоте 0,2 м.', decision_reason:'Прямая ссылка на замененный СП 30.13330.2012 при проверке по действующему СП 30.13330.2020.', evidence_sufficient:true, notes:'Числовой вывод по 0,2 м без доказанного типа кровли не используется.' }
 ];
 
 function trainingClone(value){ return JSON.parse(JSON.stringify(value)); }
-function trainingLoadCases(){
-  try {
-    const saved = JSON.parse(localStorage.getItem(TRAINING_CASES_KEY) || 'null');
-    if(Array.isArray(saved) && saved.length) return saved;
-  } catch(e) { console.warn('[Training] local case store unavailable', e); }
-  return trainingClone(TRAINING_CASE_SEED);
-}
-function trainingSaveCases(cases){
-  try { localStorage.setItem(TRAINING_CASES_KEY, JSON.stringify(cases)); return true; }
-  catch(e) { console.warn('[Training] local case store unavailable', e); return false; }
-}
-function trainingEscape(value){
-  return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function trainingCaseStatusLabel(status){ return ({unchecked:'UNCHECKED', violation:'VIOLATION', compliant:'COMPLIANT'}[status] || String(status || '').toUpperCase()); }
-function trainingCaseStatusClass(status){ return `training-case-status training-case-status-${status || 'unchecked'}`; }
-function trainingCurrentCase(){
-  const cases = trainingLoadCases();
-  return cases.find(x=>x.case_id===window.trainingSelectedCaseId) || cases[0] || null;
-}
-
-function ensureTrainingStyles(){
-  if(document.getElementById('trainingStylesheet')) return;
-  const link=document.createElement('link');
-  link.id='trainingStylesheet'; link.rel='stylesheet'; link.href='./assets/css/main-page/training.css?v=20260910-1';
-  document.head.appendChild(link);
-}
-
+function trainingLoadCases(){ try { const saved=JSON.parse(localStorage.getItem(TRAINING_CASES_KEY)||'null'); if(Array.isArray(saved)&&saved.length) return saved; } catch(e){ console.warn('[Training] local case store unavailable',e); } return trainingClone(TRAINING_CASE_SEED); }
+function trainingSaveCases(cases){ try { localStorage.setItem(TRAINING_CASES_KEY,JSON.stringify(cases)); return true; } catch(e){ console.warn('[Training] local case store unavailable',e); return false; } }
+function trainingEscape(value){ return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }
+function trainingCaseStatusLabel(status){ return ({unchecked:'UNCHECKED',violation:'VIOLATION',compliant:'COMPLIANT'}[status]||String(status||'').toUpperCase()); }
+function trainingCaseStatusClass(status){ return `training-case-status training-case-status-${status||'unchecked'}`; }
+function trainingCurrentCase(){ const cases=trainingLoadCases(); return cases.find(x=>x.case_id===window.trainingSelectedCaseId)||cases[0]||null; }
+function ensureTrainingStyles(){ if(document.getElementById('trainingStylesheet')) return; const link=document.createElement('link'); link.id='trainingStylesheet'; link.rel='stylesheet'; link.href='./assets/css/main-page/training.css?v=20260910-1'; document.head.appendChild(link); }
 function ensureTrainingUI(){
-  if(!document.body) return false;
-  ensureTrainingStyles();
+  if(!document.body) return false; ensureTrainingStyles();
   const sidebarNav=document.querySelector('.sidebar-nav');
-  if(sidebarNav && !sidebarNav.querySelector('[data-section="training"]')){
-    const sections=sidebarNav.querySelectorAll('.nav-section');
-    const target=sections.length ? sections[sections.length-1] : sidebarNav;
-    const block=document.createElement('div'); block.className='nav-section';
-    block.innerHTML='<div class="nav-section-title">AI ENGINEER</div><div class="nav-item" data-section="training"><span class="training-nav-icon">◈</span><span>Обучение AI</span></div>';
-    sidebarNav.insertBefore(block,target);
-  }
+  if(sidebarNav&&!sidebarNav.querySelector('[data-section="training"]')){ const sections=sidebarNav.querySelectorAll('.nav-section'); const target=sections.length?sections[sections.length-1]:sidebarNav; const block=document.createElement('div'); block.className='nav-section'; block.innerHTML='<div class="nav-section-title">AI ENGINEER</div><div class="nav-item" data-section="training"><span class="training-nav-icon">◈</span><span>Обучение AI</span></div>'; sidebarNav.insertBefore(block,target); }
   const content=document.querySelector('.content');
-  if(content && !document.getElementById(TRAINING_SECTION_ID)){
-    const section=document.createElement('section'); section.className='section'; section.id=TRAINING_SECTION_ID;
-    section.innerHTML=`
-      <h1 class="section-title">Обучение AI</h1>
-      <p class="section-subtitle">Формирование инженерных знаний, эталонных примеров и наборов для оценки AI Engineer</p>
-      <div class="training-overview">
-        <div class="training-card"><div class="training-card-label">Эксперименты</div><div class="training-card-value">1</div></div>
-        <div class="training-card"><div class="training-card-label">Кейсы</div><div class="training-card-value" id="trainingCaseCount">0</div></div>
-        <div class="training-card"><div class="training-card-label">GOLDEN</div><div class="training-card-value" id="trainingGoldenCount">0</div></div>
-        <div class="training-card"><div class="training-card-label">UNCHECKED</div><div class="training-card-value" id="trainingUncheckedCount">0</div></div>
-      </div>
-      <div class="training-tabs" role="tablist">
-        <button class="training-tab active" data-training-tab="overview">Обзор</button>
-        <button class="training-tab" data-training-tab="cases">Cases</button>
-        <button class="training-tab" data-training-tab="facts">Facts</button>
-        <button class="training-tab" data-training-tab="requirements">Requirements</button>
-        <button class="training-tab" data-training-tab="checklists">Checklist</button>
-        <button class="training-tab" data-training-tab="evaluation">Evaluation</button>
-      </div>
-      <div id="trainingTabContent"></div>`;
-    content.insertBefore(section,document.getElementById('settingsSection')||null);
-    section.querySelectorAll('[data-training-tab]').forEach(btn=>btn.addEventListener('click',()=>renderTrainingTab(btn.dataset.trainingTab)));
-  }
+  if(content&&!document.getElementById(TRAINING_SECTION_ID)){ const section=document.createElement('section'); section.className='section'; section.id=TRAINING_SECTION_ID; section.innerHTML=`<h1 class="section-title">Обучение AI</h1><p class="section-subtitle">Формирование инженерных знаний, эталонных примеров и наборов для оценки AI Engineer</p><div class="training-overview"><div class="training-card"><div class="training-card-label">Эксперименты</div><div class="training-card-value">1</div></div><div class="training-card"><div class="training-card-label">Кейсы</div><div class="training-card-value" id="trainingCaseCount">0</div></div><div class="training-card"><div class="training-card-label">GOLDEN</div><div class="training-card-value" id="trainingGoldenCount">0</div></div><div class="training-card"><div class="training-card-label">UNCHECKED</div><div class="training-card-value" id="trainingUncheckedCount">0</div></div></div><div class="training-tabs" role="tablist"><button class="training-tab active" data-training-tab="overview">Обзор</button><button class="training-tab" data-training-tab="cases">Cases</button><button class="training-tab" data-training-tab="facts">Facts</button><button class="training-tab" data-training-tab="requirements">Requirements</button><button class="training-tab" data-training-tab="checklists">Checklist</button><button class="training-tab" data-training-tab="evaluation">Evaluation</button></div><div id="trainingTabContent"></div>`; content.insertBefore(section,document.getElementById('settingsSection')||null); section.querySelectorAll('[data-training-tab]').forEach(btn=>btn.addEventListener('click',()=>renderTrainingTab(btn.dataset.trainingTab))); }
   return true;
 }
-
 function renderTrainingCases(){
-  const content=document.getElementById('trainingTabContent'); if(!content) return;
-  const cases=trainingLoadCases();
-  if(!window.trainingSelectedCaseId || !cases.some(x=>x.case_id===window.trainingSelectedCaseId)) window.trainingSelectedCaseId=cases[0]?.case_id || '';
-  const selected=trainingCurrentCase();
-  const list=cases.map(item=>`<button class="training-case-list-item ${item.case_id===selected?.case_id?'active':''}" data-case-id="${trainingEscape(item.case_id)}"><span class="training-case-list-main"><strong>${trainingEscape(item.case_id)}</strong><span>${trainingEscape(item.check_id)}</span></span><span class="${trainingCaseStatusClass(item.status)}">${trainingCaseStatusLabel(item.status)}</span></button>`).join('');
-  const evidence=selected?.project_evidence?.[0] || {};
-  const norm=selected?.normative_evidence?.[0] || {};
-  content.innerHTML=`
-    <div class="training-cases-layout">
-      <aside class="training-case-list">
-        <div class="training-panel-header"><div class="training-panel-title">Cases</div><span class="training-status">${cases.length}</span></div>
-        <div class="training-case-list-body">${list || '<div class="training-empty">Нет кейсов</div>'}</div>
-      </aside>
-      <main class="training-case-editor">
-        ${selected ? `<div class="training-panel-header"><div><div class="training-panel-title">${trainingEscape(selected.case_id)}</div><div class="training-muted">${trainingEscape(selected.discipline)} · ${trainingEscape(selected.check_id)}</div></div><span class="${trainingCaseStatusClass(selected.status)}">${trainingCaseStatusLabel(selected.status)}</span></div>
-        <div class="training-editor-body">
-          <div class="training-editor-grid">
-            <section class="training-editor-section"><h3>Project Fact</h3><div class="training-field"><label>Fact ID</label><input id="trainingFactId" value="${trainingEscape(evidence.fact_id)}"></div><div class="training-field"><label>Страница</label><input id="trainingSourcePage" type="number" value="${trainingEscape(evidence.source_page ?? '')}"></div><div class="training-field"><label>Evidence</label><textarea id="trainingEvidenceText" rows="5">${trainingEscape(evidence.evidence_text)}</textarea></div><div class="training-field"><label>Контекст</label><textarea id="trainingEvidenceContext" rows="3">${trainingEscape(evidence.context)}</textarea></div></section>
-            <section class="training-editor-section"><h3>Normative Requirement</h3><div class="training-field"><label>Документ</label><input id="trainingNormDocument" value="${trainingEscape(norm.document)}"></div><div class="training-field"><label>Пункт</label><input id="trainingNormClause" value="${trainingEscape(norm.clause)}"></div><div class="training-field"><label>Requirement</label><textarea id="trainingNormText" rows="5">${trainingEscape(norm.requirement_text)}</textarea></div><div class="training-field"><label>Applicability</label><textarea id="trainingNormApplicability" rows="3">${trainingEscape(norm.applicability_reason || norm.applicability)}</textarea></div></section>
-          </div>
-          <section class="training-editor-section"><h3>Expert Analysis</h3><textarea id="trainingExpertAnalysis" rows="5">${trainingEscape(selected.expert_analysis)}</textarea></section>
-          <section class="training-editor-section"><h3>Decision</h3><div class="training-decision-grid"><label><input type="radio" name="trainingDecision" value="compliant" ${selected.status==='compliant'?'checked':''}> COMPLIANT</label><label><input type="radio" name="trainingDecision" value="violation" ${selected.status==='violation'?'checked':''}> VIOLATION</label><label><input type="radio" name="trainingDecision" value="unchecked" ${selected.status==='unchecked'?'checked':''}> UNCHECKED</label></div><div class="training-field"><label>Reason</label><textarea id="trainingDecisionReason" rows="3">${trainingEscape(selected.decision_reason)}</textarea></div><label class="training-checkbox"><input id="trainingEvidenceSufficient" type="checkbox" ${selected.evidence_sufficient?'checked':''}> Evidence sufficient</label></section>
-          <section class="training-editor-section"><h3>Notes</h3><textarea id="trainingNotes" rows="3">${trainingEscape(selected.notes)}</textarea></section>
-          <div class="training-editor-actions"><button class="training-action training-action-secondary" id="trainingSaveCase">Сохранить кейс</button><button class="training-action training-action-golden" id="trainingGoldenCase">Подтвердить GOLDEN</button><button class="training-action training-action-danger" id="trainingRejectCase">Отклонить</button><span id="trainingSaveMessage" class="training-save-message"></span></div>
-        </div>` : '<div class="training-empty">Нет выбранного кейса</div>'}
-      </main>
-    </div>`;
-  content.querySelectorAll('[data-case-id]').forEach(btn=>btn.addEventListener('click',()=>{ window.trainingSelectedCaseId=btn.dataset.caseId; renderTrainingCases(); }));
-  const save=document.getElementById('trainingSaveCase'); if(save) save.addEventListener('click',()=>trainingPersistEditor('save'));
-  const golden=document.getElementById('trainingGoldenCase'); if(golden) golden.addEventListener('click',()=>trainingPersistEditor('golden'));
-  const reject=document.getElementById('trainingRejectCase'); if(reject) reject.addEventListener('click',()=>trainingPersistEditor('reject'));
+  const content=document.getElementById('trainingTabContent'); if(!content) return; const cases=trainingLoadCases(); if(!window.trainingSelectedCaseId||!cases.some(x=>x.case_id===window.trainingSelectedCaseId)) window.trainingSelectedCaseId=cases[0]?.case_id||''; const selected=trainingCurrentCase();
+  const list=cases.map(item=>`<button class="training-case-list-item ${item.case_id===selected?.case_id?'active':''}" data-case-id="${trainingEscape(item.case_id)}"><span class="training-case-list-main"><strong>${trainingEscape(item.case_id)}</strong><span>${trainingEscape(item.check_id)}</span></span><span class="${trainingCaseStatusClass(item.status)}">${trainingCaseStatusLabel(item.status)}</span></button>`).join(''); const evidence=selected?.project_evidence?.[0]||{}; const norm=selected?.normative_evidence?.[0]||{};
+  content.innerHTML=`<div class="training-cases-layout"><aside class="training-case-list"><div class="training-panel-header"><div class="training-panel-title">Cases</div><span class="training-status">${cases.length}</span></div><div class="training-case-list-body">${list||'<div class="training-empty">Нет кейсов</div>'}</div></aside><main class="training-case-editor">${selected?`<div class="training-panel-header"><div><div class="training-panel-title">${trainingEscape(selected.case_id)}</div><div class="training-muted">${trainingEscape(selected.discipline)} · ${trainingEscape(selected.check_id)}</div></div><span class="${trainingCaseStatusClass(selected.status)}">${trainingCaseStatusLabel(selected.status)}</span></div><div class="training-editor-body"><div class="training-editor-grid"><section class="training-editor-section"><h3>Project Fact</h3><div class="training-field"><label>Fact ID</label><input id="trainingFactId" value="${trainingEscape(evidence.fact_id)}"></div><div class="training-field"><label>Страница</label><input id="trainingSourcePage" type="number" value="${trainingEscape(evidence.source_page??'')}"></div><div class="training-field"><label>Evidence</label><textarea id="trainingEvidenceText" rows="5">${trainingEscape(evidence.evidence_text)}</textarea></div><div class="training-field"><label>Контекст</label><textarea id="trainingEvidenceContext" rows="3">${trainingEscape(evidence.context)}</textarea></div></section><section class="training-editor-section"><h3>Normative Requirement</h3><div class="training-field"><label>Документ</label><input id="trainingNormDocument" value="${trainingEscape(norm.document)}"></div><div class="training-field"><label>Пункт</label><input id="trainingNormClause" value="${trainingEscape(norm.clause)}"></div><div class="training-field"><label>Requirement</label><textarea id="trainingNormText" rows="5">${trainingEscape(norm.requirement_text)}</textarea></div><div class="training-field"><label>Applicability</label><textarea id="trainingNormApplicability" rows="3">${trainingEscape(norm.applicability_reason||norm.applicability)}</textarea></div></section></div><section class="training-editor-section"><h3>Expert Analysis</h3><textarea id="trainingExpertAnalysis" rows="5">${trainingEscape(selected.expert_analysis)}</textarea></section><section class="training-editor-section"><h3>Decision</h3><div class="training-decision-grid"><label><input type="radio" name="trainingDecision" value="compliant" ${selected.status==='compliant'?'checked':''}> COMPLIANT</label><label><input type="radio" name="trainingDecision" value="violation" ${selected.status==='violation'?'checked':''}> VIOLATION</label><label><input type="radio" name="trainingDecision" value="unchecked" ${selected.status==='unchecked'?'checked':''}> UNCHECKED</label></div><div class="training-field"><label>Reason</label><textarea id="trainingDecisionReason" rows="3">${trainingEscape(selected.decision_reason)}</textarea></div><label class="training-checkbox"><input id="trainingEvidenceSufficient" type="checkbox" ${selected.evidence_sufficient?'checked':''}> Evidence sufficient</label></section><section class="training-editor-section"><h3>Notes</h3><textarea id="trainingNotes" rows="3">${trainingEscape(selected.notes)}</textarea></section><div class="training-editor-actions"><button class="training-action training-action-secondary" id="trainingSaveCase">Сохранить кейс</button><button class="training-action training-action-golden" id="trainingGoldenCase">Подтвердить GOLDEN</button><button class="training-action training-action-danger" id="trainingRejectCase">Отклонить</button><span id="trainingSaveMessage" class="training-save-message" role="status" aria-live="polite"></span></div></div>`:'<div class="training-empty">Нет выбранного кейса</div>'}</main></div>`;
+  content.querySelectorAll('[data-case-id]').forEach(btn=>btn.addEventListener('click',()=>{window.trainingSelectedCaseId=btn.dataset.caseId;renderTrainingCases();}));
+  const save=document.getElementById('trainingSaveCase'); if(save) save.addEventListener('click',()=>trainingPersistEditor('save')); const golden=document.getElementById('trainingGoldenCase'); if(golden) golden.addEventListener('click',()=>trainingPersistEditor('golden')); const reject=document.getElementById('trainingRejectCase'); if(reject) reject.addEventListener('click',()=>trainingPersistEditor('reject'));
 }
-
 function trainingPersistEditor(action){
-  const cases=trainingLoadCases(); const index=cases.findIndex(x=>x.case_id===window.trainingSelectedCaseId); if(index<0) return;
-  const item=cases[index]; const evidence=item.project_evidence?.[0] || {};
-  evidence.fact_id=document.getElementById('trainingFactId')?.value.trim() || '';
-  evidence.source_page=Number(document.getElementById('trainingSourcePage')?.value || 0) || null;
-  evidence.evidence_text=document.getElementById('trainingEvidenceText')?.value.trim() || '';
-  evidence.context=document.getElementById('trainingEvidenceContext')?.value.trim() || '';
-  item.project_evidence=[evidence];
-  const norm=item.normative_evidence?.[0] || {};
-  norm.document=document.getElementById('trainingNormDocument')?.value.trim() || '';
-  norm.clause=document.getElementById('trainingNormClause')?.value.trim() || '';
-  norm.requirement_text=document.getElementById('trainingNormText')?.value.trim() || '';
-  norm.applicability_reason=document.getElementById('trainingNormApplicability')?.value.trim() || '';
-  item.normative_evidence=Object.values(norm).some(Boolean) ? [norm] : [];
-  item.expert_analysis=document.getElementById('trainingExpertAnalysis')?.value.trim() || '';
-  item.status=document.querySelector('input[name="trainingDecision"]:checked')?.value || 'unchecked';
-  item.decision_reason=document.getElementById('trainingDecisionReason')?.value.trim() || '';
-  item.evidence_sufficient=Boolean(document.getElementById('trainingEvidenceSufficient')?.checked);
-  item.notes=document.getElementById('trainingNotes')?.value.trim() || '';
+  const cases=trainingLoadCases(); const index=cases.findIndex(x=>x.case_id===window.trainingSelectedCaseId); if(index<0){ trainingShowSaveMessage('Кейс не выбран.'); return; }
+  const item=cases[index]; const evidence=item.project_evidence?.[0]||{}; evidence.fact_id=document.getElementById('trainingFactId')?.value.trim()||''; evidence.source_page=Number(document.getElementById('trainingSourcePage')?.value||0)||null; evidence.evidence_text=document.getElementById('trainingEvidenceText')?.value.trim()||''; evidence.context=document.getElementById('trainingEvidenceContext')?.value.trim()||''; item.project_evidence=[evidence];
+  const norm=item.normative_evidence?.[0]||{}; norm.document=document.getElementById('trainingNormDocument')?.value.trim()||''; norm.clause=document.getElementById('trainingNormClause')?.value.trim()||''; norm.requirement_text=document.getElementById('trainingNormText')?.value.trim()||''; norm.applicability_reason=document.getElementById('trainingNormApplicability')?.value.trim()||''; item.normative_evidence=Object.values(norm).some(Boolean)?[norm]:[];
+  item.expert_analysis=document.getElementById('trainingExpertAnalysis')?.value.trim()||''; item.status=document.querySelector('input[name="trainingDecision"]:checked')?.value||'unchecked'; item.decision_reason=document.getElementById('trainingDecisionReason')?.value.trim()||''; item.evidence_sufficient=Boolean(document.getElementById('trainingEvidenceSufficient')?.checked); item.notes=document.getElementById('trainingNotes')?.value.trim()||'';
   if(action==='golden'){
-    if(item.status==='unchecked' || !item.evidence_sufficient || !item.decision_reason){
-      trainingShowSaveMessage('GOLDEN нельзя подтвердить: нужен COMPLIANT/VIOLATION, достаточные evidence и reason.'); return;
-    }
-    item.golden=true;
-  } else if(action==='reject') {
-    item.golden=false; item.rejected=true;
-  }
-  trainingSaveCases(cases); trainingShowSaveMessage(action==='golden'?'GOLDEN подтверждён локально.':'Кейс сохранён локально.'); renderTrainingCases(); updateTrainingCounters();
+    if(item.negative_case){ trainingShowSaveMessage('Нельзя подтвердить GOLDEN: отрицательный контрольный кейс.'); return; }
+    if(item.status==='unchecked'||!item.evidence_sufficient||!item.decision_reason||!item.project_evidence.length||!item.project_evidence[0].evidence_text||!item.normative_evidence.length||!item.normative_evidence[0].requirement_text){ trainingShowSaveMessage('Нельзя подтвердить GOLDEN: нужны проектное evidence, нормативное evidence, решение и reason.'); return; }
+    item.golden=true; item.rejected=false;
+  } else if(action==='reject'){ item.golden=false; item.rejected=true; }
+  if(!trainingSaveCases(cases)){ trainingShowSaveMessage('Не удалось сохранить изменения в браузере.'); return; }
+  renderTrainingCases(); updateTrainingCounters(); trainingShowSaveMessage(action==='golden'?'GOLDEN подтверждён локально.':action==='reject'?'Кейс отклонён локально.':'Кейс сохранён локально.');
 }
-function trainingShowSaveMessage(message){ const el=document.getElementById('trainingSaveMessage'); if(el){ el.textContent=message; setTimeout(()=>{if(el)el.textContent='';},3000); } else alert(message); }
-function updateTrainingCounters(){
-  const cases=trainingLoadCases();
-  const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};
-  set('trainingCaseCount',cases.length); set('trainingGoldenCount',cases.filter(x=>x.golden || x.status==='violation' && x.case_id==='EXP001-G001').length); set('trainingUncheckedCount',cases.filter(x=>x.status==='unchecked').length);
-}
-
-function renderTrainingTab(tab='overview'){
-  if(!ensureTrainingUI()) return;
-  const section=document.getElementById(TRAINING_SECTION_ID); const content=document.getElementById('trainingTabContent'); if(!section||!content) return;
-  section.querySelectorAll('.training-tab').forEach(x=>x.classList.toggle('active',x.dataset.trainingTab===tab));
-  if(tab==='overview'){
-    content.innerHTML=`<div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">Experiment 001 — СП 30.13330.2020 + проект ВК</div><span class="training-status">Case Editor MVP</span></div><div class="training-panel-body"><p class="training-muted">Cases — первый рабочий экран обучения. Здесь эксперт связывает проектный факт с нормативным требованием, проверяет применимость и формирует решение.</p><div class="training-code">PROJECT FACT → NORMATIVE REQUIREMENT → APPLICABILITY → EXPERT ANALYSIS → DECISION → GOLDEN</div></div></div><div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">Принцип</div></div><div class="training-panel-body"><div class="training-muted">Не обучаем модель автоматически. Сначала формируем и проверяем эталонные инженерные кейсы; изменения этого MVP сохраняются только локально в браузере.</div></div></div>`;
-  } else if(tab==='cases') renderTrainingCases();
-  else { const title={facts:'Engineering Facts',requirements:'Normative Requirements',checklists:'Engineering Checklists',evaluation:'Evaluation'}[tab] || tab; content.innerHTML=`<div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">${title}</div><span class="training-status">Следующий этап</span></div><div class="training-panel-body"><div class="training-empty">Этот экран пока не реализован. Первый рабочий объект модуля — Cases / Case Editor.</div></div></div>`; }
-  updateTrainingCounters();
-}
-
-function renderTraining(){ ensureTrainingUI(); updateTrainingCounters(); renderTrainingTab('overview'); }
-window.ensureTrainingUI=ensureTrainingUI; window.renderTraining=renderTraining; window.renderTrainingTab=renderTrainingTab;
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',ensureTrainingUI,{once:true}); else ensureTrainingUI();
-console.log('[Project Expert AI] training.js loaded — Training Case Editor enabled');
+function trainingShowSaveMessage(message){ const el=document.getElementById('trainingSaveMessage'); if(el){ el.textContent=message; el.classList.add('visible'); window.setTimeout(()=>{if(el){el.textContent='';el.classList.remove('visible');}},3000); } else alert(message); }
+function updateTrainingCounters(){ const cases=trainingLoadCases(); const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;}; set('trainingCaseCount',cases.length); set('trainingGoldenCount',cases.filter(x=>x.golden).length); set('trainingUncheckedCount',cases.filter(x=>x.status==='unchecked').length); }
+function renderTrainingTab(tab='overview'){ if(!ensureTrainingUI()) return; const section=document.getElementById(TRAINING_SECTION_ID); const content=document.getElementById('trainingTabContent'); if(!section||!content) return; section.querySelectorAll('.training-tab').forEach(x=>x.classList.toggle('active',x.dataset.trainingTab===tab)); if(tab==='overview'){content.innerHTML=`<div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">Experiment 001 — СП 30.13330.2020 + проект ВК</div><span class="training-status">Case Editor MVP</span></div><div class="training-panel-body"><p class="training-muted">Cases — первый рабочий экран обучения. Здесь эксперт связывает проектный факт с нормативным требованием, проверяет применимость и формирует решение.</p><div class="training-code">PROJECT FACT → NORMATIVE REQUIREMENT → APPLICABILITY → EXPERT ANALYSIS → DECISION → GOLDEN</div></div></div><div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">Принцип</div></div><div class="training-panel-body"><div class="training-muted">Не обучаем модель автоматически. Сначала формируем и проверяем эталонные инженерные кейсы; изменения этого MVP сохраняются только локально в браузере.</div></div></div>`;} else if(tab==='cases') renderTrainingCases(); else {const title={facts:'Engineering Facts',requirements:'Normative Requirements',checklists:'Engineering Checklists',evaluation:'Evaluation'}[tab]||tab; content.innerHTML=`<div class="training-panel"><div class="training-panel-header"><div class="training-panel-title">${title}</div><span class="training-status">Следующий этап</span></div><div class="training-panel-body"><div class="training-empty">Этот экран пока не реализован. Первый рабочий объект модуля — Cases / Case Editor.</div></div></div>`;} updateTrainingCounters(); }
+function renderTraining(){ensureTrainingUI();updateTrainingCounters();renderTrainingTab('overview');}
+window.ensureTrainingUI=ensureTrainingUI; window.renderTraining=renderTraining; window.renderTrainingTab=renderTrainingTab; if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',ensureTrainingUI,{once:true}); else ensureTrainingUI(); console.log('[Project Expert AI] training.js loaded — Training Case Editor enabled');
