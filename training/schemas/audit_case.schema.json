@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit_case.schema.json",
+  "title": "Engineering Audit Case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["case_id", "discipline", "check_id", "decision"],
+  "properties": {
+    "case_id": {"type": "string"},
+    "discipline": {"type": "string"},
+    "check_id": {"type": "string"},
+    "project_evidence": {"type": "array", "items": {"type": "object"}},
+    "normative_evidence": {"type": "array", "items": {"type": "object"}},
+    "expert_analysis": {"type": "string"},
+    "decision": {
+      "type": "string",
+      "enum": ["compliant", "violation", "unchecked"]
+    },
+    "decision_reason": {"type": "string"},
+    "evidence_sufficient": {"type": "boolean"},
+    "negative_case": {"type": "boolean"},
+    "notes": {"type": "string"}
+  }
+}
