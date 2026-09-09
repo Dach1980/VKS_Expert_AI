@@ -64,6 +64,20 @@ def deterministic_numeric_comparison(candidate: dict[str, Any], decision: dict[s
         if norm.value is None:
             continue
 
+        # Generic numeric tokens are not engineering quantities. Identifiers
+        # such as "колодец № 63" must never become comparable measurements.
+        comparable_kinds = {"diameter", "slope", "flow", "pressure", "length", "count"}
+        if project.kind not in comparable_kinds or norm.kind not in comparable_kinds:
+            updated = dict(decision)
+            updated["type"] = "unchecked"
+            updated["comparison"] = "не определено"
+            updated["normative_value"] = requirement_raw
+            updated["normative_unit"] = normative_unit or str(decision.get("normative_unit") or "")
+            updated["normative_requirement"] = text
+            updated["norm"] = str(requirement.get("norm") or decision.get("norm") or "")
+            updated["clause"] = str(requirement.get("clause") or decision.get("clause") or "")
+            return updated
+
         # A numeric comparison is valid only for the same physical kind and
         # compatible explicit units. If they are incompatible, the decision
         # must not retain an LLM-produced violation/compliance result.
