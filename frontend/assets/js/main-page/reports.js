@@ -47,3 +47,11 @@ function closeReportDetail(){window.reportDetailOpen=false;window.reportDetailIn
 async function createReport(){return loadReports()}
 function generateReport(){loadReports();if(typeof window.showToast==='function')window.showToast('Отчёты формируются автоматически после завершения проверки.','info')}
 function downloadReport(i,format){var r=window.reportsData&&window.reportsData[i];if(!r)return;fetch(REPORTS_API+(format==='docx'?'/docx':'/pdf'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(r)}).then(function(x){if(!x.ok)throw Error('HTTP '+x.status);return x.blob()}).then(function(b){var u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='project-expert-ai-normcontrol-'+(r.result_id||r.document_id||'result')+(format==='docx'?'.docx':'.pdf');document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u)}).catch(function(e){console.warn('[Reports] Export error:',e);if(typeof window.showToast==='function')window.showToast('Не удалось сформировать '+format.toUpperCase()+': '+e.message,'error')})}
+
+window.loadReports = loadReports;
+window.renderReports = renderReports;
+window.setReportFilter = setReportFilter;
+window.viewReport = viewReport;
+window.closeReportDetail = closeReportDetail;
+window.generateReport = generateReport;
+window.downloadReport = downloadReport;
