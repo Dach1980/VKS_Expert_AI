@@ -157,10 +157,11 @@ def build_case_input(case: dict, facts: dict[str, dict], requirements: dict[str,
     candidate_ids = []
     for item in case.get("normative_evidence", []):
         requirement_id = item.get("requirement_id")
+        # Some negative/control cases intentionally contain only a semantic
+        # normative fragment without a canonical requirement ID. Such an item
+        # is not an admissible candidate and must not be passed to the LLM.
         if not requirement_id:
-            raise RuntimeError(
-                f"{case['case_id']}: normative_evidence item has no requirement_id"
-            )
+            continue
         if requirement_id not in requirements:
             raise RuntimeError(
                 f"{case['case_id']}: unknown normative requirement: {requirement_id}"
