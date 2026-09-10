@@ -154,8 +154,23 @@ def build_case_input(case: dict, facts: dict[str, dict], requirements: dict[str,
             "structured_fact": fact,
         })
 
+    candidate_ids = []
+    for item in case.get("normative_evidence", []):
+        requirement_id = item.get("requirement_id")
+        if not requirement_id:
+            raise RuntimeError(
+                f"{case['case_id']}: normative_evidence item has no requirement_id"
+            )
+        if requirement_id not in requirements:
+            raise RuntimeError(
+                f"{case['case_id']}: unknown normative requirement: {requirement_id}"
+            )
+        if requirement_id not in candidate_ids:
+            candidate_ids.append(requirement_id)
+
     normative_pool = []
-    for req in requirements.values():
+    for requirement_id in candidate_ids:
+        req = requirements[requirement_id]
         conditional = req.get("requirement_type") == "conditional"
         conditions = []
         if req.get("condition"):
@@ -331,6 +346,7 @@ def main() -> int:
             "checks": checks,
             "raw_response": raw,
             "parse_error": parse_error,
+            "response_json": response_json,
         })
         status = "OK" if checks["decision_correct"] and checks["applicability_correct"] and checks["evidence_trace_complete"] else "FAIL"
         print(f"    {status}: expected={expected['expected_decision']} actual={prediction.get('decision')}")
