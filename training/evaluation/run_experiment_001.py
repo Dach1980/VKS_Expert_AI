@@ -9,8 +9,9 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXP = ROOT / "datasets" / "experiment_001"
-EVAL = ROOT / "evaluation"
+TRAINING = ROOT / "training"
+EXP = TRAINING / "datasets" / "experiment_001"
+EVAL = TRAINING / "evaluation"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1"
 DEFAULT_MODEL = "qwen3.5-9b"
