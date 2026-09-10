@@ -1,0 +1,239 @@
+{
+  "run_type": "AI_ENGINEER_BENCHMARK",
+  "benchmark": {
+    "benchmark_id": "EXP001-BM-v1",
+    "experiment_id": "experiment_001",
+    "status": "ready_for_ai_run",
+    "scope": {
+      "discipline": "ВК",
+      "normative_base": [
+        "СП 30.13330.2020"
+      ],
+      "project": "current VK project used in the first audit experiment"
+    },
+    "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions.",
+    "cases": [
+      {
+        "case_id": "EXP001-C001",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."
+      },
+      {
+        "case_id": "EXP001-C002",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."
+      },
+      {
+        "case_id": "EXP001-C003",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."
+      },
+      {
+        "case_id": "EXP001-G001",
+        "expected_decision": "violation",
+        "negative_case": false,
+        "reason": "The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."
+      },
+      {
+        "case_id": "EXP001-G002",
+        "expected_decision": "compliant",
+        "negative_case": false,
+        "reason": "The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."
+      },
+      {
+        "case_id": "EXP001-G003",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."
+      },
+      {
+        "case_id": "EXP001-N001",
+        "expected_decision": "unchecked",
+        "negative_case": true,
+        "reason": "Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."
+      },
+      {
+        "case_id": "EXP001-N002",
+        "expected_decision": "unchecked",
+        "negative_case": true,
+        "reason": "A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."
+      }
+    ],
+    "evaluation_rules": {
+      "primary_metric": "decision_accuracy",
+      "critical_metric": "false_violation_rate",
+      "additional_metrics": [
+        "unsupported_violation_rate",
+        "unchecked_precision",
+        "unchecked_recall",
+        "normative_applicability_accuracy",
+        "evidence_trace_completeness"
+      ],
+      "critical_failure": "Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
+      "golden_gate": "Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
+    }
+  },
+  "summary": {
+    "benchmark_id": "EXP001-BM-v1",
+    "model": "qwen3.5-9b",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "total_cases": 8,
+    "decision_accuracy": 0.25,
+    "false_violation_rate": 0.0,
+    "applicability_field_valid_rate": 0.25,
+    "evidence_trace_completeness": 0.125,
+    "critical_failure": false
+  },
+  "results": [
+    {
+      "case_id": "EXP001-C001",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни одно из предложенных нормативных требований не относится к параметру расчётного суточного объёма стоков (8,48 м³/сут). Требование R001 касается актуальности нормативной ссылки, R002 — материала труб внутренней канализации, R003 — высоты выхода вентиляционного стояка. Ни одно не регулирует расчётный объём бытовых стоков.",
+        "missing_evidence": [
+          "нормативное требование для расчётного суточного объёма стоков"
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни одно из предложенных нормативных требований не относится к параметру расчётного суточного объёма стоков (8,48 м³/сут). Требование R001 касается актуальности нормативной ссылки, R002 — материала труб внутренней канализации, R003 — высоты выхода вентиляционного стояка. Ни одно не регулирует расчётный объём бытовых стоков.\",\n  \"missing_evidence\": [\"нормативное требование для расчётного суточного объёма стоков\"],\n  \"evidence_trace\": []\n}",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C002",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "В списке кандидатов отсутствуют нормативные требования, регулирующие диаметр трубопровода канализации. Требуется проверка по СП 30.13330.2020 раздел 18 (диаметры), но соответствующее требование отсутствует среди предоставленных кандидатов.",
+        "missing_evidence": [
+          "нормативное требование на минимальный/максимальный диаметр трубопровода"
+        ],
+        "evidence_trace": [
+          "EXP001-F004",
+          null
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"В списке кандидатов отсутствуют нормативные требования, регулирующие диаметр трубопровода канализации. Требуется проверка по СП 30.13330.2020 раздел 18 (диаметры), но соответствующее требование отсутствует среди предоставленных кандидатов.\",\n  \"missing_evidence\": [\"нормативное требование на минимальный/максимальный диаметр трубопровода\"],\n  \"evidence_trace\": [\"EXP001-F004\", null]\n}",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C003",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    },
+    {
+      "case_id": "EXP001-G001",
+      "expected_decision": "violation",
+      "negative_case": false,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    },
+    {
+      "case_id": "EXP001-G002",
+      "expected_decision": "compliant",
+      "negative_case": false,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    },
+    {
+      "case_id": "EXP001-G003",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    },
+    {
+      "case_id": "EXP001-N001",
+      "expected_decision": "unchecked",
+      "negative_case": true,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    },
+    {
+      "case_id": "EXP001-N002",
+      "expected_decision": "unchecked",
+      "negative_case": true,
+      "prediction": {
+        "decision": null
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": false,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "",
+      "parse_error": "timed out"
+    }
+  ]
+}
