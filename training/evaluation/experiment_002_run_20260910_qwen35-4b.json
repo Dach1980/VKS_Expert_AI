@@ -1,0 +1,526 @@
+{
+  "run_type": "AI_ENGINEER_BENCHMARK",
+  "benchmark": {
+    "benchmark_id": "EXP001-BM-v2",
+    "experiment_id": "experiment_001",
+    "status": "ready_for_ai_run",
+    "scope": {
+      "discipline": "ВК",
+      "normative_base": [
+        "СП 30.13330.2020"
+      ],
+      "project": "current VK project used in the first audit experiment"
+    },
+    "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions, with conditional applicability evaluated before value comparison.",
+    "cases": [
+      {
+        "case_id": "EXP001-C001",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."
+      },
+      {
+        "case_id": "EXP001-C002",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."
+      },
+      {
+        "case_id": "EXP001-C003",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."
+      },
+      {
+        "case_id": "EXP001-G001",
+        "expected_decision": "violation",
+        "expected_applicability": "applicable",
+        "expected_selected_requirement_id": "EXP001-R001",
+        "expected_trace_relations": [
+          "obsolete_normative_reference"
+        ],
+        "negative_case": false,
+        "reason": "The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."
+      },
+      {
+        "case_id": "EXP001-G002",
+        "expected_decision": "compliant",
+        "expected_applicability": "applicable",
+        "expected_selected_requirement_id": "EXP001-R002",
+        "expected_trace_relations": [
+          "supports_compliance"
+        ],
+        "negative_case": false,
+        "reason": "The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."
+      },
+      {
+        "case_id": "EXP001-G003",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": "EXP001-R003",
+        "expected_trace_relations": [
+          "missing_condition"
+        ],
+        "negative_case": false,
+        "reason": "The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."
+      },
+      {
+        "case_id": "EXP001-N001",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_applicable",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": true,
+        "reason": "Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."
+      },
+      {
+        "case_id": "EXP001-N002",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_applicable",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": true,
+        "reason": "A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."
+      }
+    ],
+    "evaluation_rules": {
+      "primary_metric": "decision_accuracy",
+      "critical_metric": "false_violation_rate",
+      "additional_metrics": [
+        "unsupported_violation_rate",
+        "unchecked_precision",
+        "unchecked_recall",
+        "normative_applicability_accuracy",
+        "evidence_trace_completeness",
+        "evidence_trace_validity",
+        "selected_requirement_accuracy"
+      ],
+      "critical_failure": "Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
+      "applicability_rule": "Applicability must be evaluated before normative value comparison. A conditional requirement with an unproven mandatory condition must be reported as not_proven; the model must not infer the missing condition.",
+      "selection_rule": "selected_requirement_id may identify a candidate only when that requirement is the one used for the decision. For unchecked conditional cases it may identify the unresolved candidate, but applicability must remain not_proven.",
+      "evidence_trace_rule": "Every trace item must be a structured object with valid fact_id, requirement_id, relation and applicability. A missing_condition relation requires an explicit missing_condition field. Trace validity is distinct from trace presence. When the benchmark expects a selected requirement, at least one valid trace item must reference it and use an expected relation.",
+      "golden_gate": "Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
+    }
+  },
+  "summary": {
+    "benchmark_id": "EXP001-BM-v2",
+    "model": "qwen3.5-4b",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "total_cases": 8,
+    "decision_accuracy": 0.75,
+    "false_violation_rate": 0.0,
+    "unsupported_violation_rate": 0.0,
+    "unchecked_precision": 0.75,
+    "unchecked_recall": 1.0,
+    "normative_applicability_accuracy": 0.5,
+    "selected_requirement_accuracy": 0.625,
+    "evidence_trace_completeness": 0.625,
+    "evidence_trace_validity": 0.75,
+    "critical_failure": false
+  },
+  "results": [
+    {
+      "case_id": "EXP001-C001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни один из кандидатов не может быть применен к проекту без доказательства обязательных условий применимости. Факт проекта касается расчетного объема стоков, что не соответствует ни системе материалов труб (R002), ни высоте выхода стояка над кровлей (R003).",
+        "missing_evidence": [
+          "Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 как нормативного основания для R001.",
+          "Отсутствие проектных фактов, подтверждающих наличие труб и соединительных деталей бытовой канализации в системе водоотведения для проверки требования к материалу (R002).",
+          "Отсутствие проектных фактов, подтверждающих наличие вытяжной части канализационного стояка и его высоту выхода над кровлей для проверки требования R003."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R001",
+            "relation": "not_relevant",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R002",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни один из кандидатов не может быть применен к проекту без доказательства обязательных условий применимости. Факт проекта касается расчетного объема стоков, что не соответствует ни системе материалов труб (R002), ни высоте выхода стояка над кровлей (R003).\",\n  \"missing_evidence\": [\n    \"Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 как нормативного основания для R001.\",\n    \"Отсутствие проектных фактов, подтверждающих наличие труб и соединительных деталей бытовой канализации в системе водоотведения для проверки требования к материалу (R002).\",\n    \"Отсутствие проектных фактов, подтверждающих наличие вытяжной части канализационного стояка и его высоту выхода над кровлей для проверки требования R003.\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"not_relevant\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни одно из представленных нормативных требований (R001-R003) не может быть применено к проекту без доказательства выполнения обязательных условий применимости. Проектный факт касается диаметра трубопровода, в то время как требования касаются актуальности ссылки, материала труб и высоты выхода стояка.",
+        "missing_evidence": [
+          "Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 (для R001)",
+          "Отсутствие проектных фактов, указывающих на материал труб (полимерные/стальные) или их отсутствие (для R002)",
+          "Отсутствие проектных фактов, касающихся высоты выхода вытяжной части стояка над кровлей (для R003)"
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F004",
+            "requirement_id": "EXP001-R001",
+            "relation": "not_relevant",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F004",
+            "requirement_id": "EXP001-R002",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F004",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни одно из представленных нормативных требований (R001-R003) не может быть применено к проекту без доказательства выполнения обязательных условий применимости. Проектный факт касается диаметра трубопровода, в то время как требования касаются актуальности ссылки, материала труб и высоты выхода стояка.\",\n  \"missing_evidence\": [\n    \"Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 (для R001)\",\n    \"Отсутствие проектных фактов, указывающих на материал труб (полимерные/стальные) или их отсутствие (для R002)\",\n    \"Отсутствие проектных фактов, касающихся высоты выхода вытяжной части стояка над кровлей (для R003)\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F004\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"not_relevant\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F004\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F004\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни одно из предложенных нормативных требований (R001, R002, R003) не применимо к проектному факту по диаметру трубопровода Ø110 мм в системе внутренней бытовой канализации. Требуется доказательство соответствия системного сегмента и объекта.",
+        "missing_evidence": [
+          "Отсутствие проектного факта, подтверждающего использование СП 30.13330.2012 как нормативного основания (для R001).",
+          "Проектный факт касается диаметра трубопровода, а не материала труб или высоты выхода стояка над кровлей.",
+          "Отсутствие проектного факта о типе кровли и расположении вытяжной части стояка для проверки требования R003."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F005",
+            "requirement_id": "EXP001-R001",
+            "relation": "not_relevant",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F005",
+            "requirement_id": "EXP001-R002",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          },
+          {
+            "fact_id": "EXP001-F005",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни одно из предложенных нормативных требований (R001, R002, R003) не применимо к проектному факту по диаметру трубопровода Ø110 мм в системе внутренней бытовой канализации. Требуется доказательство соответствия системного сегмента и объекта.\",\n  \"missing_evidence\": [\n    \"Отсутствие проектного факта, подтверждающего использование СП 30.13330.2012 как нормативного основания (для R001).\",\n    \"Проектный факт касается диаметра трубопровода, а не материала труб или высоты выхода стояка над кровлей.\",\n    \"Отсутствие проектного факта о типе кровли и расположении вытяжной части стояка для проверки требования R003.\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F005\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"not_relevant\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F005\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    },\n    {\n      \"fact_id\": \"EXP001-F005\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G001",
+      "expected_decision": "violation",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R001",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт (F009) ссылается на СП 30.13330.2012 как на нормативное основание для решения по вентиляции. Требование EXP001-R001 требует доказательства того, что проект прямо использует устаревший документ в качестве действующей базы. Хотя текст факта содержит ссылку, не доказано, является ли эта ссылка обязательной частью проектного обоснования или просто историческим комментарием/ссылкой на источник информации. Без явного указания «используется как нормативное основание» применимость требования R001 не подтверждена.",
+        "missing_evidence": [
+          "Отсутствие прямого утверждения в проекте о том, что СП 30.13330.2012 используется как действующая нормативная база для принятия решений."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F009",
+            "requirement_id": "EXP001-R001",
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Проект не содержит прямого указания на использование СП 30.13330.2012 как действующей нормативной базы для принятия проектных решений."
+          },
+          {
+            "fact_id": "EXP001-F009",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": null,
+            "note": "Сравнение значений (0.2 м) возможно только после подтверждения применимости R003 через R001 или прямое доказательство использования актуального СП 30.13330.2020 в проекте."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": false,
+        "evidence_trace_valid": false,
+        "evidence_trace_complete": false,
+        "unsupported_violation": false,
+        "trace_errors": [
+          "trace[1] contains unsupported fields"
+        ]
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт (F009) ссылается на СП 30.13330.2012 как на нормативное основание для решения по вентиляции. Требование EXP001-R001 требует доказательства того, что проект прямо использует устаревший документ в качестве действующей базы. Хотя текст факта содержит ссылку, не доказано, является ли эта ссылка обязательной частью проектного обоснования или просто историческим комментарием/ссылкой на источник информации. Без явного указания «используется как нормативное основание» применимость требования R001 не подтверждена.\",\n  \"missing_evidence\": [\n    \"Отсутствие прямого утверждения в проекте о том, что СП 30.13330.2012 используется как действующая нормативная база для принятия решений.\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Проект не содержит прямого указания на использование СП 30.13330.2012 как действующей нормативной базы для принятия проектных решений.\"\n    },\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": null,\n      \"note\": \"Сравнение значений (0.2 м) возможно только после подтверждения применимости R003 через R001 или прямое доказательство использования актуального СП 30.13330.2020 в проекте.\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G002",
+      "expected_decision": "compliant",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R002",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектные факты не содержат доказательств использования СП 30.13330.2012 как нормативного основания для данной системы. Условие применимости требования R002 (система бытовых сточных вод) формально выполняется по описанию объекта, но критическое обязательное условие — наличие ссылки на устаревший документ в проекте — не доказано.",
+        "missing_evidence": [
+          "Отсутствует прямая ссылка проекта на СП 30.13330.2012 в качестве нормативного документа для системы бытовой канализации выше отм. 0.000."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F008",
+            "requirement_id": "EXP001-R002",
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Проект не содержит указания на использование СП 30.13330.2012 как нормативного документа для системы бытовой канализации выше отм. 0.000."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": false,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": false,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектные факты не содержат доказательств использования СП 30.13330.2012 как нормативного основания для данной системы. Условие применимости требования R002 (система бытовых сточных вод) формально выполняется по описанию объекта, но критическое обязательное условие — наличие ссылки на устаревший документ в проекте — не доказано.\",\n  \"missing_evidence\": [\n    \"Отсутствует прямая ссылка проекта на СП 30.13330.2012 в качестве нормативного документа для системы бытовой канализации выше отм. 0.000.\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F008\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Проект не содержит указания на использование СП 30.13330.2012 как нормативного документа для системы бытовой канализации выше отм. 0.000.\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": "EXP001-R003",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектное требование R003 является условным (conditional). Для его применения необходимо доказать тип кровли или наличие/отсутствие сборной вентиляционной шахты. В проекте указано только значение '0,2 м' без указания типа кровли (эксплуатируемая/неэксплуатируемая) и отсутствия шахты. Следовательно, применимость условия R003-COND-01 не доказана.",
+        "missing_evidence": [
+          "Тип кровли (плоская эксплуатируемая / плоская неэксплуатируемая)",
+          "Наличие или отсутствие сборной вентиляционной шахты"
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F009",
+            "requirement_id": "EXP001-R003",
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Не доказано тип кровли (эксплуатируемая/неэксплуатируемая) и отсутствие сборной вентиляционной шахты, что необходимо для применения нормативного значения 0,2 м согласно п. 18.18 СП 30.13330.2020."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": false,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектное требование R003 является условным (conditional). Для его применения необходимо доказать тип кровли или наличие/отсутствие сборной вентиляционной шахты. В проекте указано только значение '0,2 м' без указания типа кровли (эксплуатируемая/неэксплуатируемая) и отсутствия шахты. Следовательно, применимость условия R003-COND-01 не доказана.\",\n  \"missing_evidence\": [\n    \"Тип кровли (плоская эксплуатируемая / плоская неэксплуатируемая)\",\n    \"Наличие или отсутствие сборной вентиляционной шахты\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Не доказано тип кровли (эксплуатируемая/неэксплуатируемая) и отсутствие сборной вентиляционной шахты, что необходимо для применения нормативного значения 0,2 м согласно п. 18.18 СП 30.13330.2020.\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-N001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни одно из предложенных нормативных требований (R001, R002, R003) не применимо к проектному факту F007 по системе, объекту или параметру. Проектный факт касается установки узла учёта в колодец, тогда как требования касаются материалов труб, высоты выхода стояка и актуальности нормативной ссылки.",
+        "missing_evidence": [
+          {
+            "fact_id": "EXP001-F007",
+            "requirement_id": "EXP001-R001",
+            "relation": "not_relevant",
+            "applicability": "not_applicable",
+            "missing_condition": ""
+          },
+          {
+            "fact_id": "EXP001-F007",
+            "requirement_id": "EXP001-R002",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": ""
+          },
+          {
+            "fact_id": "EXP001-F007",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_applicable",
+            "missing_condition": ""
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни одно из предложенных нормативных требований (R001, R002, R003) не применимо к проектному факту F007 по системе, объекту или параметру. Проектный факт касается установки узла учёта в колодец, тогда как требования касаются материалов труб, высоты выхода стояка и актуальности нормативной ссылки.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": \"EXP001-F007\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"not_relevant\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": \"\"\n    },\n    {\n      \"fact_id\": \"EXP001-F007\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": \"\"\n    },\n    {\n      \"fact_id\": \"EXP001-F007\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_applicable\",\n      \"missing_condition\": \"\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-N002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Ни один из кандидатов не может быть применен к проекту без доказательства применимости условий. Факт проекта касается суточного объема стоков (параметр 'суточный объём стоков'), что не соответствует ни системному охвату (трубы/материалы, вытяжная часть), ни параметрическому охвату (высота выхода) нормативных требований R002 и R003. Требование R001 касается актуальности ссылки, но проект не использует устаревшую ссылку 2012 года как основание.",
+        "missing_evidence": [
+          "Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 в качестве нормативного основания для данного проекта (для R001).",
+          "Отсутствие проектных фактов, описывающих материал труб или соединительных деталей бытовой канализации (для R002).",
+          "Отсутствие проектных фактов, описывающих высоту вывода вытяжной части стояка над кровлей (для R003)."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R001",
+            "relation": "not_relevant",
+            "applicability": "not_proven",
+            "missing_condition": "Проект не использует СП 30.13330.2012 как нормативное основание."
+          },
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R002",
+            "relation": "parameter_mismatch",
+            "applicability": "not_proven",
+            "missing_condition": "Нет фактов о материале труб или соединительных деталей."
+          },
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": "EXP001-R003",
+            "relation": "parameter_mismatch",
+            "applicability": "not_proven",
+            "missing_condition": "Нет фактов о высоте вывода вытяжной части стояка."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": false,
+        "evidence_trace_complete": false,
+        "unsupported_violation": false,
+        "trace_errors": [
+          "trace[0] missing_condition is only allowed for missing_condition relation",
+          "trace[1] missing_condition is only allowed for missing_condition relation",
+          "trace[2] missing_condition is only allowed for missing_condition relation"
+        ]
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Ни один из кандидатов не может быть применен к проекту без доказательства применимости условий. Факт проекта касается суточного объема стоков (параметр 'суточный объём стоков'), что не соответствует ни системному охвату (трубы/материалы, вытяжная часть), ни параметрическому охвату (высота выхода) нормативных требований R002 и R003. Требование R001 касается актуальности ссылки, но проект не использует устаревшую ссылку 2012 года как основание.\",\n  \"missing_evidence\": [\n    \"Отсутствие проектных фактов, подтверждающих использование СП 30.13330.2012 в качестве нормативного основания для данного проекта (для R001).\",\n    \"Отсутствие проектных фактов, описывающих материал труб или соединительных деталей бытовой канализации (для R002).\",\n    \"Отсутствие проектных фактов, описывающих высоту вывода вытяжной части стояка над кровлей (для R003).\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"not_relevant\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Проект не использует СП 30.13330.2012 как нормативное основание.\"\n    },\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Нет фактов о материале труб или соединительных деталей.\"\n    },\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"parameter_mismatch\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Нет фактов о высоте вывода вытяжной части стояка.\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    }
+  ]
+}
