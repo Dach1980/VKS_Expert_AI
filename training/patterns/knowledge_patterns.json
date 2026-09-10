@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "experiment_id": "experiment_001",
+  "description": "Training Knowledge patterns describing reusable expert reasoning boundaries derived from verified Golden cases G001 and G003.",
+  "patterns": [
+    {
+      "pattern_id": "NK-001",
+      "name": "Normative Reference Applicability",
+      "type": "normative_reference_applicability",
+      "source_cases": ["EXP001-G001"],
+      "principle": "An explicit normative reference used by the project as the basis for a design decision is itself an auditable project fact and may require an independent normative-reference check.",
+      "required_evidence": [
+        "explicit project reference to a normative document",
+        "normative document/version used as the project basis"
+      ],
+      "reasoning_boundary": "Do not replace a normative-reference check with an engineering-parameter check merely because the same project fragment also contains a numeric engineering value.",
+      "expected_behavior": "Evaluate the status and applicability of the referenced normative document independently from engineering-parameter compliance."
+    },
+    {
+      "pattern_id": "NK-002",
+      "name": "Conditional Normative Requirement",
+      "type": "conditional_normative_requirement",
+      "source_cases": ["EXP001-G003"],
+      "principle": "A normative requirement may define a value together with conditions, exceptions or applicability constraints that are an integral part of the requirement.",
+      "required_evidence": [
+        "the project parameter being checked",
+        "the applicable normative requirement",
+        "all project conditions required to select the applicable normative branch"
+      ],
+      "reasoning_boundary": "A numeric match alone does not establish compliance when the normative requirement is conditional.",
+      "expected_behavior": "Treat the condition or applicability constraint as part of the normative requirement rather than as optional context."
+    },
+    {
+      "pattern_id": "NK-003",
+      "name": "Missing Condition → Unchecked",
+      "type": "decision_boundary",
+      "source_cases": ["EXP001-G003"],
+      "principle": "If a required condition of a normative requirement is not established by project evidence, compliance or violation must not be determined.",
+      "required_evidence": [
+        "project parameter",
+        "applicable normative requirement",
+        "evidence establishing each mandatory condition"
+      ],
+      "reasoning_boundary": "Missing evidence for a mandatory condition is not equivalent to evidence that the condition is satisfied.",
+      "expected_behavior": "Set evidence_sufficient to false and decision to unchecked when a mandatory applicability condition remains unproven."
+    },
+    {
+      "pattern_id": "NK-004",
+      "name": "Do Not Infer Absent Project Conditions",
+      "type": "evidence_integrity",
+      "source_cases": ["EXP001-G003"],
+      "principle": "An absent project fact must not be replaced by a typical, probable, assumed or contextually inferred value.",
+      "required_evidence": [
+        "explicit project evidence for the condition"
+      ],
+      "reasoning_boundary": "The AI must not infer an absent project condition in order to make a normative requirement applicable or to reach compliant/violation.",
+      "forbidden_behavior": [
+        "assuming the roof type from a typical building configuration",
+        "assuming the most favorable normative condition",
+        "treating an unstated condition as established"
+      ],
+      "expected_behavior": "Preserve the condition as unknown and follow NK-003 when the missing condition is mandatory for the decision."
+    },
+    {
+      "pattern_id": "NK-005",
+      "name": "Normative-reference Check vs Engineering-parameter Check",
+      "type": "check_subject_separation",
+      "source_cases": ["EXP001-G001", "EXP001-G003"],
+      "principle": "A single project fragment may contain multiple independent audit subjects, including a normative reference and an engineering parameter.",
+      "required_evidence": [
+        "the explicit audit subject",
+        "project evidence relevant to that subject",
+        "normative evidence applicable to that subject"
+      ],
+      "reasoning_boundary": "Do not collapse independent audit subjects into one decision merely because they originate from the same sentence, page or project fact.",
+      "expected_behavior": "Keep normative-reference status and engineering-parameter compliance as separate checks. The same project fragment may legitimately produce different outcomes for those checks."
+    }
+  ]
+}
