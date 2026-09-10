@@ -1,5 +1,5 @@
 {
-  "benchmark_id": "EXP001-BM-v1",
+  "benchmark_id": "EXP001-BM-v2",
   "experiment_id": "experiment_001",
   "status": "ready_for_ai_run",
   "scope": {
@@ -7,22 +7,25 @@
     "normative_base": ["СП 30.13330.2020"],
     "project": "current VK project used in the first audit experiment"
   },
-  "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions.",
+  "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions, with conditional applicability evaluated before value comparison.",
   "cases": [
-    {"case_id":"EXP001-C001","expected_decision":"unchecked","negative_case":false,"reason":"Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."},
-    {"case_id":"EXP001-C002","expected_decision":"unchecked","negative_case":false,"reason":"Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."},
-    {"case_id":"EXP001-C003","expected_decision":"unchecked","negative_case":false,"reason":"Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."},
-    {"case_id":"EXP001-G001","expected_decision":"violation","negative_case":false,"reason":"The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."},
-    {"case_id":"EXP001-G002","expected_decision":"compliant","negative_case":false,"reason":"The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."},
-    {"case_id":"EXP001-G003","expected_decision":"unchecked","negative_case":false,"reason":"The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."},
-    {"case_id":"EXP001-N001","expected_decision":"unchecked","negative_case":true,"reason":"Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."},
-    {"case_id":"EXP001-N002","expected_decision":"unchecked","negative_case":true,"reason":"A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."}
+    {"case_id":"EXP001-C001","expected_decision":"unchecked","expected_applicability":"not_proven","expected_selected_requirement_id":null,"expected_trace_relations":[],"negative_case":false,"reason":"Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."},
+    {"case_id":"EXP001-C002","expected_decision":"unchecked","expected_applicability":"not_proven","expected_selected_requirement_id":null,"expected_trace_relations":[],"negative_case":false,"reason":"Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."},
+    {"case_id":"EXP001-C003","expected_decision":"unchecked","expected_applicability":"not_proven","expected_selected_requirement_id":null,"expected_trace_relations":[],"negative_case":false,"reason":"Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."},
+    {"case_id":"EXP001-G001","expected_decision":"violation","expected_applicability":"applicable","expected_selected_requirement_id":"EXP001-R001","expected_trace_relations":["obsolete_normative_reference"],"negative_case":false,"reason":"The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."},
+    {"case_id":"EXP001-G002","expected_decision":"compliant","expected_applicability":"applicable","expected_selected_requirement_id":"EXP001-R002","expected_trace_relations":["supports_compliance"],"negative_case":false,"reason":"The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."},
+    {"case_id":"EXP001-G003","expected_decision":"unchecked","expected_applicability":"not_proven","expected_selected_requirement_id":"EXP001-R003","expected_trace_relations":["missing_condition"],"negative_case":false,"reason":"The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."},
+    {"case_id":"EXP001-N001","expected_decision":"unchecked","expected_applicability":"not_applicable","expected_selected_requirement_id":null,"expected_trace_relations":[],"negative_case":true,"reason":"Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."},
+    {"case_id":"EXP001-N002","expected_decision":"unchecked","expected_applicability":"not_applicable","expected_selected_requirement_id":null,"expected_trace_relations":[],"negative_case":true,"reason":"A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."}
   ],
   "evaluation_rules": {
     "primary_metric":"decision_accuracy",
     "critical_metric":"false_violation_rate",
-    "additional_metrics":["unsupported_violation_rate","unchecked_precision","unchecked_recall","normative_applicability_accuracy","evidence_trace_completeness"],
+    "additional_metrics":["unsupported_violation_rate","unchecked_precision","unchecked_recall","normative_applicability_accuracy","evidence_trace_completeness","evidence_trace_validity","selected_requirement_accuracy"],
     "critical_failure":"Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
+    "applicability_rule":"Applicability must be evaluated before normative value comparison. A conditional requirement with an unproven mandatory condition must be reported as not_proven; the model must not infer the missing condition.",
+    "selection_rule":"selected_requirement_id may identify a candidate only when that requirement is the one used for the decision. For unchecked conditional cases it may identify the unresolved candidate, but applicability must remain not_proven.",
+    "evidence_trace_rule":"Every trace item must be a structured object with valid fact_id, requirement_id, relation and applicability. A missing_condition relation requires an explicit missing_condition field. Trace validity is distinct from trace presence. When the benchmark expects a selected requirement, at least one valid trace item must reference it and use an expected relation.",
     "golden_gate":"Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
   }
 }

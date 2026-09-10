@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence_trace.schema.json",
+  "title": "Evidence Trace",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["fact_id", "requirement_id", "relation", "applicability"],
+    "properties": {
+      "fact_id": {"type": "string"},
+      "requirement_id": {"type": "string"},
+      "relation": {
+        "type": "string",
+        "enum": [
+          "supports_compliance",
+          "supports_violation",
+          "parameter_mismatch",
+          "not_relevant",
+          "missing_condition",
+          "obsolete_normative_reference"
+        ]
+      },
+      "applicability": {
+        "type": "string",
+        "enum": ["applicable", "not_applicable", "not_proven"]
+      },
+      "missing_condition": {"type": ["string", "null"]}
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {"relation": {"const": "missing_condition"}}
+        },
+        "then": {
+          "required": ["missing_condition"],
+          "properties": {"missing_condition": {"type": "string", "minLength": 1}}
+        }
+      }
+    ]
+  }
+}
