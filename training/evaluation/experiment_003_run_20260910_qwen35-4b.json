@@ -1,0 +1,661 @@
+{
+  "run_type": "AI_ENGINEER_BENCHMARK",
+  "benchmark": {
+    "benchmark_id": "EXP001-BM-v2",
+    "experiment_id": "experiment_001",
+    "status": "ready_for_ai_run",
+    "scope": {
+      "discipline": "ВК",
+      "normative_base": [
+        "СП 30.13330.2020"
+      ],
+      "project": "current VK project used in the first audit experiment"
+    },
+    "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions, with conditional applicability evaluated before value comparison.",
+    "cases": [
+      {
+        "case_id": "EXP001-C001",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."
+      },
+      {
+        "case_id": "EXP001-C002",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."
+      },
+      {
+        "case_id": "EXP001-C003",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": false,
+        "reason": "Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."
+      },
+      {
+        "case_id": "EXP001-G001",
+        "expected_decision": "violation",
+        "expected_applicability": "applicable",
+        "expected_selected_requirement_id": "EXP001-R001",
+        "expected_trace_relations": [
+          "obsolete_normative_reference"
+        ],
+        "negative_case": false,
+        "reason": "The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."
+      },
+      {
+        "case_id": "EXP001-G002",
+        "expected_decision": "compliant",
+        "expected_applicability": "applicable",
+        "expected_selected_requirement_id": "EXP001-R002",
+        "expected_trace_relations": [
+          "supports_compliance"
+        ],
+        "negative_case": false,
+        "reason": "The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."
+      },
+      {
+        "case_id": "EXP001-G003",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_proven",
+        "expected_selected_requirement_id": "EXP001-R003",
+        "expected_trace_relations": [
+          "missing_condition"
+        ],
+        "negative_case": false,
+        "reason": "The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."
+      },
+      {
+        "case_id": "EXP001-N001",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_applicable",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": true,
+        "reason": "Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."
+      },
+      {
+        "case_id": "EXP001-N002",
+        "expected_decision": "unchecked",
+        "expected_applicability": "not_applicable",
+        "expected_selected_requirement_id": null,
+        "expected_trace_relations": [],
+        "negative_case": true,
+        "reason": "A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."
+      }
+    ],
+    "evaluation_rules": {
+      "primary_metric": "decision_accuracy",
+      "critical_metric": "false_violation_rate",
+      "additional_metrics": [
+        "unsupported_violation_rate",
+        "unchecked_precision",
+        "unchecked_recall",
+        "normative_applicability_accuracy",
+        "evidence_trace_completeness",
+        "evidence_trace_validity",
+        "selected_requirement_accuracy"
+      ],
+      "critical_failure": "Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
+      "applicability_rule": "Applicability must be evaluated before normative value comparison. A conditional requirement with an unproven mandatory condition must be reported as not_proven; the model must not infer the missing condition.",
+      "selection_rule": "selected_requirement_id may identify a candidate only when that requirement is the one used for the decision. For unchecked conditional cases it may identify the unresolved candidate, but applicability must remain not_proven.",
+      "evidence_trace_rule": "Every trace item must be a structured object with valid fact_id, requirement_id, relation and applicability. A missing_condition relation requires an explicit missing_condition field. Trace validity is distinct from trace presence. When the benchmark expects a selected requirement, at least one valid trace item must reference it and use an expected relation.",
+      "golden_gate": "Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
+    }
+  },
+  "summary": {
+    "benchmark_id": "EXP001-BM-v2",
+    "model": "qwen3.5-4b",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "total_cases": 8,
+    "decision_accuracy": 0.875,
+    "false_violation_rate": 0.0,
+    "unsupported_violation_rate": 0.0,
+    "unchecked_precision": 0.8571428571428571,
+    "unchecked_recall": 1.0,
+    "normative_applicability_accuracy": 0.625,
+    "selected_requirement_accuracy": 0.875,
+    "evidence_trace_completeness": 0.75,
+    "evidence_trace_validity": 0.875,
+    "critical_failure": false
+  },
+  "results": [
+    {
+      "case_id": "EXP001-C001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия хотя бы одного кандидата невозможно проверить применимость условий или соответствие числовых значений.",
+        "missing_evidence": [
+          "Отсутствуют данные о нормативных требованиях для сравнения с проектным фактом EXP001-F003."
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия хотя бы одного кандидата невозможно проверить применимость условий или соответствие числовых значений.\",\n  \"missing_evidence\": [\"Отсутствуют данные о нормативных требованиях для сравнения с проектным фактом EXP001-F003.\"],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-zw49s91oiqh136e7l7ilzh",
+        "object": "chat.completion",
+        "created": 1789020614,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия хотя бы одного кандидата невозможно проверить применимость условий или соответствие числовых значений.\",\n  \"missing_evidence\": [\"Отсутствуют данные о нормативных требованиях для сравнения с проектным фактом EXP001-F003.\"],\n  \"evidence_trace\": []\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1070,
+          "completion_tokens": 136,
+          "total_tokens": 1206,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-C002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно определить применимое требование и проверить соответствие проектных значений.",
+        "missing_evidence": [
+          {
+            "fact_id": null,
+            "requirement_id": null,
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Отсутствует список кандидатских нормативных требований (candidate_normative_requirements) для анализа."
+          }
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно определить применимое требование и проверить соответствие проектных значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список кандидатских нормативных требований (candidate_normative_requirements) для анализа.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-jfheqt1i7trm6khpcaog9",
+        "object": "chat.completion",
+        "created": 1789020616,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатских нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно определить применимое требование и проверить соответствие проектных значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список кандидатских нормативных требований (candidate_normative_requirements) для анализа.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1021,
+          "completion_tokens": 186,
+          "total_tokens": 1207,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-C003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Список кандидатных нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно выполнить проверку соответствия проектных значений нормативным требованиям.",
+        "missing_evidence": [
+          {
+            "fact_id": null,
+            "requirement_id": null,
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Отсутствует список кандидатных нормативных требований для проверки соответствия параметру 'диаметр трубопровода' системы 'wastewater'."
+          }
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатных нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно выполнить проверку соответствия проектных значений нормативным требованиям.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список кандидатных нормативных требований для проверки соответствия параметру 'диаметр трубопровода' системы 'wastewater'.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-65j9vdqfspy6twlebv4g8",
+        "object": "chat.completion",
+        "created": 1789020618,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Список кандидатных нормативных требований пуст (candidate_normative_requirements: []). Без наличия конкретных нормативных ссылок в запросе невозможно выполнить проверку соответствия проектных значений нормативным требованиям.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список кандидатных нормативных требований для проверки соответствия параметру 'диаметр трубопровода' системы 'wastewater'.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1026,
+          "completion_tokens": 199,
+          "total_tokens": 1225,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-G001",
+      "expected_decision": "violation",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R001",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": "EXP001-R001",
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт содержит ссылку на СП 30.13330.2012, однако не доказано, что этот документ используется как действующее нормативное основание для принятия проектных решений в текущем проекте. Условие применимости требует прямого использования замененного документа как нормы.",
+        "missing_evidence": [
+          "Отсутствует прямое указание на то, что СП 30.13330.2012 является действующим нормативным основанием для данного проекта (например, в разделе 'Применяемые нормы и стандарты' или в тексте обоснования как обязательной ссылки)."
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F009",
+            "requirement_id": "EXP001-R001",
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Проект не содержит доказательств прямого использования СП 30.13330.2012 как действующего нормативного основания для принятия проектных решений."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": false,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": \"EXP001-R001\",\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт содержит ссылку на СП 30.13330.2012, однако не доказано, что этот документ используется как действующее нормативное основание для принятия проектных решений в текущем проекте. Условие применимости требует прямого использования замененного документа как нормы.\",\n  \"missing_evidence\": [\n    \"Отсутствует прямое указание на то, что СП 30.13330.2012 является действующим нормативным основанием для данного проекта (например, в разделе 'Применяемые нормы и стандарты' или в тексте обоснования как обязательной ссылки).\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Проект не содержит доказательств прямого использования СП 30.13330.2012 как действующего нормативного основания для принятия проектных решений.\"\n    }\n  ]\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-a98bfeqggllbxojq9nmte",
+        "object": "chat.completion",
+        "created": 1789020621,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": \"EXP001-R001\",\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт содержит ссылку на СП 30.13330.2012, однако не доказано, что этот документ используется как действующее нормативное основание для принятия проектных решений в текущем проекте. Условие применимости требует прямого использования замененного документа как нормы.\",\n  \"missing_evidence\": [\n    \"Отсутствует прямое указание на то, что СП 30.13330.2012 является действующим нормативным основанием для данного проекта (например, в разделе 'Применяемые нормы и стандарты' или в тексте обоснования как обязательной ссылки).\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Проект не содержит доказательств прямого использования СП 30.13330.2012 как действующего нормативного основания для принятия проектных решений.\"\n    }\n  ]\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1512,
+          "completion_tokens": 330,
+          "total_tokens": 1842,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-G002",
+      "expected_decision": "compliant",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R002",
+      "negative_case": false,
+      "prediction": {
+        "decision": "compliant",
+        "selected_requirement_id": "EXP001-R002",
+        "applicability": "applicable",
+        "confidence": 0.95,
+        "reason": "Проектная система (бытовая канализация выше отм. 0.000) полностью соответствует системному и объектно-параметрическому охвату нормативного требования (wastewater/internal/трубы бытовой канализации/материал). Условие применимости 'система бытовых сточных вод' доказано фактом F008. Проектное значение 'полипропиленовые трубы' является подмножеством допустимых полимерных материалов согласно нормативу.",
+        "missing_evidence": [],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F008",
+            "requirement_id": "EXP001-R002",
+            "relation": "supports_compliance",
+            "applicability": "applicable",
+            "missing_condition": null
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"compliant\",\n  \"selected_requirement_id\": \"EXP001-R002\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проектная система (бытовая канализация выше отм. 0.000) полностью соответствует системному и объектно-параметрическому охвату нормативного требования (wastewater/internal/трубы бытовой канализации/материал). Условие применимости 'система бытовых сточных вод' доказано фактом F008. Проектное значение 'полипропиленовые трубы' является подмножеством допустимых полимерных материалов согласно нормативу.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F008\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"supports_compliance\",\n      \"applicability\": \"applicable\",\n      \"missing_condition\": null\n    }\n  ]\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-gl5qf1q62rl42jv0n28336",
+        "object": "chat.completion",
+        "created": 1789020625,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"compliant\",\n  \"selected_requirement_id\": \"EXP001-R002\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проектная система (бытовая канализация выше отм. 0.000) полностью соответствует системному и объектно-параметрическому охвату нормативного требования (wastewater/internal/трубы бытовой канализации/материал). Условие применимости 'система бытовых сточных вод' доказано фактом F008. Проектное значение 'полипропиленовые трубы' является подмножеством допустимых полимерных материалов согласно нормативу.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F008\",\n      \"requirement_id\": \"EXP001-R002\",\n      \"relation\": \"supports_compliance\",\n      \"applicability\": \"applicable\",\n      \"missing_condition\": null\n    }\n  ]\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1471,
+          "completion_tokens": 263,
+          "total_tokens": 1734,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-G003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": "EXP001-R003",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт указывает на высоту выхода 0,2 м, но не содержит доказательств типа кровли или наличия/отсутствия сборной вентиляционной шахты, что является обязательным условием для применения нормативного требования СП 30.13330.2020 п. 18.18.",
+        "missing_evidence": [
+          "Тип кровли (плоская неэксплуатируемая/скатная или плоская эксплуатируемая)",
+          "Наличие или отсутствие сборной вентиляционной шахты"
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F009",
+            "requirement_id": "EXP001-R003",
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Не доказано значение параметра 'тип кровли' и 'расположение относительно сборной вентиляционной шахты', необходимые для выбора нормативного значения (0,2 м или 3,0 м) согласно условию EXP001-R003-COND-01."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": true,
+        "selected_requirement_correct": false,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт указывает на высоту выхода 0,2 м, но не содержит доказательств типа кровли или наличия/отсутствия сборной вентиляционной шахты, что является обязательным условием для применения нормативного требования СП 30.13330.2020 п. 18.18.\",\n  \"missing_evidence\": [\n    \"Тип кровли (плоская неэксплуатируемая/скатная или плоская эксплуатируемая)\",\n    \"Наличие или отсутствие сборной вентиляционной шахты\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Не доказано значение параметра 'тип кровли' и 'расположение относительно сборной вентиляционной шахты', необходимые для выбора нормативного значения (0,2 м или 3,0 м) согласно условию EXP001-R003-COND-01.\"\n    }\n  ]\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-61k69mg6p6r5jm4snwvbul",
+        "object": "chat.completion",
+        "created": 1789020629,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт указывает на высоту выхода 0,2 м, но не содержит доказательств типа кровли или наличия/отсутствия сборной вентиляционной шахты, что является обязательным условием для применения нормативного требования СП 30.13330.2020 п. 18.18.\",\n  \"missing_evidence\": [\n    \"Тип кровли (плоская неэксплуатируемая/скатная или плоская эксплуатируемая)\",\n    \"Наличие или отсутствие сборной вентиляционной шахты\"\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R003\",\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Не доказано значение параметра 'тип кровли' и 'расположение относительно сборной вентиляционной шахты', необходимые для выбора нормативного значения (0,2 м или 3,0 м) согласно условию EXP001-R003-COND-01.\"\n    }\n  ]\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1550,
+          "completion_tokens": 320,
+          "total_tokens": 1870,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-N001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Нет предоставленных кандидатов нормативных требований (candidate_normative_requirements: []). Без наличия нормативной ссылки невозможно проверить применимость условий или соответствие значений.",
+        "missing_evidence": [
+          {
+            "fact_id": null,
+            "requirement_id": null,
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Отсутствует список candidate_normative_requirements для анализа применимости условий."
+          }
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": true,
+        "evidence_trace_complete": true,
+        "unsupported_violation": false,
+        "trace_errors": []
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Нет предоставленных кандидатов нормативных требований (candidate_normative_requirements: []). Без наличия нормативной ссылки невозможно проверить применимость условий или соответствие значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список candidate_normative_requirements для анализа применимости условий.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-113vne8aew0b73x4wfg2ckb",
+        "object": "chat.completion",
+        "created": 1789020633,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Нет предоставленных кандидатов нормативных требований (candidate_normative_requirements: []). Без наличия нормативной ссылки невозможно проверить применимость условий или соответствие значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список candidate_normative_requirements для анализа применимости условий.\"\n    }\n  ],\n  \"evidence_trace\": []\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1059,
+          "completion_tokens": 169,
+          "total_tokens": 1228,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    },
+    {
+      "case_id": "EXP001-N002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "В списке кандидатов нормативных требований (candidate_normative_requirements) отсутствует какое-либо требование для проверки. Без наличия кандидата невозможно выполнить проверку применимости или сравнение значений.",
+        "missing_evidence": [
+          {
+            "fact_id": null,
+            "requirement_id": null,
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Отсутствует список candidate_normative_requirements для сопоставления с проектным фактом EXP001-F003."
+          }
+        ],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F003",
+            "requirement_id": null,
+            "relation": "missing_condition",
+            "applicability": "not_proven",
+            "missing_condition": "Нет данных о нормативных требованиях для проверки применимости."
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_correct": false,
+        "selected_requirement_correct": true,
+        "evidence_trace_valid": false,
+        "evidence_trace_complete": false,
+        "unsupported_violation": false,
+        "trace_errors": [
+          "trace[0] unknown requirement_id: None"
+        ]
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"В списке кандидатов нормативных требований (candidate_normative_requirements) отсутствует какое-либо требование для проверки. Без наличия кандидата невозможно выполнить проверку применимости или сравнение значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список candidate_normative_requirements для сопоставления с проектным фактом EXP001-F003.\"\n    }\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Нет данных о нормативных требованиях для проверки применимости.\"\n    }\n  ]\n}\n```",
+      "parse_error": null,
+      "response_json": {
+        "id": "chatcmpl-qdc4dt7sd88pw2p2u02tq",
+        "object": "chat.completion",
+        "created": 1789020635,
+        "model": "qwen3.5-4b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"В списке кандидатов нормативных требований (candidate_normative_requirements) отсутствует какое-либо требование для проверки. Без наличия кандидата невозможно выполнить проверку применимости или сравнение значений.\",\n  \"missing_evidence\": [\n    {\n      \"fact_id\": null,\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Отсутствует список candidate_normative_requirements для сопоставления с проектным фактом EXP001-F003.\"\n    }\n  ],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F003\",\n      \"requirement_id\": null,\n      \"relation\": \"missing_condition\",\n      \"applicability\": \"not_proven\",\n      \"missing_condition\": \"Нет данных о нормативных требованиях для проверки применимости.\"\n    }\n  ]\n}\n```",
+              "reasoning_content": "",
+              "tool_calls": []
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1070,
+          "completion_tokens": 261,
+          "total_tokens": 1331,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "stats": {},
+        "system_fingerprint": "qwen3.5-4b"
+      }
+    }
+  ]
+}
