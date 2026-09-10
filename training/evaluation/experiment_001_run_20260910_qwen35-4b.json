@@ -1,0 +1,310 @@
+{
+  "run_type": "AI_ENGINEER_BENCHMARK",
+  "benchmark": {
+    "benchmark_id": "EXP001-BM-v1",
+    "experiment_id": "experiment_001",
+    "status": "ready_for_ai_run",
+    "scope": {
+      "discipline": "ВК",
+      "normative_base": [
+        "СП 30.13330.2020"
+      ],
+      "project": "current VK project used in the first audit experiment"
+    },
+    "purpose": "Measure whether the AI Engineer preserves verified expert boundaries between project facts, normative applicability and audit decisions.",
+    "cases": [
+      {
+        "case_id": "EXP001-C001",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Project fact 8.48 м³/сут is confirmed, but no applicable normative requirement with a proven matching parameter and unit is verified."
+      },
+      {
+        "case_id": "EXP001-C002",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."
+      },
+      {
+        "case_id": "EXP001-C003",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."
+      },
+      {
+        "case_id": "EXP001-G001",
+        "expected_decision": "violation",
+        "negative_case": false,
+        "reason": "The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."
+      },
+      {
+        "case_id": "EXP001-G002",
+        "expected_decision": "compliant",
+        "negative_case": false,
+        "reason": "The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."
+      },
+      {
+        "case_id": "EXP001-G003",
+        "expected_decision": "unchecked",
+        "negative_case": false,
+        "reason": "The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."
+      },
+      {
+        "case_id": "EXP001-N001",
+        "expected_decision": "unchecked",
+        "negative_case": true,
+        "reason": "Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."
+      },
+      {
+        "case_id": "EXP001-N002",
+        "expected_decision": "unchecked",
+        "negative_case": true,
+        "reason": "A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."
+      }
+    ],
+    "evaluation_rules": {
+      "primary_metric": "decision_accuracy",
+      "critical_metric": "false_violation_rate",
+      "additional_metrics": [
+        "unsupported_violation_rate",
+        "unchecked_precision",
+        "unchecked_recall",
+        "normative_applicability_accuracy",
+        "evidence_trace_completeness"
+      ],
+      "critical_failure": "Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
+      "golden_gate": "Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
+    }
+  },
+  "summary": {
+    "benchmark_id": "EXP001-BM-v1",
+    "model": "qwen3.5-4b",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "total_cases": 8,
+    "decision_accuracy": 0.75,
+    "false_violation_rate": 0.0,
+    "applicability_field_valid_rate": 1.0,
+    "evidence_trace_completeness": 0.625,
+    "critical_failure": false
+  },
+  "results": [
+    {
+      "case_id": "EXP001-C001",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт (расчетный объем стоков) не имеет семантического пересечения с условиями применимости ни одного из предложенных нормативных требований.",
+        "missing_evidence": [
+          "Отсутствие информации о материалах труб и соединительных деталей в проекте для проверки требования EXP001-R002 (требование касается 'труб', а факт — 'объема стоков').",
+          "Отсутствие информации о конструкции вытяжной части стояка, типе кровли или высоте выхода над кровлей для проверки требования EXP001-R003.",
+          "Проектный факт относится к параметру 'суточный объём стоков', тогда как все три кандидата (R001, R002, R003) касаются нормативных ссылок, материалов труб или геометрических размеров выхода стояка."
+        ],
+        "evidence_trace": [
+          [
+            "EXP001-F003",
+            "EXP001-R001"
+          ],
+          [
+            "EXP001-F003",
+            "EXP001-R002"
+          ],
+          [
+            "EXP001-F003",
+            "EXP001-R003"
+          ]
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт (расчетный объем стоков) не имеет семантического пересечения с условиями применимости ни одного из предложенных нормативных требований.\",\n  \"missing_evidence\": [\n    \"Отсутствие информации о материалах труб и соединительных деталей в проекте для проверки требования EXP001-R002 (требование касается 'труб', а факт — 'объема стоков').\",\n    \"Отсутствие информации о конструкции вытяжной части стояка, типе кровли или высоте выхода над кровлей для проверки требования EXP001-R003.\",\n    \"Проектный факт относится к параметру 'суточный объём стоков', тогда как все три кандидата (R001, R002, R003) касаются нормативных ссылок, материалов труб или геометрических размеров выхода стояка.\"\n  ],\n  \"evidence_trace\": [\n    [\"EXP001-F003\", \"EXP001-R001\"],\n    [\"EXP001-F003\", \"EXP001-R002\"],\n    [\"EXP001-F003\", \"EXP001-R003\"]\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C002",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт касается диаметра трубопровода (160 мм), а не материала труб или высоты выхода стояка над кровлей. Ни одно из предложенных нормативных требований (R001 - актуальность ссылки, R002 - материал труб, R003 - высота выхода) не содержит условия для проверки параметра 'диаметр трубопровода'. Требование R002 касается материала, но не диаметра.",
+        "missing_evidence": [
+          "Нормативное требование с параметром 'диаметр трубопровода' или аналогичным (например, минимальный диаметр канализационной трубы)",
+          "Условие в нормативном требовании, связывающее систему 'внутренняя самотечная бытовая канализация' с проверкой диаметра"
+        ],
+        "evidence_trace": [
+          "fact_id: EXP001-F004 (параметр: диаметр трубопровода)",
+          "requirement_id: EXP001-R002 (параметр: материал - несоответствие параметров)"
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт касается диаметра трубопровода (160 мм), а не материала труб или высоты выхода стояка над кровлей. Ни одно из предложенных нормативных требований (R001 - актуальность ссылки, R002 - материал труб, R003 - высота выхода) не содержит условия для проверки параметра 'диаметр трубопровода'. Требование R002 касается материала, но не диаметра.\",\n  \"missing_evidence\": [\n    \"Нормативное требование с параметром 'диаметр трубопровода' или аналогичным (например, минимальный диаметр канализационной трубы)\",\n    \"Условие в нормативном требовании, связывающее систему 'внутренняя самотечная бытовая канализация' с проверкой диаметра\"\n  ],\n  \"evidence_trace\": [\n    \"fact_id: EXP001-F004 (параметр: диаметр трубопровода)\",\n    \"requirement_id: EXP001-R002 (параметр: материал - несоответствие параметров)\"\n  ]\n}",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-C003",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт касается диаметра выпуска (110 мм), а не материала труб или высоты выхода над кровлей. Ни одно из предложенных требований (R001 - актуальность ссылки, R002 - материал, R003 - высота выхода) не содержит условия, связанного с параметром 'диаметр трубопровода'.",
+        "missing_evidence": [
+          "Нет требования в списке кандидатов, регулирующего минимальный или максимальный диаметр выпуска бытовой канализации.",
+          "Требование R002 регулирует материал, а не размер."
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт касается диаметра выпуска (110 мм), а не материала труб или высоты выхода над кровлей. Ни одно из предложенных требований (R001 - актуальность ссылки, R002 - материал, R003 - высота выхода) не содержит условия, связанного с параметром 'диаметр трубопровода'.\",\n  \"missing_evidence\": [\n    \"Нет требования в списке кандидатов, регулирующего минимальный или максимальный диаметр выпуска бытовой канализации.\",\n    \"Требование R002 регулирует материал, а не размер.\"\n  ],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G001",
+      "expected_decision": "violation",
+      "negative_case": false,
+      "prediction": {
+        "decision": "compliant",
+        "selected_requirement_id": "EXP001-R003",
+        "applicability": "applicable",
+        "confidence": 0.95,
+        "reason": "Проектный факт (высота выхода над кровлей 0,2 м) полностью соответствует одному из допустимых значений в нормативном требовании СП 30.13330.2020 п. 18.18 для плоской неэксплуатируемой кровли.",
+        "missing_evidence": [],
+        "evidence_trace": [
+          "EXP001-F009",
+          "EXP001-R003"
+        ]
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"compliant\",\n  \"selected_requirement_id\": \"EXP001-R003\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проектный факт (высота выхода над кровлей 0,2 м) полностью соответствует одному из допустимых значений в нормативном требовании СП 30.13330.2020 п. 18.18 для плоской неэксплуатируемой кровли.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\"EXP001-F009\", \"EXP001-R003\"]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G002",
+      "expected_decision": "compliant",
+      "negative_case": false,
+      "prediction": {
+        "decision": "compliant",
+        "selected_requirement_id": "EXP001-R002",
+        "applicability": "applicable",
+        "confidence": 0.95,
+        "reason": "Проектный факт (F008) описывает систему бытовой канализации выше отметки 0.000, использующую полипропиленовые трубы. Требование R002 прямо регламентирует допустимые материалы для систем бытовых сточных вод, включая полимерные материалы, что соответствует используемому в проекте материалу.",
+        "missing_evidence": [],
+        "evidence_trace": [
+          {
+            "fact_id": "EXP001-F008",
+            "requirement_id": "EXP001-R002"
+          }
+        ]
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"compliant\",\n  \"selected_requirement_id\": \"EXP001-R002\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проектный факт (F008) описывает систему бытовой канализации выше отметки 0.000, использующую полипропиленовые трубы. Требование R002 прямо регламентирует допустимые материалы для систем бытовых сточных вод, включая полимерные материалы, что соответствует используемому в проекте материалу.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F008\",\n      \"requirement_id\": \"EXP001-R002\"\n    }\n  ]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-G003",
+      "expected_decision": "unchecked",
+      "negative_case": false,
+      "prediction": {
+        "decision": "compliant",
+        "selected_requirement_id": "EXP001-R003",
+        "applicability": "applicable",
+        "confidence": 0.95,
+        "reason": "Проектный факт (высота выхода над кровлей 0,2 м) полностью соответствует нормативному требованию для плоской неэксплуатируемой кровли, указанному в п. 18.18 СП 30.13330.2020.",
+        "missing_evidence": [],
+        "evidence_trace": [
+          "EXP001-F009",
+          "EXP001-R003"
+        ]
+      },
+      "checks": {
+        "decision_correct": false,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": true
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"compliant\",\n  \"selected_requirement_id\": \"EXP001-R003\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проектный факт (высота выхода над кровлей 0,2 м) полностью соответствует нормативному требованию для плоской неэксплуатируемой кровли, указанному в п. 18.18 СП 30.13330.2020.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\"EXP001-F009\", \"EXP001-R003\"]\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-N001",
+      "expected_decision": "unchecked",
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт касается установки узла учёта сточных вод в водоотводной камере или павильоне (факт EXP001-F007). Ни одно из предложенных нормативных требований не регулирует вопросы размещения узлов учёта, выбора типа помещения для их установки или конструктивных особенностей водоотводных камер. Требование R002 касается материалов труб бытовой канализации, а R003 — высоты выхода вытяжных частей стояков над кровлей; ни одно из них не применимо к факту установки узла учёта.",
+        "missing_evidence": [
+          "Отсутствует требование в базе СП 30.13330.2020, регламентирующее размещение узлов учёта сточных вод в водоотводных камерах или павильонах."
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "```json\n{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт касается установки узла учёта сточных вод в водоотводной камере или павильоне (факт EXP001-F007). Ни одно из предложенных нормативных требований не регулирует вопросы размещения узлов учёта, выбора типа помещения для их установки или конструктивных особенностей водоотводных камер. Требование R002 касается материалов труб бытовой канализации, а R003 — высоты выхода вытяжных частей стояков над кровлей; ни одно из них не применимо к факту установки узла учёта.\",\n  \"missing_evidence\": [\n    \"Отсутствует требование в базе СП 30.13330.2020, регламентирующее размещение узлов учёта сточных вод в водоотводных камерах или павильонах.\"\n  ],\n  \"evidence_trace\": []\n}\n```",
+      "parse_error": null
+    },
+    {
+      "case_id": "EXP001-N002",
+      "expected_decision": "unchecked",
+      "negative_case": true,
+      "prediction": {
+        "decision": "unchecked",
+        "selected_requirement_id": null,
+        "applicability": "not_proven",
+        "confidence": 0.0,
+        "reason": "Проектный факт (расчетный объем стоков) не содержит информации о материалах труб или высоте выхода стояка над кровлей, необходимых для проверки требований R002 и R003.",
+        "missing_evidence": [
+          "Отсутствие данных о материалах труб в проекте",
+          "Отсутствие данных о конструкции выхода вытяжной части стояка"
+        ],
+        "evidence_trace": []
+      },
+      "checks": {
+        "decision_correct": true,
+        "false_violation_critical": false,
+        "applicability_present": true,
+        "evidence_trace_complete": false
+      },
+      "raw_response": "{\n  \"decision\": \"unchecked\",\n  \"selected_requirement_id\": null,\n  \"applicability\": \"not_proven\",\n  \"confidence\": 0.0,\n  \"reason\": \"Проектный факт (расчетный объем стоков) не содержит информации о материалах труб или высоте выхода стояка над кровлей, необходимых для проверки требований R002 и R003.\",\n  \"missing_evidence\": [\n    \"Отсутствие данных о материалах труб в проекте\",\n    \"Отсутствие данных о конструкции выхода вытяжной части стояка\"\n  ],\n  \"evidence_trace\": []\n}",
+      "parse_error": null
+    }
+  ]
+}
