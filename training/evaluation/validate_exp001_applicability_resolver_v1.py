@@ -142,22 +142,23 @@ def main() -> int:
         }
         rows.append(row)
 
-    # Expected resolver outcomes are validation expectations, not benchmark
-    # inputs and are intentionally separate from case-level golden answers.
+    # Expected resolver outcomes describe the resolver's own status contract.
+    # They are validation expectations, not benchmark inputs and are intentionally
+    # separate from case-level golden answers.
     expected_resolver = {
-        "EXP001-G001": ("applicable", True),
-        "EXP001-G002": ("applicable", True),
-        "EXP001-G003": ("not_proven", False),
-        "EXP001-C001": ("no_canonical_candidate", None),
-        "EXP001-C002": ("no_canonical_candidate", None),
-        "EXP001-C003": ("no_canonical_candidate", None),
-        "EXP001-N001": ("no_canonical_candidate", None),
-        "EXP001-N002": ("no_canonical_candidate", None),
+        "EXP001-G001": ("resolved", True, "applicable"),
+        "EXP001-G002": ("resolved", True, "applicable"),
+        "EXP001-G003": ("not_proven", False, "not_proven"),
+        "EXP001-C001": ("no_canonical_candidate", None, None),
+        "EXP001-C002": ("no_canonical_candidate", None, None),
+        "EXP001-C003": ("no_canonical_candidate", None, None),
+        "EXP001-N001": ("no_canonical_candidate", None, None),
+        "EXP001-N002": ("no_canonical_candidate", None, None),
     }
 
     failures = []
     for row in rows:
-        expected_status, expected_proven = expected_resolver[row["case_id"]]
+        expected_status, expected_proven, expected_applicability = expected_resolver[row["case_id"]]
         if row["resolver_status"] != expected_status:
             failures.append({"case_id": row["case_id"], "error": "status mismatch", "actual": row["resolver_status"], "expected": expected_status})
             continue
@@ -165,6 +166,9 @@ def main() -> int:
             actual = row["resolver_result"]["condition_proven"]
             if actual != expected_proven:
                 failures.append({"case_id": row["case_id"], "error": "condition_proven mismatch", "actual": actual, "expected": expected_proven})
+            actual_applicability = row["resolver_result"]["resolved_applicability"]
+            if actual_applicability != expected_applicability:
+                failures.append({"case_id": row["case_id"], "error": "resolved_applicability mismatch", "actual": actual_applicability, "expected": expected_applicability})
 
     artifact = {
         "run_type": "AI_ENGINEER_DETERMINISTIC_VALIDATION",
