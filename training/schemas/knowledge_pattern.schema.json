@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Dach1980/VKS_Expert_AI/blob/main/training/schemas/knowledge_pattern.schema.json",
+  "title": "Project Expert AI Knowledge Pattern",
+  "description": "Schema for reusable expert reasoning patterns in the Training / Engineering Knowledge layer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "description",
+    "patterns"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "patterns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/pattern"
+      }
+    }
+  },
+  "$defs": {
+    "pattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pattern_id",
+        "name",
+        "type",
+        "source_cases",
+        "principle",
+        "required_evidence",
+        "reasoning_boundary",
+        "expected_behavior"
+      ],
+      "properties": {
+        "pattern_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "principle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "reasoning_boundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "forbidden_behavior": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "expected_behavior": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
