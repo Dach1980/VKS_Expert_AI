@@ -7,7 +7,6 @@ from pathlib import Path
 
 from run_experiment_001 import (
     DEFAULT_BASE_URL,
-    DEFAULT_MODEL,
     build_case_input,
     call_qwen,
     evaluate,
@@ -16,14 +15,18 @@ from run_experiment_001 import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-EVAL = ROOT / "training" / "evaluation"
+TRAINING = ROOT / "training"
+EXP = TRAINING / "datasets" / "experiment_001"
+EVAL = TRAINING / "evaluation"
 
 EXPERIMENT_ID = "EXP001-G001-EVIDENCE-RESOLUTION-V1"
+EXPERIMENT_MODEL = "qwen3.5-4b"
 OUTPUT_DEFAULT = EVAL / "experiment_005_g001_evidence_resolution_v1_qwen35-4b.json"
 
 # This experiment tests whether deterministic normalization of an observed
 # normative reference helps the same Qwen3.5-4B reasoning pipeline resolve
 # applicability. It must never emit the golden answer itself.
+
 
 def resolve_normative_reference(evidence_text: str, context: str = "") -> dict:
     text = f"{evidence_text} {context}".strip()
@@ -79,10 +82,12 @@ def build_resolution_input(case: dict, facts: dict[str, dict], requirements: dic
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run isolated EXP001 G001 evidence-resolution experiment against local Qwen."
+        description="Run isolated EXP001 G001 evidence-resolution experiment against local Qwen3.5-4B."
     )
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    # Keep the experiment model fixed for reproducibility. Do not inherit
+    # DEFAULT_MODEL from the base runner, which may target another model.
+    parser.add_argument("--model", default=EXPERIMENT_MODEL)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--output", default=str(OUTPUT_DEFAULT))
     args = parser.parse_args()
