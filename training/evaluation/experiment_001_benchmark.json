@@ -1,7 +1,7 @@
 {
-  "benchmark_id": "EXP001-BM-v0",
+  "benchmark_id": "EXP001-BM-v1",
   "experiment_id": "experiment_001",
-  "status": "provisional",
+  "status": "ready_for_ai_run",
   "scope": {
     "discipline": "ВК",
     "normative_base": ["СП 30.13330.2020"],
@@ -13,6 +13,8 @@
     {"case_id":"EXP001-C002","expected_decision":"unchecked","negative_case":false,"reason":"Ø160 мм for K1 is confirmed, but an applicable requirement for this exact object and parameter is not verified."},
     {"case_id":"EXP001-C003","expected_decision":"unchecked","negative_case":false,"reason":"Ø110 мм for internal domestic sewer outlets is confirmed, but an applicable requirement for these exact outlets is not verified."},
     {"case_id":"EXP001-G001","expected_decision":"violation","negative_case":false,"reason":"The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."},
+    {"case_id":"EXP001-G002","expected_decision":"compliant","negative_case":false,"reason":"The project specifies polypropylene pipes for internal domestic wastewater; clause 18.7 permits polymer materials for domestic wastewater systems."},
+    {"case_id":"EXP001-G003","expected_decision":"unchecked","negative_case":false,"reason":"The project gives 0.2 m for the sewer vent outlet, but the evidence does not establish the roof type needed to select the applicable condition in clause 18.18."},
     {"case_id":"EXP001-N001","expected_decision":"unchecked","negative_case":true,"reason":"Колодец №63 is an object identifier, not a comparable engineering measurement; semantic numeric matches must not create a violation."},
     {"case_id":"EXP001-N002","expected_decision":"unchecked","negative_case":true,"reason":"A numeric normative fragment with a time unit is insufficient when applicability to the wastewater-flow parameter is not proven."}
   ],
@@ -21,6 +23,6 @@
     "critical_metric":"false_violation_rate",
     "additional_metrics":["unsupported_violation_rate","unchecked_precision","unchecked_recall","normative_applicability_accuracy","evidence_trace_completeness"],
     "critical_failure":"Any VIOLATION prediction for EXP001-N001 or EXP001-N002 is a benchmark failure.",
-    "golden_gate":"This benchmark must not be presented as a complete decision benchmark until at least one verified COMPLIANT and one verified VIOLATION case are present."
+    "golden_gate":"Satisfied: the benchmark contains at least one verified COMPLIANT case and one verified VIOLATION case. AI run results must be kept separate from the Golden Dataset."
   }
 }
