@@ -1,0 +1,214 @@
+{
+  "run_type": "AI_ENGINEER_SINGLE_CASE_EXPERIMENT",
+  "experiment_id": "EXP001-G001-APPLICABILITY-INPUT-ONLY-V1",
+  "benchmark_id": "EXP001-BM-v2",
+  "case_id": "EXP001-G001",
+  "model": "qwen3.5-4b",
+  "endpoint": "http://127.0.0.1:1234/v1",
+  "temperature": 0.1,
+  "enable_thinking": false,
+  "max_tokens": 1400,
+  "scope": {
+    "baseline_experiment": "EXP001-G001-EVIDENCE-RESOLUTION-V1",
+    "input_construction": "EXP005/base input plus applicability resolution fields only",
+    "facts": [
+      "EXP001-F009"
+    ],
+    "candidate_requirements": [
+      "EXP001-R001"
+    ],
+    "evidence_resolution": "same as EXP005",
+    "applicability_resolution": "new deterministic input factor",
+    "system_prompt": "unchanged from EXP005/base runner",
+    "evaluator": "unchanged: training/evaluation/run_experiment_001.py",
+    "output_schema": "unchanged from EXP005/base runner",
+    "production_pipeline": "unchanged",
+    "benchmark": "unchanged",
+    "model": "fixed qwen3.5-4b",
+    "purpose": "test whether applicability resolution alone, as input, changes G001 classification"
+  },
+  "expected": {
+    "case_id": "EXP001-G001",
+    "expected_decision": "violation",
+    "expected_applicability": "applicable",
+    "expected_selected_requirement_id": "EXP001-R001",
+    "expected_trace_relations": [
+      "obsolete_normative_reference"
+    ],
+    "negative_case": false,
+    "reason": "The project explicitly uses СП 30.13330.2012 as the normative basis for an internal wastewater ventilation decision; the current base uses СП 30.13330.2020, which replaced the 2012 document."
+  },
+  "resolver": {
+    "fact_id": "EXP001-F009",
+    "requirement_id": "EXP001-R001",
+    "normative_reference": {
+      "reference_type": "direct",
+      "reference_target": "project_decision",
+      "document": "СП 30.13330.2012",
+      "clause": "8.2.15",
+      "marker": "согласно"
+    },
+    "applicability_resolution": {
+      "condition_id": "EXP001-R001-COND-01",
+      "condition_proven": true,
+      "resolved_applicability": "applicable",
+      "basis": {
+        "document_match": true,
+        "direct_reference": true,
+        "reference_target": true,
+        "condition_document_match": true
+      }
+    }
+  },
+  "input_payload": {
+    "case_id": "EXP001-G001",
+    "discipline": "ВК",
+    "check_id": "normative_reference_currency",
+    "project_evidence": [
+      {
+        "fact_id": "EXP001-F009",
+        "source_page": 10,
+        "evidence_text": "Сеть бытовой канализации здания вентилируется через вытяжные участки стояков, которые выведены выше кровли на 0,2 м, согласно п. 8.2.15 СП 30.13330.2012.",
+        "context": "Лист 3.1-10, текстовое обоснование вентиляции бытовой канализации.",
+        "structured_fact": {
+          "fact_id": "EXP001-F009",
+          "discipline": "ВК",
+          "system": "wastewater",
+          "object": "вытяжная часть канализационного стояка",
+          "parameter": "высота выхода над кровлей",
+          "project_value": "0,2 м",
+          "unit": "м",
+          "source": {
+            "document_id": "53c22e43fcc843ef81f950516e81e68d",
+            "page": 10,
+            "section": "Вентиляция канализации"
+          },
+          "evidence_text": "Сеть бытовой канализации здания вентилируется через вытяжные участки стояков, которые выведены выше кровли на 0,2 м, согласно п. 8.2.15 СП 30.13330.2012.",
+          "source_context": "Проектная ссылка на старый СП для решения по вентиляции бытовой канализации.",
+          "confidence": 0.9
+        },
+        "evidence_resolution": {
+          "normative_reference": {
+            "reference_type": "direct",
+            "reference_target": "project_decision",
+            "document": "СП 30.13330.2012",
+            "clause": "8.2.15",
+            "marker": "согласно"
+          }
+        }
+      }
+    ],
+    "candidate_normative_requirements": [
+      {
+        "requirement_id": "EXP001-R001",
+        "document": "СП 30.13330.2020",
+        "version": "редакция с Изменением №5",
+        "clause": "предисловие / статус документа",
+        "requirement": "СП 30.13330.2020 введен в действие с 1 июля 2021 г.; СП 30.13330.2012 является замененным документом и не должен использоваться как действующая нормативная база при проверке проекта по текущему эксперименту.",
+        "requirement_type": "reference",
+        "scope": {
+          "system": "wastewater",
+          "segment": "internal",
+          "object": "нормативная ссылка проекта",
+          "parameter": "актуальность нормативной ссылки"
+        },
+        "applicability": {
+          "conditions": [
+            {
+              "condition_id": "EXP001-R001-COND-01",
+              "description": "проект прямо использует СП 30.13330.2012 как нормативное основание",
+              "required_for_applicability": true
+            }
+          ],
+          "exceptions": [
+            "Не относится к историческому анализу проектных решений, если проверка явно задана как историческая."
+          ],
+          "must_be_proven": true
+        },
+        "value_rules": []
+      }
+    ],
+    "task": "Определи применимое нормативное требование и решение по проектному факту. Сначала докажи applicability, затем сравнивай нормативное значение. Если обязательное условие не доказано, выбери unchecked.",
+    "evidence_resolution": [
+      {
+        "fact_id": "EXP001-F009",
+        "normative_reference": {
+          "reference_type": "direct",
+          "reference_target": "project_decision",
+          "document": "СП 30.13330.2012",
+          "clause": "8.2.15",
+          "marker": "согласно"
+        }
+      }
+    ],
+    "applicability_resolution": {
+      "condition_id": "EXP001-R001-COND-01",
+      "condition_proven": true,
+      "resolved_applicability": "applicable",
+      "basis": {
+        "document_match": true,
+        "direct_reference": true,
+        "reference_target": true,
+        "condition_document_match": true
+      }
+    },
+    "applicability_resolved": "applicable"
+  },
+  "prediction": {
+    "decision": "violation",
+    "selected_requirement_id": "EXP001-R001",
+    "applicability": "applicable",
+    "confidence": 0.95,
+    "reason": "Проект явно ссылается на утратив силу нормативный документ (СП 30.13330.2012) в качестве обоснования решения, что нарушает требование о применении актуальной редакции СП 30.13330.2020.",
+    "missing_evidence": [],
+    "evidence_trace": [
+      {
+        "fact_id": "EXP001-F009",
+        "requirement_id": "EXP001-R001",
+        "relation": "supports_violation",
+        "applicability": "applicable"
+      }
+    ]
+  },
+  "checks": {
+    "decision_correct": true,
+    "false_violation_critical": false,
+    "applicability_correct": true,
+    "selected_requirement_correct": true,
+    "evidence_trace_valid": true,
+    "evidence_trace_complete": false,
+    "unsupported_violation": false,
+    "trace_errors": []
+  },
+  "raw_response": "```json\n{\n  \"decision\": \"violation\",\n  \"selected_requirement_id\": \"EXP001-R001\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проект явно ссылается на утратив силу нормативный документ (СП 30.13330.2012) в качестве обоснования решения, что нарушает требование о применении актуальной редакции СП 30.13330.2020.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"supports_violation\",\n      \"applicability\": \"applicable\"\n    }\n  ]\n}\n```",
+  "response_json": {
+    "id": "chatcmpl-4lt597wqzgia8s905bxr6j",
+    "object": "chat.completion",
+    "created": 1789083920,
+    "model": "qwen3.5-4b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "```json\n{\n  \"decision\": \"violation\",\n  \"selected_requirement_id\": \"EXP001-R001\",\n  \"applicability\": \"applicable\",\n  \"confidence\": 0.95,\n  \"reason\": \"Проект явно ссылается на утратив силу нормативный документ (СП 30.13330.2012) в качестве обоснования решения, что нарушает требование о применении актуальной редакции СП 30.13330.2020.\",\n  \"missing_evidence\": [],\n  \"evidence_trace\": [\n    {\n      \"fact_id\": \"EXP001-F009\",\n      \"requirement_id\": \"EXP001-R001\",\n      \"relation\": \"supports_violation\",\n      \"applicability\": \"applicable\"\n    }\n  ]\n}\n```",
+          "reasoning_content": "",
+          "tool_calls": []
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1814,
+      "completion_tokens": 209,
+      "total_tokens": 2023,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    },
+    "stats": {},
+    "system_fingerprint": "qwen3.5-4b"
+  },
+  "parse_error": null
+}

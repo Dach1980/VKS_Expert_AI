@@ -1,0 +1,167 @@
+{
+  "run_type": "AI_ENGINEER_DETERMINISTIC_VALIDATION",
+  "experiment_id": "EXP001-APPLICABILITY-RESOLVER-VALIDATION-V1",
+  "benchmark_id": "EXP001-BM-v2",
+  "benchmark_unchanged": true,
+  "production_runner_unchanged": true,
+  "evaluator_unchanged": true,
+  "golden_answer_used_by_resolver": false,
+  "cases_checked": 8,
+  "canonical_candidate_cases": [
+    "EXP001-G001",
+    "EXP001-G002",
+    "EXP001-G003"
+  ],
+  "boundary_cases_without_candidate": [
+    "EXP001-C001",
+    "EXP001-C002",
+    "EXP001-C003",
+    "EXP001-N001",
+    "EXP001-N002"
+  ],
+  "failures": [],
+  "passed": true,
+  "results": [
+    {
+      "case_id": "EXP001-C001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "canonical_candidate_ids": [],
+      "resolver_status": "no_canonical_candidate",
+      "resolver_result": null,
+      "boundary_check": {
+        "passed": true,
+        "reason": "No canonical requirement ID is present; resolver must not manufacture a candidate from semantic normative text."
+      }
+    },
+    {
+      "case_id": "EXP001-C002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "canonical_candidate_ids": [],
+      "resolver_status": "no_canonical_candidate",
+      "resolver_result": null,
+      "boundary_check": {
+        "passed": true,
+        "reason": "No canonical requirement ID is present; resolver must not manufacture a candidate from semantic normative text."
+      }
+    },
+    {
+      "case_id": "EXP001-C003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": null,
+      "canonical_candidate_ids": [],
+      "resolver_status": "no_canonical_candidate",
+      "resolver_result": null,
+      "boundary_check": {
+        "passed": true,
+        "reason": "No canonical requirement ID is present; resolver must not manufacture a candidate from semantic normative text."
+      }
+    },
+    {
+      "case_id": "EXP001-G001",
+      "expected_decision": "violation",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R001",
+      "canonical_candidate_ids": [
+        "EXP001-R001"
+      ],
+      "resolver_status": "resolved",
+      "resolver_result": {
+        "requirement_id": "EXP001-R001",
+        "status": "resolved",
+        "resolved_applicability": "applicable",
+        "condition_proven": true,
+        "basis": {
+          "document_match": true,
+          "direct_reference": true,
+          "reference_target": true,
+          "condition_document_match": true
+        }
+      },
+      "boundary_check": {
+        "passed": true,
+        "reason": "Canonical candidate applicability resolved from project evidence and requirement metadata only."
+      }
+    },
+    {
+      "case_id": "EXP001-G002",
+      "expected_decision": "compliant",
+      "expected_applicability": "applicable",
+      "expected_selected_requirement_id": "EXP001-R002",
+      "canonical_candidate_ids": [
+        "EXP001-R002"
+      ],
+      "resolver_status": "resolved",
+      "resolver_result": {
+        "requirement_id": "EXP001-R002",
+        "status": "resolved",
+        "resolved_applicability": "applicable",
+        "condition_proven": true,
+        "basis": {
+          "condition_text_match": true,
+          "structured_system_match": true,
+          "condition_mentions_domestic_wastewater": true
+        }
+      },
+      "boundary_check": {
+        "passed": true,
+        "reason": "Canonical candidate applicability resolved from project evidence and requirement metadata only."
+      }
+    },
+    {
+      "case_id": "EXP001-G003",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_proven",
+      "expected_selected_requirement_id": "EXP001-R003",
+      "canonical_candidate_ids": [
+        "EXP001-R003"
+      ],
+      "resolver_status": "not_proven",
+      "resolver_result": {
+        "requirement_id": "EXP001-R003",
+        "status": "not_proven",
+        "resolved_applicability": "not_proven",
+        "condition_proven": false,
+        "basis": {
+          "roof_context_proven": false,
+          "shaft_context_proven": false,
+          "height_value_present": true
+        }
+      },
+      "boundary_check": {
+        "passed": true,
+        "reason": "Canonical candidate applicability resolved from project evidence and requirement metadata only."
+      }
+    },
+    {
+      "case_id": "EXP001-N001",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "canonical_candidate_ids": [],
+      "resolver_status": "no_canonical_candidate",
+      "resolver_result": null,
+      "boundary_check": {
+        "passed": true,
+        "reason": "No canonical requirement ID is present; resolver must not manufacture a candidate from semantic normative text."
+      }
+    },
+    {
+      "case_id": "EXP001-N002",
+      "expected_decision": "unchecked",
+      "expected_applicability": "not_applicable",
+      "expected_selected_requirement_id": null,
+      "canonical_candidate_ids": [],
+      "resolver_status": "no_canonical_candidate",
+      "resolver_result": null,
+      "boundary_check": {
+        "passed": true,
+        "reason": "No canonical requirement ID is present; resolver must not manufacture a candidate from semantic normative text."
+      }
+    }
+  ]
+}
