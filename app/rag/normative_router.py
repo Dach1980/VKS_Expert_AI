@@ -13,6 +13,9 @@ def _text(value: Any) -> str:
 
 def _is_external(candidate: dict[str, Any]) -> bool:
     text = " ".join(_text(candidate.get(key)) for key in ("parameter", "title", "description", "source_context", "evidence_text", "project_value"))
+    internal_wastewater = "внутренн" in text and any(term in text for term in ("канализац", "сточн"))
+    if internal_wastewater:
+        return False
     external_terms = ("наружн", "внутриплощад", "колодец", "от колодца", "до точки подключения", "сети нк", "сети нв")
     return any(term in text for term in external_terms)
 
