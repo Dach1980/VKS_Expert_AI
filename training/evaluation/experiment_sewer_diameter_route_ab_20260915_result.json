@@ -1,0 +1,42 @@
+{
+  "experiment": "sewer_diameter_route_ab",
+  "date": "2026-09-15",
+  "production_code_changed": false,
+  "qwen_prompt_changed": false,
+  "candidate": {
+    "parameter": "диаметр выпуска",
+    "title": "Диаметры",
+    "description": "Указан диаметр выпусков внутренней самотечной бытовой канализации.",
+    "source_context": "Бытовые стоки отводятся системой внутренней самотечной бытовой канализации по пяти выпускам Ø110мм в внутриплощадочную сеть бытовой канализации Ø160 мм.",
+    "evidence_text": "Бытовые стоки отводятся системой внутренней самотечной бытовой канализации по пяти выпускам Ø110мм в внутриплощадочную сеть бытовой канализации Ø160 мм.",
+    "project_value": "Ø110мм"
+  },
+  "before": {
+    "scope": "external_wastewater",
+    "segment": "external",
+    "normative_documents": ["СП 32.13330.2018"]
+  },
+  "after": {
+    "scope": "internal_wastewater",
+    "segment": "internal",
+    "normative_documents": ["СП 30.13330.2020"]
+  },
+  "checks": {
+    "before_scope_is_external_wastewater": true,
+    "after_scope_is_internal_wastewater": true,
+    "sp32_6_3_5_allowed_before": true,
+    "sp32_6_3_5_excluded_after": true
+  },
+  "qwen_input_gate": {
+    "before": {
+      "sp32_6_3_5_can_enter": true,
+      "reason": "The saved production finding selected СП 32.13330.2018 §6.3.5 after external_wastewater routing."
+    },
+    "after": {
+      "sp32_6_3_5_can_enter": false,
+      "reason": "The corrected route scopes the candidate to СП 30.13330.2020; СП 32.13330.2018 is outside the scoped retrievers."
+    }
+  },
+  "status": "PASS",
+  "interpretation": "The deterministic routing defect is reproduced and the experiment-only correction removes the false external_wastewater route. Consequently СП 32.13330.2018 §6.3.5 is excluded from the normative context that can reach Qwen. No production routing code or Qwen prompt was changed."
+}
