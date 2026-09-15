@@ -9,12 +9,19 @@ def test_sp_amendment_and_effective_date():
     assert parsed.version_id == "СП_30_13330_2020_20250301_amendment_5"
 
 
-def test_date_only_version():
+def test_date_only_federal_law():
     parsed = parse_normative_filename("ФЗ_123 01.01.2026.pdf")
     assert parsed.document_number == "ФЗ 123"
     assert parsed.amendment_number is None
     assert parsed.effective_date == "2026-01-01"
     assert parsed.version_id == "ФЗ_123_20260101"
+
+
+def test_date_only_government_resolution():
+    parsed = parse_normative_filename("Постановление_Правительства_123 01.01.2026.pdf")
+    assert parsed.document_number == "Постановление Правительства 123"
+    assert parsed.amendment_number is None
+    assert parsed.effective_date == "2026-01-01"
 
 
 def test_sp_without_amendment():
