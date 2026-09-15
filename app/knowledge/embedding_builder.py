@@ -1,7 +1,7 @@
-"""Project Expert AI — Embedding Builder v2.
+"""Project Expert AI — Embedding Builder v3.
 
 Строит embeddings и FAISS из document chunks.
-Использует общий KnowledgeStorage и существующий EmbeddingClient.
+Метаданные индекса содержат полную canonical identity нормативной версии.
 """
 
 import json
@@ -20,6 +20,9 @@ class EmbeddingBuilder:
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
         self.paths = self.storage.paths(document_id, version_id)
+        self.document = self.storage.get_document(document_id)
+        self.version = self.storage.get_version(document_id, version_id)
+        self.version_metadata = self.storage.get_version_metadata(document_id, self.version["id"])
 
     def load_chunks(self):
         file = self.paths.chunks / "all_chunks.json"
@@ -30,10 +33,26 @@ class EmbeddingBuilder:
         print("Chunks loaded:", len(chunks))
         return chunks
 
+    def _normative_metadata(self):
+        return {
+            "document": {
+                "id": self.document_id,
+                "number": self.document.get("number"),
+                "title": self.document.get("title"),
+                "document_type": self.document.get("document_type"),
+            },
+            "version": {
+                "id": self.version.get("id"),
+                "edition": self.version_metadata.get("edition", {}),
+            },
+            "source": self.version_metadata.get("source", {}),
+        }
+
     def build_embeddings(self, chunks):
         client = EmbeddingClient()
         vectors = []
         metadata = []
+        normative = self._normative_metadata()
 
         for index, item in enumerate(chunks, start=1):
             text = item.get("embedding_text", "")
@@ -45,16 +64,18 @@ class EmbeddingBuilder:
 
             vector = client.embed(str(text))
             vectors.append(vector)
+            item_metadata = item.get("metadata", {})
             metadata.append({
                 "chunk_id": item["chunk_id"],
                 "type": item.get("type", "text"),
                 "document": item.get("document", self.document_id),
                 "document_id": item.get("document_id", self.document_id),
-                "version": item.get("version"),
+                "version": item.get("version", self.version.get("id")),
                 "page": item.get("page", 0),
                 "location": item.get("location", {}),
                 "content": item.get("content", {}),
-                "metadata": item.get("metadata", {}),
+                "metadata": item_metadata,
+                "normative": normative,
                 "embedding_text": text,
             })
             print(f"Embedded {index}/{len(chunks)}")
