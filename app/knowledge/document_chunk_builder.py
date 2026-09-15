@@ -1,4 +1,4 @@
-"""VKS Expert AI — Document Chunk Builder v8."""
+"""VKS Expert AI — Document Chunk Builder v9."""
 
 import json
 from datetime import datetime
@@ -12,12 +12,39 @@ class DocumentChunkBuilder:
         self.version_id = version_id
         self.storage = storage or KnowledgeStorage()
         self.paths = self.storage.paths(document_id, version_id)
-        self.document = self.storage.get_document(document_id)["number"]
-        self.version = self.storage.get_version(document_id, version_id).get("id")
+        document = self.storage.get_document(document_id)
+        version = self.storage.get_version(document_id, version_id)
+        self.document = document["number"]
+        self.version = version["id"]
+        self.normative_metadata = self._build_normative_metadata(document, version)
+
+    def _build_normative_metadata(self, document, version):
+        version_meta = self.storage.get_version_metadata(self.document_id, self.version)
+        return {
+            "document": {
+                "id": self.document_id,
+                "number": document.get("number"),
+                "title": document.get("title"),
+                "document_type": document.get("document_type"),
+            },
+            "version": {
+                "id": version.get("id"),
+                "edition": version_meta.get("edition", {}),
+            },
+            "source": version_meta.get("source", {}),
+        }
 
     def load_page(self, file):
         with open(file, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _metadata(self, **extra):
+        value = {
+            "normative": self.normative_metadata,
+            "created": datetime.now().isoformat(),
+        }
+        value.update(extra)
+        return value
 
     def build_text_chunk(self, page, block, index):
         text = str(block.get("text", "")).strip()
@@ -32,8 +59,12 @@ class DocumentChunkBuilder:
             "page": page,
             "location": {"page": page, "bbox": block.get("bbox"), "pdf": str(self.paths.pdf)},
             "content": {"text": text},
-            "embedding_text": f"Документ: {self.document}. Версия: {self.version}. Страница: {page}. Тип: нормативный текст. Текст: {text}",
-            "metadata": {"source": self.document_id, "created": datetime.now().isoformat()},
+            "embedding_text": (
+                f"Документ: {self.document}. Версия: {self.version}. "
+                f"Редакция: {self.normative_metadata['version']['edition'].get('date', '—')}. "
+                f"Страница: {page}. Тип: нормативный текст. Текст: {text}"
+            ),
+            "metadata": self._metadata(),
         }
 
     def find_nearest_text(self, formula, blocks):
@@ -57,8 +88,10 @@ class DocumentChunkBuilder:
         before, after = self.find_nearest_text(formula, blocks)
         text = f"{before}\n\nФормула: {latex}\n\n{after}".strip()
         embedding_text = (
-            f"Документ: {self.document}. Версия: {self.version}. Страница: {page}. "
-            f"Тип: нормативная формула. Область: ВК. Система: внутренний водопровод. "
+            f"Документ: {self.document}. Версия: {self.version}. "
+            f"Редакция: {self.normative_metadata['version']['edition'].get('date', '—')}. "
+            f"Страница: {page}. Тип: нормативная формула. "
+            f"Область: ВК. Система: внутренний водопровод. "
             f"Тема: гидравлический расчет. Нормативное описание: {before}. "
             f"Формула: {latex}. Дополнительный текст: {after}"
         )
@@ -71,18 +104,24 @@ class DocumentChunkBuilder:
             "page": page,
             "location": {"page": page, "bbox": formula.get("bbox"), "pdf": str(self.paths.pdf)},
             "content": {
-                "text": text, "formula": latex, "before": before, "after": after,
+                "text": text,
+                "formula": latex,
+                "before": before,
+                "after": after,
                 "engineering_context": {
-                    "discipline": "ВК", "system": "Внутренний водопровод",
-                    "purpose": before, "calculation_type": "Гидравлический расчет",
+                    "discipline": "ВК",
+                    "system": "Внутренний водопровод",
+                    "purpose": before,
+                    "calculation_type": "Гидравлический расчет",
                 },
             },
             "embedding_text": embedding_text,
-            "metadata": {
-                "source": self.document_id, "formula": True, "discipline": "ВК",
-                "system": "internal_water_supply", "topic": "hydraulic_calculation",
-                "created": datetime.now().isoformat(),
-            },
+            "metadata": self._metadata(
+                "formula": True,
+                "discipline": "ВК",
+                "system": "internal_water_supply",
+                "topic": "hydraulic_calculation",
+            ),
         }
 
     def process_page(self, data):
