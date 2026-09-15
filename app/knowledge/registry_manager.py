@@ -63,10 +63,9 @@ class DocumentRegistry:
         if parsed.effective_date:
             edition["date"] = parsed.effective_date
         if parsed.amendment_number:
-            edition["amendment"] = {
-                "number": parsed.amendment_number,
-                "effective_from": parsed.effective_date,
-            }
+            edition["amendment"] = {"number": parsed.amendment_number}
+            if parsed.effective_date:
+                edition["amendment"]["effective_from"] = parsed.effective_date
         return edition
 
     def get_current_version(self, document_id):
@@ -95,6 +94,7 @@ class DocumentRegistry:
         parsed_file=None,
         structured_file=None,
         make_current=False,
+        effective_from=None,
         edition_date=None,
         amendment_number=None,
         amendment_effective_from=None,
@@ -124,6 +124,9 @@ class DocumentRegistry:
             document["title"] = title
             if document_type:
                 document["document_type"] = document_type
+
+        if edition_date is None and effective_from is not None:
+            edition_date = effective_from
 
         parsed_filename = None
         if file_path:
