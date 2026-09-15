@@ -1,14 +1,15 @@
-"""Project Expert AI — KnowledgeStorage v5."""
+"""Project Expert AI — KnowledgeStorage v6."""
 from __future__ import annotations
 
+import hashlib
 import json
-import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from app.knowledge.filename_parser import FilenameParseError, parse_normative_filename
 from app.knowledge.registry_manager import DocumentRegistry, RegistryError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -100,8 +101,9 @@ class KnowledgeStorage:
     def paths(self, document_id, version_id=None):
         version = self.get_version(document_id, version_id)
         root = self.vector_index_root() / document_id / version.get("id", "")
+        source = version.get("source") or {}
         return DocumentPaths(
-            self.resolve(version.get("file", "")),
+            self.resolve(source.get("file", "")),
             self.resolve(version.get("parsed_file", "")),
             self.resolve(version.get("structured_file", "")),
             root,
@@ -126,50 +128,40 @@ class KnowledgeStorage:
         return paths
 
     @staticmethod
-    def _classify_uploaded_filename(filename: str) -> tuple[str | None, str | None]:
-        """Определяет тип и номер изменения только по имени загруженного файла."""
-        stem = Path(filename).stem.replace("_", " ").replace("-", " ")
-        if re.search(r"(?i)\bбазов(?:ая|ую|ая версия)\b|\bбез\s+изменений\b", stem):
-            return "base", None
-        match = re.search(
-            r"(?i)\b(?:изм(?:енение|енения)?|изменени[ея]|amendment)\s*№?\s*(\d+)\b",
-            stem,
-        )
-        if match:
-            return "amendment", match.group(1)
-        return None, None
-
-    @classmethod
-    def _filename_change_number(cls, filename: str | None) -> str | None:
-        _, number = cls._classify_uploaded_filename(str(filename or ""))
-        return number
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as file:
+            for block in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
 
     def _apply_filename_version_metadata(self, document_id, version_id, filename):
-        version_type, change_number = self._classify_uploaded_filename(filename)
+        """Обновляет canonical edition/source поля из имени PDF."""
         document = self.registry.get_document(document_id)
         if not document:
             return
         version = next((item for item in document.get("versions", []) if item.get("id") == version_id), None)
         if not version:
             return
+        try:
+            parsed = parse_normative_filename(filename)
+        except FilenameParseError as error:
+            raise StorageError(str(error)) from error
 
-        version["original_filename"] = filename
-        if version_type == "base":
-            version["type"] = "base"
-            version.pop("change_number", None)
-            version.pop("change_date", None)
-        elif version_type == "amendment":
-            version["type"] = "amendment"
-            version["change_number"] = str(change_number)
-            # The amendment number comes from the filename. A date is not
-            # inferred from PDF text because that text can reference another amendment.
-            version.pop("change_date", None)
+        edition = version.setdefault("edition", {})
+        if parsed.effective_date:
+            edition["date"] = parsed.effective_date
         else:
-            # A filename without "Изм.N" is an edition without a declared
-            # amendment number. Do not inherit stale metadata from parsed JSON.
-            version["type"] = "edition"
-            version.pop("change_number", None)
-            version.pop("change_date", None)
+            edition.pop("date", None)
+        if parsed.amendment_number is not None:
+            edition["amendment"] = {"number": parsed.amendment_number}
+            if parsed.effective_date:
+                edition["amendment"]["effective_from"] = parsed.effective_date
+        else:
+            edition.pop("amendment", None)
+
+        source = version.setdefault("source", {})
+        source["original_filename"] = parsed.original_filename
         self.registry.save()
 
     def save_pdf(self, document_id, source, version_id=None):
@@ -181,6 +173,9 @@ class KnowledgeStorage:
         paths = self.ensure_version_dirs(document_id, version_id)
         shutil.copy2(source, paths.pdf)
         self._apply_filename_version_metadata(document_id, version_id, source.name)
+        version = self.get_version(document_id, version_id)
+        version.setdefault("source", {})["sha256"] = self._sha256(paths.pdf)
+        self.registry.save()
         return paths.pdf
 
     def save_uploaded_pdf(self, document_id, upload_file, version_id=None):
@@ -195,6 +190,9 @@ class KnowledgeStorage:
         except OSError as error:
             raise StorageError(f"Не удалось сохранить PDF: {error}") from error
         self._apply_filename_version_metadata(document_id, version_id, filename)
+        version = self.get_version(document_id, version_id)
+        version.setdefault("source", {})["sha256"] = self._sha256(paths.pdf)
+        self.registry.save()
         return paths.pdf
 
     def _index_error_path(self, document_id, version_id=None):
@@ -241,7 +239,7 @@ class KnowledgeStorage:
 
     @classmethod
     def _extract_parsed_metadata(cls, data):
-        """Extract document number/title only; amendment metadata is filename-owned."""
+        """Извлекает номер/название; edition metadata принадлежит имени файла."""
         result: dict[str, str] = {}
         for key, value in cls._walk_strings(data):
             normalized_key = key.lower().strip()
@@ -277,45 +275,25 @@ class KnowledgeStorage:
                 return 0
 
     def get_version_metadata(self, document_id, version_id=None):
-        """Return metadata without allowing parsed PDF text to change amendment number."""
+        """Возвращает canonical metadata версии."""
         version = self.get_version(document_id, version_id)
-        pdf = self.resolve(version.get("file", ""))
-        parsed = self.resolve(version.get("parsed_file", ""))
-        filename = version.get("original_filename") or Path(version.get("file", "")).name
+        source = version.get("source") or {}
+        pdf = self.resolve(source.get("file", ""))
         result: dict[str, Any] = {
-            "pages_count": int(version.get("pages_count") or self._pdf_pages(pdf)),
+            "edition": dict(version.get("edition") or {}),
+            "source": dict(source),
+            "pages_count": int((version.get("index") or {}).get("pages_count") or self._pdf_pages(pdf)),
+            "version_type": version.get("version_type") or "edition",
         }
-
-        filename_change = self._filename_change_number(filename)
-        stored_change = version.get("change_number")
-        if filename_change is not None:
-            result["change_number"] = filename_change
-        elif stored_change is not None:
-            result["change_number"] = str(stored_change)
-
-        if version.get("change_date"):
-            result["change_date"] = str(version.get("change_date"))
-        if version.get("type"):
-            result["version_type"] = version.get("type")
-
-        # Parsed JSON may enrich document number/title, but it must never
-        # override filename-derived amendment metadata.
+        parsed = self.resolve(version.get("parsed_file", ""))
         if parsed.exists():
             try:
-                parsed_meta = self._extract_parsed_metadata(
-                    json.loads(parsed.read_text(encoding="utf-8-sig"))
-                )
-                result.update(parsed_meta)
-                if filename_change is not None:
-                    result["change_number"] = filename_change
-                elif "change_number" in result and filename_change is None and not stored_change:
-                    result.pop("change_number", None)
+                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig"))))
             except (OSError, json.JSONDecodeError):
                 pass
         return result
 
     def refresh_version_metadata_from_parsed(self, document_id, version_id):
-        """Refresh number/title only. Amendment metadata remains controlled by filename."""
         version = self.get_version(document_id, version_id)
         parsed = self.resolve(version.get("parsed_file", ""))
         if not parsed.exists():
@@ -330,7 +308,7 @@ class KnowledgeStorage:
         if meta.get("number") and meta["number"] != document.get("number"):
             document["number"] = meta["number"]
             changed = True
-        if meta.get("title") and document.get("title") != meta["title"]:
+        if meta.get("title") and meta["title"] != document.get("title"):
             document["title"] = meta["title"]
             changed = True
         if changed:
@@ -343,14 +321,9 @@ class KnowledgeStorage:
             versions = document.get("versions", [])
             if not versions:
                 continue
-
-            # A version is current only when it was explicitly selected by the
-            # user. Legacy status="current" without the explicit flag is not
-            # treated as an active edition.
             current = next(
                 (
-                    version
-                    for version in versions
+                    version for version in versions
                     if version.get("status") == "current"
                     and version.get("current_selected_by_user") is True
                 ),
@@ -362,43 +335,39 @@ class KnowledgeStorage:
                 else {"pages_count": 0, "vector_index": False, "vector_metadata": False, "indexing": False}
             )
             current_meta = self.get_version_metadata(document["id"], current["id"]) if current else {}
-            result.append(
-                {
-                    "document_id": document["id"],
-                    "number": document.get("number"),
-                    "title": document.get("title"),
-                    "version_id": current.get("id") if current else None,
-                    "effective_from": current.get("effective_from") if current else None,
-                    "current_change_number": current_meta.get("change_number"),
-                    "current_change_date": current_meta.get("change_date") or (current.get("effective_from") if current else None),
-                    "processing": processing,
-                    "versions": [self._version_status(document["id"], version) for version in versions],
-                }
-            )
+            result.append({
+                "document_id": document["id"],
+                "number": document.get("number"),
+                "title": document.get("title"),
+                "document_type": document.get("document_type"),
+                "version_id": current.get("id") if current else None,
+                "edition": current_meta.get("edition", {}),
+                "source": current_meta.get("source", {}),
+                "processing": processing,
+                "versions": [self._version_status(document["id"], version) for version in versions],
+            })
         return result
 
     def _version_status(self, document_id, version):
-        filename = version.get("original_filename") or Path(version.get("file", "")).name
+        source = version.get("source") or {}
+        filename = source.get("original_filename") or Path(source.get("file", "")).name
         return {
             **version,
             "document_id": document_id,
             "version_id": version.get("id"),
             "filename": filename,
-            "original_filename": version.get("original_filename") or filename,
             "processing": self._version_processing(document_id, version.get("id")),
         }
 
     def _version_processing(self, document_id, version_id):
         paths = self.paths(document_id, version_id)
         meta = self.get_version_metadata(document_id, version_id)
-        index_file = paths.embeddings / "index.faiss"
-        metadata_file = paths.embeddings / "metadata.json"
         error_file = paths.index_root / "index_error.json"
         indexing_file = paths.index_root / "indexing.json"
         result = {
             "pages_count": meta.get("pages_count", 0),
-            "vector_index": index_file.exists(),
-            "vector_metadata": metadata_file.exists(),
+            "vector_index": (paths.embeddings / "index.faiss").exists(),
+            "vector_metadata": (paths.embeddings / "metadata.json").exists(),
             "indexing": indexing_file.exists(),
         }
         if error_file.exists():
