@@ -117,10 +117,10 @@ class DocumentChunkBuilder:
             },
             "embedding_text": embedding_text,
             "metadata": self._metadata(
-                "formula": True,
-                "discipline": "ВК",
-                "system": "internal_water_supply",
-                "topic": "hydraulic_calculation",
+                formula=True,
+                discipline="ВК",
+                system="internal_water_supply",
+                topic="hydraulic_calculation",
             ),
         }
 
