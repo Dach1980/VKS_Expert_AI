@@ -1,7 +1,9 @@
 import json
 import re
-from pathlib import Path
 from datetime import date
+from pathlib import Path
+
+from app.knowledge.filename_parser import FilenameParseError, parse_normative_filename
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_FILE = PROJECT_ROOT / "knowledge" / "registry" / "documents.json"
@@ -9,10 +11,11 @@ REGISTRY_FILE = PROJECT_ROOT / "knowledge" / "registry" / "documents.json"
 
 class RegistryError(Exception):
     """Ошибка работы с реестром нормативных документов."""
-    pass
 
 
 class DocumentRegistry:
+    """Registry with one canonical version model for all normative documents."""
+
     def __init__(self, registry_file: Path = REGISTRY_FILE):
         self.registry_file = registry_file
         self.data = self._load()
@@ -40,22 +43,31 @@ class DocumentRegistry:
         return self.data.get("documents", [])
 
     def get_document(self, document_id):
-        for document in self.get_all_documents():
-            if document.get("id") == document_id:
-                return document
-        return None
-
-    @staticmethod
-    def _number_group(value):
-        normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
-        match = re.search(r"(?:сп|гост\s*р?|снип|тр|фз)\s*[0-9]+\.[0-9]+", normalized, re.IGNORECASE)
-        return re.sub(r"\s+", " ", match.group(0)).strip() if match else normalized
+        return next((d for d in self.get_all_documents() if d.get("id") == document_id), None)
 
     @staticmethod
     def canonical_number(value):
-        value = re.sub(r"\s+", " ", str(value or "")).strip()
-        match = re.search(r"((?:СП|ГОСТ|ГОСТ Р|СНиП|ТР|ФЗ)\s*[0-9]+(?:\.[0-9]+)+)", value, re.IGNORECASE)
-        return re.sub(r"\s+", " ", match.group(1)).strip() if match else value
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
+    @staticmethod
+    def _number_group(value):
+        return DocumentRegistry.canonical_number(value).lower()
+
+    @staticmethod
+    def _edition_from_filename(file_path):
+        try:
+            parsed = parse_normative_filename(Path(file_path).name)
+        except FilenameParseError:
+            return {}
+        edition = {}
+        if parsed.effective_date:
+            edition["date"] = parsed.effective_date
+        if parsed.amendment_number:
+            edition["amendment"] = {
+                "number": parsed.amendment_number,
+                "effective_from": parsed.effective_date,
+            }
+        return edition
 
     def get_current_version(self, document_id):
         document = self.get_document(document_id)
@@ -71,59 +83,97 @@ class DocumentRegistry:
             raise RegistryError(f"Для документа {document_id} найдено несколько действующих версий.")
         return current_versions[0]
 
-    def register_version(self, document_id, number, title, document_type="СП", version_id=None,
-                         version_type="edition", effective_from=None, file_path=None,
-                         parsed_file=None, structured_file=None, make_current=False,
-                         change_number=None, change_date=None, pages_count=None, sha256=None):
+    def register_version(
+        self,
+        document_id,
+        number,
+        title,
+        document_type="СП",
+        version_id=None,
+        version_type="edition",
+        file_path=None,
+        parsed_file=None,
+        structured_file=None,
+        make_current=False,
+        edition_date=None,
+        amendment_number=None,
+        amendment_effective_from=None,
+        pages_count=None,
+        sha256=None,
+        index=None,
+    ):
         if not document_id or not number or not title:
             raise RegistryError("document_id, number и title обязательны")
 
         number = self.canonical_number(number)
         document = self.get_document(document_id)
         if document is None:
-            document = {"id": document_id, "number": number, "title": title,
-                        "document_type": document_type, "versions": []}
+            document = {
+                "id": document_id,
+                "number": number,
+                "title": title,
+                "document_type": document_type,
+                "versions": [],
+            }
             self.data.setdefault("documents", []).append(document)
         else:
-            existing_number = document.get("number") or ""
-            if existing_number != number:
-                if self._number_group(existing_number) == self._number_group(number):
-                    if len(str(number)) >= len(str(existing_number)):
-                        document["number"] = number
-                    else:
-                        number = existing_number
-                else:
-                    raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
-            existing_title = document.get("title") or ""
-            if existing_title != title and len(str(title)) >= len(str(existing_title)):
-                document["title"] = title
-            else:
-                title = existing_title or title
+            existing_number = self.canonical_number(document.get("number"))
+            if existing_number and existing_number != number and self._number_group(existing_number) != self._number_group(number):
+                raise RegistryError(f"Номер документа {document_id} не совпадает с существующим Registry")
+            document["number"] = number
+            document["title"] = title
+            if document_type:
+                document["document_type"] = document_type
 
-        versions = document.setdefault("versions", [])
+        parsed_filename = None
+        if file_path:
+            try:
+                parsed_filename = parse_normative_filename(Path(file_path).name)
+            except FilenameParseError:
+                parsed_filename = None
+
+        if parsed_filename:
+            if not version_id:
+                version_id = parsed_filename.version_id
+            if edition_date is None:
+                edition_date = parsed_filename.effective_date
+            if amendment_number is None:
+                amendment_number = parsed_filename.amendment_number
+            if amendment_effective_from is None and amendment_number is not None:
+                amendment_effective_from = parsed_filename.effective_date
+
         if version_id is None:
             version_id = f"{document_id}_{date.today().isoformat().replace('-', '')}"
+
+        versions = document.setdefault("versions", [])
         if any(version.get("id") == version_id for version in versions):
             raise RegistryError(f"Версия уже существует: {document_id}/{version_id}")
 
+        edition = {}
+        if edition_date:
+            edition["date"] = str(edition_date)
+        if amendment_number is not None:
+            amendment = {"number": str(amendment_number)}
+            if amendment_effective_from:
+                amendment["effective_from"] = str(amendment_effective_from)
+            edition["amendment"] = amendment
+
         version = {
             "id": version_id,
-            "type": version_type,
             "status": "uploaded",
             "current_selected_by_user": False,
-            "effective_from": effective_from,
-            "file": file_path,
+            "edition": edition,
+            "source": {"file": file_path},
             "parsed_file": parsed_file,
             "structured_file": structured_file,
+            "index": index or {},
         }
-        if change_number is not None:
-            version["change_number"] = str(change_number)
-        if change_date:
-            version["change_date"] = str(change_date)
         if pages_count is not None:
-            version["pages_count"] = int(pages_count)
+            version["index"]["pages_count"] = int(pages_count)
         if sha256:
-            version["sha256"] = str(sha256)
+            version["source"]["sha256"] = str(sha256)
+        if parsed_filename:
+            version["source"]["original_filename"] = parsed_filename.original_filename
 
         versions.append(version)
         if make_current:
@@ -155,7 +205,7 @@ class DocumentRegistry:
         document = self.get_document(document_id)
         if document is None:
             raise RegistryError(f"Документ не найден: {document_id}")
-        target = next((version for version in document.get("versions", []) if version.get("id") == version_id), None)
+        target = next((v for v in document.get("versions", []) if v.get("id") == version_id), None)
         if target is None:
             raise RegistryError(f"Версия не найдена: {document_id}/{version_id}")
         self._activate_in_document(document, target)
@@ -178,8 +228,7 @@ class DocumentRegistry:
             document_removed = True
         elif was_current:
             for version in versions:
-                if version.get("status") == "current":
-                    version["status"] = "superseded"
+                version["status"] = "superseded"
                 version["current_selected_by_user"] = False
         self.save()
         return target, document_removed
@@ -189,8 +238,13 @@ class DocumentRegistry:
         for document in self.get_all_documents():
             try:
                 current = self.get_current_version(document["id"])
-                result.append({"id": document["id"], "number": document["number"], "title": document["title"],
-                               "document_type": document["document_type"], "version": current})
+                result.append({
+                    "id": document["id"],
+                    "number": document["number"],
+                    "title": document["title"],
+                    "document_type": document["document_type"],
+                    "version": current,
+                })
             except RegistryError:
                 continue
         return result
@@ -198,8 +252,6 @@ class DocumentRegistry:
     def validate(self):
         errors = []
         documents = self.get_all_documents()
-        if not isinstance(documents, list):
-            return ["Поле 'documents' должно быть списком."]
         document_ids = set()
         for document in documents:
             document_id = document.get("id")
@@ -209,27 +261,35 @@ class DocumentRegistry:
             if document_id in document_ids:
                 errors.append(f"Дублирующийся id документа: {document_id}")
             document_ids.add(document_id)
-            if not document.get("number"):
-                errors.append(f"{document_id}: отсутствует number.")
-            if not document.get("title"):
-                errors.append(f"{document_id}: отсутствует title.")
+            for key in ("number", "title", "document_type"):
+                if not document.get(key):
+                    errors.append(f"{document_id}: отсутствует {key}.")
             versions = document.get("versions", [])
             if not isinstance(versions, list):
                 errors.append(f"{document_id}: versions должен быть списком.")
                 continue
-            current_count = sum(1 for version in versions if version.get("status") == "current" and version.get("current_selected_by_user") is True)
-            for version in versions:
-                file_path = version.get("file")
-                if file_path and not (PROJECT_ROOT / file_path).exists():
-                    errors.append(f"{document_id}: файл не найден:\n  {file_path}")
-                effective_from = version.get("effective_from")
-                if effective_from:
-                    try:
-                        date.fromisoformat(effective_from)
-                    except ValueError:
-                        errors.append(f"{document_id}: некорректная дата effective_from: {effective_from}")
+            current_count = sum(
+                1 for version in versions
+                if version.get("status") == "current" and version.get("current_selected_by_user") is True
+            )
             if current_count > 1:
                 errors.append(f"{document_id}: несколько действующих версий.")
+            for version in versions:
+                if not version.get("id"):
+                    errors.append(f"{document_id}: версия без id.")
+                edition = version.get("edition")
+                if not isinstance(edition, dict):
+                    errors.append(f"{document_id}/{version.get('id')}: edition должен быть объектом.")
+                elif edition.get("date"):
+                    try:
+                        date.fromisoformat(str(edition["date"]))
+                    except ValueError:
+                        errors.append(f"{document_id}: некорректная edition.date: {edition['date']}")
+                source = version.get("source")
+                if not isinstance(source, dict) or not source.get("file"):
+                    errors.append(f"{document_id}/{version.get('id')}: отсутствует source.file.")
+                elif not (PROJECT_ROOT / source["file"]).exists():
+                    errors.append(f"{document_id}: файл не найден:\n  {source['file']}")
         return errors
 
 
@@ -242,7 +302,15 @@ def print_registry(registry):
         print(f"{document['number']} — {document['title']}")
         print(f"  ID: {document['id']}")
         for version in document.get("versions", []):
-            print(f"  └─ {version['id']} [{version.get('status')}]\n     файл: {version.get('file')}\n     действует с: {version.get('effective_from')}")
+            edition = version.get("edition") or {}
+            amendment = edition.get("amendment") or {}
+            print(
+                f"  └─ {version['id']} [{version.get('status')}]\n"
+                f"     файл: {(version.get('source') or {}).get('file')}\n"
+                f"     редакция: {edition.get('date') or '—'}\n"
+                f"     изменение: {amendment.get('number') or '—'}\n"
+                f"     действует с: {amendment.get('effective_from') or edition.get('date') or '—'}"
+            )
 
 
 def main():
