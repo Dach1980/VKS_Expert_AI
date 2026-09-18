@@ -100,7 +100,9 @@ class KnowledgeStorage:
 
     def paths(self, document_id, version_id=None):
         version = self.get_version(document_id, version_id)
-        root = self.vector_index_root() / document_id / version.get("id", "")
+        document = self.get_document(document_id)
+        document_number = document.get("number") or document_id
+        root = self.vector_index_root() / document_number / version.get("id", "")
         source = version.get("source") or {}
         return DocumentPaths(
             self.resolve(source.get("file", "")),
