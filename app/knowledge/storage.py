@@ -291,7 +291,7 @@ class KnowledgeStorage:
         parsed = self.resolve(version.get("parsed_file", ""))
         if parsed.exists():
             try:
-                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig")))
+                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig"))))
             except (OSError, json.JSONDecodeError):
                 pass
         return result
