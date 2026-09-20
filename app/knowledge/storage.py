@@ -102,6 +102,7 @@ class KnowledgeStorage:
         version = self.get_version(document_id, version_id)
         document = self.get_document(document_id)
         document_number = document.get("number") or document_id
+        document_number = document_number.replace(" ", "_")
         root = self.vector_index_root() / document_number / version.get("id", "")
         source = version.get("source") or {}
         return DocumentPaths(
@@ -290,7 +291,7 @@ class KnowledgeStorage:
         parsed = self.resolve(version.get("parsed_file", ""))
         if parsed.exists():
             try:
-                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig"))))
+                result.update(self._extract_parsed_metadata(json.loads(parsed.read_text(encoding="utf-8-sig")))
             except (OSError, json.JSONDecodeError):
                 pass
         return result
