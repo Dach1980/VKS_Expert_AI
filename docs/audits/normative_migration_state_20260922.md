@@ -74,20 +74,7 @@ data/vectordb/
 - старые vector indexes;
 - экспериментальные файлы и результаты.
 
-## Следующий этап
-
-1. Аудит состава входных PDF в `knowledge/regulations/`.
-2. Проверка текущего кода модуля «Нормы».
-3. Проверка parser имени файла и формирования version metadata.
-4. Проверка фактической схемы нового расширенного JSON.
-5. Выбор одной тестовой редакции СП.
-6. Генерация нового JSON через модуль «Нормы».
-7. Валидация JSON.
-8. Только после успешной проверки — индексация.
-9. Затем повторить для всех нужных СП.
-10. После этого сформировать чистый production commit.
-
-## Важное архитектурное ограничение
+## Архитектурное ограничение
 
 Не восстанавливать нормативную применимость через бесконечные `if/elif/else`. Источником нормативного контекста должна стать структурированная нормативная база, а выбор требований должен опираться на metadata, структуру документа, редакцию и RAG.
 
@@ -104,19 +91,20 @@ data/vectordb/
 
 Эти проблемы **не исправляются сейчас**. Сначала завершается миграция нормативной базы и новый pipeline «Нормы».
 
-
 ## Граница StructureParser → SPIndexBuilder и формат PDFPageProcessor — 2026-09-22
 
-Проверены в `main`:
+Проверены:
+
 - `app/knowledge/structure_parser.py`
 - `app/knowledge/build_sp_index.py`
 - `app/knowledge/pdf_page_processor.py`
 
-### Что выдаёт PDFPageProcessor
+### PDFPageProcessor
 
-`PDFPageProcessor` формирует parsed JSON schema `1.0`.
+Формирует parsed JSON schema 1.0.
 
 На уровне документа:
+
 - `schema_version`
 - `document.number`
 - `document.title`
@@ -127,139 +115,78 @@ data/vectordb/
 - `pages[]`
 - `created`
 
-Каждая страница содержит:
-- `document.number`
-- `document.title`
-- `document.source_file`
-- `document.pages`
-- `document_id`
-- `version`
-- `page`
-- `geometry.width`
-- `geometry.height`
-- `source.pdf`
-- `source.pipeline = ["PyMuPDF", "PDFPageProcessor"]`
-- `created`
-- `blocks[]`
-- `formulas[]`
+Страница содержит:
 
-Каждый block содержит:
-- `index`
-- `bbox = [x0, y0, x1, y1]`
-- `text`
+- document metadata;
+- `page`;
+- `geometry.width/height`;
+- `source.pdf`;
+- `source.pipeline = ["PyMuPDF", "PDFPageProcessor"]`;
+- `created`;
+- `blocks[]`;
+- `formulas[]`.
+
+Block содержит:
+
+- `index`;
+- `bbox = [x0,y0,x1,y1]`;
+- `text`.
 
 На текущем этапе `formulas[]` всегда создаётся пустым.
 
-### Что использует StructureParser
+### StructureParser
 
-`StructureParser.build_structure()` получает parsed JSON и использует:
-- `document`
-- `pages[].page`
-- `pages[].blocks[].text`
-- `pages[].blocks[].bbox`
+`StructureParser.build_structure()` использует:
 
-Он дополнительно формирует:
-- sections: `type, number, title, page_start, page_end, clauses`
-- clauses: `type, number, level, text, page_start, page_end, source.file, source.blocks[].page, source.blocks[].bbox`
-- appendices: `type, number, title, page_start, page_end, blocks`
+- `document`;
+- `pages[].page`;
+- `pages[].blocks[].text`;
+- `pages[].blocks[].bbox`.
 
-### Архитектурная граница
+Формирует:
+
+- sections: `type, number, title, page_start, page_end, clauses`;
+- clauses: `type, number, level, text, page_start, page_end, source.file, source.blocks[].page, source.blocks[].bbox`;
+- appendices: `type, number, title, page_start, page_end, blocks`.
+
+### Граница
 
 `PDFPageProcessor` отвечает за PDF → parsed representation → provenance.
 
 `StructureParser` отвечает за parsed representation → структурные разделы/пункты/приложения.
 
-Новый Normative JSON Generator должен стоять после `StructureParser` и использовать уже существующие:
-- текст;
-- номер пункта;
-- страницы;
-- bbox;
-- исходный PDF/source provenance;
-- document_id/version.
+Normative JSON Generator должен стоять после StructureParser и использовать уже существующие текст, номер пункта, страницы, bbox, source provenance, document_id/version. Он не должен повторно извлекать PDF-текст, страницы или bbox.
 
-Он не должен повторно извлекать PDF-текст, страницы или bbox.
+## PageEnricher / DocumentChunkBuilder
 
-При этом Generator должен добавлять новую нормативную семантику:
-- requirements;
-- subject/attribute;
-- operator/value/unit;
-- condition/scope/exceptions;
-- tables;
-- references;
-- edition/change metadata;
-- связи с provenance.
+Проверены:
 
-### SPIndexBuilder
-
-Текущий `SPIndexBuilder.run()` сам запускает:
-`PDFPageProcessor → StructureParser → PageEnricher → DocumentChunkBuilder → EmbeddingBuilder`.
-
-Результат `StructureParser` сохраняется как `structured JSON schema 1.0`, но последующие chunk/embedding стадии работают через page/enriched-page pipeline, а не как прямой consumer этого structured JSON.
-
-Следовательно, новый Generator не следует встраивать внутрь `StructureParser` и не следует делать `SPIndexBuilder` владельцем нормативной семантики. Между структурным JSON и индексированием нужен отдельный слой:
-
-`StructureParser → Normative JSON Generator → Validator → Indexing`.
-
-
-
-## PageEnricher / DocumentChunkBuilder: дополнительный аудит границы Generator — 2026-09-22
-
-Проверены в `main`:
 - `app/knowledge/page_enricher.py`
 - `app/knowledge/document_chunk_builder.py`
 
 ### PageEnricher
 
-`PageEnricher` не создаёт новую структурную модель документа. Он работает поверх page JSON, уже созданного `PDFPageProcessor`.
+Работает поверх page JSON, уже созданного PDFPageProcessor.
 
-Он повторно использует:
-- `page`;
-- `blocks[].text`;
-- `blocks[].bbox`;
-- `document`;
-- `version`;
-- `geometry`.
+Повторно использует:
 
-Он нормализует blocks в `text_blocks[]`, сохраняя `id/index`, `bbox`, `text`.
-
-Дополнительно он умеет подключать формулы из отдельного каталога `knowledge/work/formulas/page_NNN/page_NNN_formulas.json`. При наличии формул сохраняются:
-- распознанная формула;
-- `bbox`;
-- контекст ближайшего текстового блока;
-- формула и контекст в `embedding_text`.
-
-Enriched page содержит:
+- page;
+- blocks[].text;
+- blocks[].bbox;
 - document;
 - version;
-- page;
-- geometry;
-- source.pipeline;
-- created;
-- text_blocks;
-- formulas;
-- embedding_text.
+- geometry.
 
-### Что это означает для Generator
+Нормализует blocks в `text_blocks[]`, умеет подключать формулы из `knowledge/work/formulas/page_NNN/page_NNN_formulas.json` и формирует `embedding_text`.
 
-Generator **не должен использовать PageEnricher как источник основной provenance-модели** и тем более не должен повторять его нормализацию блоков.
-
-Основная provenance уже есть раньше:
-
-`PDFPageProcessor → parsed JSON`
-
-и структурная provenance уже формируется:
-
-`StructureParser → clause.source.blocks[].page/bbox`
-
-PageEnricher полезен прежде всего для **индексационного представления**: нормализованные блоки, формулы и готовый embedding_text.
-
-Поэтому его не следует делать зависимостью нормативного Generator. Если Generator понадобится формула как нормативная сущность, источник должен быть отдельным и явно связанным с исходной page/block provenance, а не извлекаться повторно из enriched text.
+Это индексное enrichment, а не основная normative provenance.
 
 ### DocumentChunkBuilder
 
-`DocumentChunkBuilder` создаёт именно индексные chunks, а не нормативную структуру.
+Создаёт retrieval chunks, а не нормативную структуру.
 
-Он уже формирует полезную индексную provenance:
+Формирует:
+
 - `chunk_id`;
 - `document`;
 - `document_id`;
@@ -271,40 +198,17 @@ PageEnricher полезен прежде всего для **индексаци�
 - `content.text`;
 - `metadata.normative`.
 
-Его `normative_metadata` повторно использует canonical Registry:
-- document id/number/title/type;
-- version id;
-- edition;
-- source.
+Не знает нормативной семантики requirement/subject/attribute/operator/value/unit/condition/applicability/exception/table/reference.
 
-Для formula-context chunk дополнительно сохраняются:
-- formula;
-- before/after context;
-- discipline/system/topic;
-- formula bbox;
-- нормативная metadata.
+Текущий builder получает страницы из `paths.enriched`, поэтому появление Generator само по себе не делает его источником RAG. Интеграцию с индексированием решать только после валидации первого Normative JSON 2.0.
 
-### Что это означает для Generator
+# Normative JSON 2.0 — проектный контракт
 
-Здесь есть важное разделение ответственности:
+## Цель
 
-`DocumentChunkBuilder` уже умеет превращать существующий текст/формулу в **retrieval unit с provenance**.
+Normative JSON 2.0 — отдельная семантическая модель нормативного документа между StructureParser и indexing.
 
-Но он не знает нормативной семантики:
-- requirement;
-- subject;
-- attribute;
-- operator;
-- value;
-- unit;
-- condition;
-- applicability;
-- exception;
-- table/reference relation.
-
-Следовательно, Generator не должен дублировать chunk generation и не должен строить normative JSON из уже сформированных chunks.
-
-Целевой поток остаётся:
+Целевой поток:
 
 ```
 PDF
@@ -315,7 +219,7 @@ parsed JSON 1.0
   ↓
 StructureParser
   ↓
-★ Normative JSON Generator
+Normative JSON Generator
   ↓
 Normative JSON 2.0
   ↓
@@ -327,63 +231,486 @@ Indexing
   └─ EmbeddingBuilder
 ```
 
-То есть Generator **добавляет нормативную семантику к уже существующей структурной provenance**, а PageEnricher/ChunkBuilder после этого продолжают выполнять свою индексную работу.
-
-### Важное наблюдение о текущей реализации
-
-Текущий `DocumentChunkBuilder` получает страницы из `paths.enriched`, а не из нового Normative JSON. Поэтому на текущем этапе нельзя считать, что новый Generator автоматически станет источником данных для RAG только после своего появления.
-
-Понадобится отдельное решение о границе интеграции:
-
-1. либо новый индексатор будет строить retrieval units непосредственно из Normative JSON;
-2. либо существующие page/enriched chunks сохраняются как базовый слой, а нормативные entities/metadata индексируются дополнительно;
-3. либо chunk builder получает минимальный адаптер, который связывает chunk с нормативной entity/provenance.
-
-Это **следующий архитектурный вопрос**, но сейчас его не следует решать до появления и валидации первого Normative JSON 2.0.
-
-### Сверка с предыдущими аудитами
-
-Проверены существующие записи `docs/audits/` на `main`:
-
-- `norms_canonical_model_frontend_audit_20260915.md`
-- `norms_frontend_dependency_audit_20260915.md`
-- `root_cause_sewer_diameter_external_route_2026-09.md`
-
-И текущая запись:
-- `normative_migration_state_20260922.md`
-
-Предыдущие аудиты подтверждают тот же принцип границ:
-
-1. Миграция Registry/Norms должна идти к canonical model v2, а не через новые compatibility-слои.
-2. Production RAG/FAISS/chunk/embedding pipeline не следует менять в рамках frontend/registry migration.
-3. Подтверждённая ошибка `sewer_diameter` возникла из-за неправильной маршрутизации нормативного контекста, а downstream numeric comparison только усилил уже неверно выбранное требование.
-4. Текущая миграция должна начинаться с одного контрольного PDF → canonical metadata → новый нормативный JSON → validation → только затем indexing.
-5. Не следует сейчас исправлять downstream applicability/numeric comparison и не следует строить новый Generator через набор специальных `if/elif/else`.
-
-### Итоговая граница ответственности
+Контракт верхнего уровня:
 
 ```
-PDFPageProcessor
-  = PDF text + page geometry + raw block provenance
-
-StructureParser
-  = sections + clauses + appendices + clause provenance
-
-Normative JSON Generator
-  = normative semantics + tables + references + applicability
-    поверх уже существующего text/structure/provenance
-
-Validator
-  = проверка полноты/типа/связности Normative JSON
-
-PageEnricher
-  = индексное enrichment страниц + formulas/embedding_text
-
-DocumentChunkBuilder
-  = retrieval chunks + chunk provenance + canonical version metadata
-
-EmbeddingBuilder
-  = vectors / FAISS
+NormativeDocument
+├── schema_version
+├── document
+│   ├── document_id
+│   ├── number
+│   ├── title
+│   ├── document_type
+│   ├── edition
+│   │   ├── id
+│   │   ├── label
+│   │   ├── base_year
+│   │   └── amendments[]
+│   └── source
+│       ├── file
+│       ├── original_filename
+│       ├── sha256
+│       └── pages
+├── structure
+│   ├── sections[]
+│   │   └── clauses[]
+│   └── appendices[]
+├── requirements[]
+├── tables[]
+├── references[]
+└── provenance
 ```
 
-**Вывод:** для первого Generator не нужно забирать работу ни у `PDFPageProcessor`, ни у `StructureParser`, ни у `PageEnricher`, ни у `DocumentChunkBuilder`. Generator должен стать отдельным semantic layer между StructureParser и indexing, используя их результаты, а не копируя их.
+## Полный контракт полей
+
+### document
+
+```
+document.document_id
+document.number
+document.title
+document.document_type
+document.edition
+document.source
+```
+
+### edition
+
+```
+edition.id
+edition.label
+edition.base_year
+edition.amendments[]
+edition.amendments[].number
+edition.amendments[].effective_from
+```
+
+### source
+
+```
+source.file
+source.original_filename
+source.sha256
+source.pages
+```
+
+### structure / section
+
+```
+structure.sections[]
+section.number
+section.title
+section.page_start
+section.page_end
+section.source
+section.clauses[]
+```
+
+### clause
+
+```
+clause.number
+clause.level
+clause.text
+clause.page_start
+clause.page_end
+clause.source
+clause.requirements[]
+clause.table_refs[]
+clause.references[]
+```
+
+### appendix
+
+```
+appendix.number
+appendix.title
+appendix.page_start
+appendix.page_end
+appendix.source
+appendix.requirements[]
+appendix.tables[]
+appendix.references[]
+```
+
+### requirement
+
+```
+requirement.requirement_id
+requirement.clause_id
+requirement.text
+requirement.type
+requirement.subject
+requirement.relation
+requirement.values[]
+requirement.condition
+requirement.scope
+requirement.applicability
+requirement.exceptions[]
+requirement.table_refs[]
+requirement.references[]
+requirement.source
+```
+
+### subject
+
+```
+subject.object
+subject.attribute
+```
+
+### normative value
+
+```
+values[].value
+values[].unit
+values[].condition
+```
+
+### condition
+
+```
+condition.text
+condition.facts[]
+condition.facts[].subject
+condition.facts[].attribute
+condition.facts[].relation
+condition.facts[].value
+condition.facts[].unit
+```
+
+### scope
+
+```
+scope.discipline
+scope.system
+scope.segment
+```
+
+### applicability
+
+```
+applicability.systems[]
+applicability.segments[]
+applicability.objects[]
+applicability.contexts[]
+applicability.exclusions[]
+```
+
+Важно: `applicable: true/false` сюда не переносится. Это результат сопоставления нормативного условия с проектом и относится к evaluation.
+
+### exception
+
+```
+exception.text
+exception.conditions[]
+exception.requirement_refs[]
+```
+
+### table
+
+```
+table.table_id
+table.number
+table.title
+table.columns[]
+table.columns[].id
+table.columns[].name
+table.rows[]
+table.rows[].id
+table.rows[].cells[]
+table.rows[].cells[].column
+table.rows[].cells[].text
+table.rows[].cells[].value
+table.rows[].cells[].unit
+table.source
+```
+
+### reference
+
+```
+reference.reference_id
+reference.type
+reference.target
+reference.target.document_id
+reference.target.clause
+reference.target.table_id
+reference.target.appendix
+reference.target.document_number
+reference.source
+```
+
+Типы:
+
+- `clause_reference`
+- `table_reference`
+- `appendix_reference`
+- `document_reference`
+- `standard_reference`
+
+### provenance
+
+```
+provenance.generator
+provenance.generator.name
+provenance.generator.version
+provenance.source_format
+provenance.extraction
+provenance.extraction.pipeline[]
+```
+
+Entity-level source:
+
+```
+source.file
+source.blocks[]
+source.blocks[].page
+source.blocks[].bbox
+```
+
+## Карта происхождения полей
+
+### KEEP — существующая модель без концептуального изменения
+
+- `document.document_id` — canonical Registry, `registry_manager.py`.
+- `document.number` — `filename_parser.py`, canonical Registry.
+- `document.title` — `norm_metadata.py`, Registry и исходный PDF/parsed representation.
+- `document.document_type` — Registry.
+- `edition.id` — canonical `version_id`, формируемый filename parser.
+- `edition.amendments[].number` — `ParsedFilename.amendment_number`.
+- `edition.amendments[].effective_from` — `ParsedFilename.effective_date`.
+- `source.file` — Registry / normative metadata / PDF pipeline.
+- `source.original_filename` — filename parser.
+- `source.sha256` — canonical Registry.
+- `section.title` — StructureParser.
+- `section.page_start`, `section.page_end` — StructureParser.
+- `clause.number` — StructureParser.
+- `clause.level` — StructureParser.
+- `clause.text` — StructureParser.
+- `clause.page_start`, `clause.page_end` — StructureParser.
+- `clause.source` — StructureParser.
+- `requirement_id` — `training/schemas/normative_requirement.schema.json` и experiment dataset.
+
+### EXTEND
+
+- `edition.amendments` — существующее представление изменения расширяется до массива.
+- `source.pages` — нормализует существующий page count.
+- `section.number` — существующий numeric number нормализуется как string.
+- `requirement.type` — основан на существующем `requirement_type`, при этом `table` заменяется семантически на `table_dependent`.
+- `condition` — старый текст сохраняется, добавляются структурированные facts.
+- `exceptions` — старый exception расширяется условиями и ссылками.
+- `values[]` — расширяет `normative_value + normative_unit` до нескольких структурированных значений.
+- `reference.type` — существующий `reference` type получает полноценную структуру target/source.
+
+### MOVE / RENAME
+
+- `requirement.clause` → `requirement.clause_id`.
+- `requirement.requirement` → `requirement.text`.
+- `object` → `subject.object`.
+- `parameter` → `subject.attribute`.
+- runtime `operator` из `app/rag/normative_requirement.py` → normative `relation`.
+- `normative_value` + `normative_unit` → `values[]`.
+
+Дублирование document/version/section metadata внутри каждой requirement не сохраняется: контекст наследуется от root/clause.
+
+### NEW
+
+- `schema_version = 2.0`.
+- `edition.label`.
+- `edition.base_year`.
+- `clause.table_refs`.
+- `clause.references`.
+- `scope`.
+- `applicability` как описание условий применимости, без runtime result.
+- `table_refs` на requirement.
+- `references` на requirement.
+- полноценные `tables[]`, columns, rows, cells.
+- полноценные `references[]` и target.
+- requirement/table/reference-level semantic provenance.
+- document-level `provenance.generator`.
+- `provenance.source_format`.
+- `provenance.extraction`.
+
+## Источники существующих моделей
+
+### Requirement schema
+
+`training/schemas/normative_requirement.schema.json` уже содержит:
+
+```
+requirement_id
+document
+version
+clause
+section
+requirement
+requirement_type
+system
+segment
+object
+parameter
+condition
+exception
+normative_value
+normative_unit
+source_page
+```
+
+Это основа requirement части, но не готовый JSON 2.0.
+
+### Runtime requirement extraction
+
+`app/rag/normative_requirement.py` уже содержит executable representation:
+
+```
+norm
+version
+clause
+requirement
+parameter
+operator
+normative_value
+normative_unit
+page
+source
+metadata
+metadata_text
+```
+
+Особенно важно, что существующий `operator` является источником концепции для нового `relation`.
+
+### Dataset
+
+`training/datasets/experiment_001/requirements.jsonl` подтверждает реальные структуры требований, включая conditional requirements и несколько нормативных значений.
+
+### Evidence trace
+
+`training/schemas/evidence_trace.schema.json` содержит:
+
+```
+fact_id
+requirement_id
+relation
+applicability
+missing_condition
+```
+
+и состояния:
+
+```
+applicable
+not_applicable
+not_proven
+```
+
+Это модель evidence/evaluation, а не нормативного документа. Эти result states в Normative JSON 2.0 не переносятся.
+
+### Audit case
+
+`training/schemas/audit_case.schema.json` содержит нормативное evidence и applicability concepts:
+
+```
+system
+segment
+object
+parameter
+reason
+applicable
+```
+
+Из него переиспользуются semantic concepts `system/segment/object/parameter`, но `applicable: boolean` в normative JSON не переносится.
+
+### Canonical metadata
+
+Источники:
+
+- `app/knowledge/filename_parser.py`
+- `app/knowledge/norm_metadata.py`
+- `app/knowledge/registry_manager.py`
+
+Они являются источником истины для:
+
+```
+document_id
+number
+title
+document_type
+version_id
+edition
+source.file
+source.sha256
+source.original_filename
+amendment number
+effective date
+```
+
+Generator не должен создавать вторую metadata/Registry модель.
+
+### Tables
+
+Полноценной модели таблиц в текущем репозитории не найдено. `requirement_type = table` — недостаточная модель.
+
+Поэтому `tables[]`, columns, rows, cells и table links создаются впервые.
+
+### References
+
+Полноценной модели ссылок также не найдено. `requirement_type = reference` — только классификация требования.
+
+Поэтому `references[]`, target и typed links создаются впервые.
+
+## Что НЕ входит в Normative JSON 2.0
+
+Не переносить:
+
+- retrieval scores;
+- RAG ranking;
+- `best_score`;
+- `query_hits`;
+- `route_reason`;
+- `has_numeric_rule`;
+- `applicable: true/false`;
+- `violation`;
+- `compliance`;
+- `supports_violation`;
+- `supports_compliance`.
+
+Это runtime/evaluation layer.
+
+## Ключевой принцип Generator
+
+Generator не должен угадывать нормативную семантику там, где исходный текст её не подтверждает.
+
+Если для фрагмента нельзя достоверно установить:
+
+- operator;
+- value;
+- unit;
+- applicability;
+- table relation;
+- reference target;
+
+исходный текст и provenance должны сохраняться, а semantic field должен оставаться неопределённым/отсутствующим согласно контракту.
+
+Нельзя превращать неопределённость в ложное нормативное правило.
+
+## Контрольный набор для первого fixture
+
+Перед реализацией полноценного Generator контракт должен быть проверен на:
+
+- 11.5 — условие / зазор / единицы;
+- 18.18 — обычное текстовое требование;
+- 18.31 — защита от ложного числового вывода;
+- 18.36 — table-dependent requirement;
+- 21.18 — числовая/условная структура.
+
+Цель fixture — доказать, что схема способна выразить реальные нормативные конструкции, а не только простые числовые правила.
+
+## Следующий этап
+
+1. Создать `normative_document.schema.json` в выделенном каталоге схем.
+2. Создать минимальный fixture Normative JSON 2.0 на одном контрольном фрагменте.
+3. Провалидировать сам schema и fixture.
+4. Только после PASS перейти к реализации Validator.
+5. Затем реализовать Generator поверх существующих outputs PDFPageProcessor/StructureParser.
+6. После первого валидного JSON отдельно решить интеграцию Normative JSON с indexing/RAG.
+7. Не менять сейчас downstream applicability/numeric comparison и не восстанавливать routing через `if/elif/else`.
