@@ -148,6 +148,100 @@ def main() -> None:
     print("DECISION FROM decide_audit():")
     dump(decision)
 
+
+
+    print("\nSTEP 4A: raw decide_audit() request/response")
+    captured = {}
+
+    original_chat = client.chat
+
+    def capture_chat(prompt, *args, **kwargs):
+        captured["prompt"] = str(prompt)
+        raw = original_chat(prompt, *args, **kwargs)
+        captured["raw_response"] = str(raw or "")
+        return raw
+
+    client.chat = capture_chat
+    decision = decide_audit(client, CANDIDATE, norm_text)
+    client.chat = original_chat
+
+    prompt_text = captured.get("prompt", "")
+    raw_response = captured.get("raw_response", "")
+    print(f"PROMPT LENGTH: {len(prompt_text)} chars")
+    print("RAW LLM RESPONSE:")
+    print(raw_response if raw_response else "<EMPTY>")
+    print("PARSED DECISION:")
+    dump(decision)
+
+    print("\nSTEP 5A: isolated applicability matrix")
+    applicability_prompt_template = """Ты проверяешь применимость ОДНОГО нормативного требования к ОДНОМУ факту проекта.
+Верни ТОЛЬКО JSON:
+{"applicable":"yes|no|unclear","reason":"кратко","missing_evidence":["..."]}
+
+ФАКТ ПРОЕКТА:
+{candidate}
+
+НОРМАТИВНОЕ ТРЕБОВАНИЕ:
+{requirement}
+
+Правила:
+- yes только если текст факта прямо относится к объекту/параметру требования и данных достаточно, чтобы утверждать применимость;
+- no если требование явно относится к другому объекту, параметру или условию;
+- unclear если связь возможна, но из факта не видно нужного объекта/условия;
+- не считай совпадение одного общего слова (например, «диаметр») доказательством применимости.
+"""
+    applicability_matrix = []
+    for i, requirement in enumerate(production_requirements, 1):
+        isolated_prompt = applicability_prompt_template.format(
+            candidate=json.dumps(CANDIDATE, ensure_ascii=False),
+            requirement=json.dumps(
+                {
+                    "norm": requirement.get("norm"),
+                    "clause": requirement.get("clause"),
+                    "requirement": requirement.get("requirement"),
+                    "operator": requirement.get("operator"),
+                    "normative_value": requirement.get("normative_value"),
+                    "normative_unit": requirement.get("normative_unit"),
+                },
+                ensure_ascii=False,
+            ),
+        )
+        raw = original_chat(
+            isolated_prompt,
+            temperature=0.1,
+            max_tokens=500,
+            enable_thinking=False,
+        )
+        raw_text = str(raw or "").strip()
+        parsed = {}
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError:
+            start, end = raw_text.find("{"), raw_text.rfind("}")
+            if start >= 0 and end > start:
+                try:
+                    parsed = json.loads(raw_text[start:end + 1])
+                except json.JSONDecodeError:
+                    parsed = {}
+        row = {
+            "index": i,
+            "clause": requirement.get("clause"),
+            "requirement": requirement.get("requirement"),
+            "applicable": parsed.get("applicable") if isinstance(parsed, dict) else None,
+            "reason": parsed.get("reason") if isinstance(parsed, dict) else "",
+            "missing_evidence": parsed.get("missing_evidence") if isinstance(parsed, dict) else [],
+            "raw_response": raw_text,
+        }
+        applicability_matrix.append(row)
+        print(f"\nREQUIREMENT #{i} / clause {requirement.get('clause')}")
+        print(f"  applicable: {row['applicable']!r}")
+        print(f"  reason: {row['reason']!r}")
+        print(f"  missing_evidence: {row['missing_evidence']!r}")
+        print(f"  raw_response: {raw_text!r}")
+
+    print("\nAPPLICABILITY MATRIX:")
+    dump(applicability_matrix)
+
     print("\nSTEP 5: deterministic_numeric_comparison()")
     compared = deterministic_numeric_comparison(CANDIDATE, decision, production_requirements)
     print("DECISION AFTER deterministic_numeric_comparison():")
