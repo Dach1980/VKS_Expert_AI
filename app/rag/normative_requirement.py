@@ -6,7 +6,7 @@ from typing import Any
 
 _CLAUSE_PATTERNS = (
     re.compile(r"(?:пункт|п\.|параграф|раздел)\s*([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE),
-    re.compile(r"(?:^|\s)([0-9]+(?:\.[0-9]+){2,})(?:\s|$)"),
+    re.compile(r"(?:^|\s)([0-9]+(?:\.[0-9]+)+)(?:\s|$)"),
 )
 
 _NUMBER_PATTERNS = (
