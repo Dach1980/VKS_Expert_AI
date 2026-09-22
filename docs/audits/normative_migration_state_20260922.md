@@ -200,3 +200,190 @@ data/vectordb/
 
 `StructureParser → Normative JSON Generator → Validator → Indexing`.
 
+
+
+## PageEnricher / DocumentChunkBuilder: дополнительный аудит границы Generator — 2026-09-22
+
+Проверены в `main`:
+- `app/knowledge/page_enricher.py`
+- `app/knowledge/document_chunk_builder.py`
+
+### PageEnricher
+
+`PageEnricher` не создаёт новую структурную модель документа. Он работает поверх page JSON, уже созданного `PDFPageProcessor`.
+
+Он повторно использует:
+- `page`;
+- `blocks[].text`;
+- `blocks[].bbox`;
+- `document`;
+- `version`;
+- `geometry`.
+
+Он нормализует blocks в `text_blocks[]`, сохраняя `id/index`, `bbox`, `text`.
+
+Дополнительно он умеет подключать формулы из отдельного каталога `knowledge/work/formulas/page_NNN/page_NNN_formulas.json`. При наличии формул сохраняются:
+- распознанная формула;
+- `bbox`;
+- контекст ближайшего текстового блока;
+- формула и контекст в `embedding_text`.
+
+Enriched page содержит:
+- document;
+- version;
+- page;
+- geometry;
+- source.pipeline;
+- created;
+- text_blocks;
+- formulas;
+- embedding_text.
+
+### Что это означает для Generator
+
+Generator **не должен использовать PageEnricher как источник основной provenance-модели** и тем более не должен повторять его нормализацию блоков.
+
+Основная provenance уже есть раньше:
+
+`PDFPageProcessor → parsed JSON`
+
+и структурная provenance уже формируется:
+
+`StructureParser → clause.source.blocks[].page/bbox`
+
+PageEnricher полезен прежде всего для **индексационного представления**: нормализованные блоки, формулы и готовый embedding_text.
+
+Поэтому его не следует делать зависимостью нормативного Generator. Если Generator понадобится формула как нормативная сущность, источник должен быть отдельным и явно связанным с исходной page/block provenance, а не извлекаться повторно из enriched text.
+
+### DocumentChunkBuilder
+
+`DocumentChunkBuilder` создаёт именно индексные chunks, а не нормативную структуру.
+
+Он уже формирует полезную индексную provenance:
+- `chunk_id`;
+- `document`;
+- `document_id`;
+- `version`;
+- `page`;
+- `location.page`;
+- `location.bbox`;
+- `location.pdf`;
+- `content.text`;
+- `metadata.normative`.
+
+Его `normative_metadata` повторно использует canonical Registry:
+- document id/number/title/type;
+- version id;
+- edition;
+- source.
+
+Для formula-context chunk дополнительно сохраняются:
+- formula;
+- before/after context;
+- discipline/system/topic;
+- formula bbox;
+- нормативная metadata.
+
+### Что это означает для Generator
+
+Здесь есть важное разделение ответственности:
+
+`DocumentChunkBuilder` уже умеет превращать существующий текст/формулу в **retrieval unit с provenance**.
+
+Но он не знает нормативной семантики:
+- requirement;
+- subject;
+- attribute;
+- operator;
+- value;
+- unit;
+- condition;
+- applicability;
+- exception;
+- table/reference relation.
+
+Следовательно, Generator не должен дублировать chunk generation и не должен строить normative JSON из уже сформированных chunks.
+
+Целевой поток остаётся:
+
+```
+PDF
+  ↓
+PDFPageProcessor
+  ↓
+parsed JSON 1.0
+  ↓
+StructureParser
+  ↓
+★ Normative JSON Generator
+  ↓
+Normative JSON 2.0
+  ↓
+Validator
+  ↓
+Indexing
+  ├─ PageEnricher
+  ├─ DocumentChunkBuilder
+  └─ EmbeddingBuilder
+```
+
+То есть Generator **добавляет нормативную семантику к уже существующей структурной provenance**, а PageEnricher/ChunkBuilder после этого продолжают выполнять свою индексную работу.
+
+### Важное наблюдение о текущей реализации
+
+Текущий `DocumentChunkBuilder` получает страницы из `paths.enriched`, а не из нового Normative JSON. Поэтому на текущем этапе нельзя считать, что новый Generator автоматически станет источником данных для RAG только после своего появления.
+
+Понадобится отдельное решение о границе интеграции:
+
+1. либо новый индексатор будет строить retrieval units непосредственно из Normative JSON;
+2. либо существующие page/enriched chunks сохраняются как базовый слой, а нормативные entities/metadata индексируются дополнительно;
+3. либо chunk builder получает минимальный адаптер, который связывает chunk с нормативной entity/provenance.
+
+Это **следующий архитектурный вопрос**, но сейчас его не следует решать до появления и валидации первого Normative JSON 2.0.
+
+### Сверка с предыдущими аудитами
+
+Проверены существующие записи `docs/audits/` на `main`:
+
+- `norms_canonical_model_frontend_audit_20260915.md`
+- `norms_frontend_dependency_audit_20260915.md`
+- `root_cause_sewer_diameter_external_route_2026-09.md`
+
+И текущая запись:
+- `normative_migration_state_20260922.md`
+
+Предыдущие аудиты подтверждают тот же принцип границ:
+
+1. Миграция Registry/Norms должна идти к canonical model v2, а не через новые compatibility-слои.
+2. Production RAG/FAISS/chunk/embedding pipeline не следует менять в рамках frontend/registry migration.
+3. Подтверждённая ошибка `sewer_diameter` возникла из-за неправильной маршрутизации нормативного контекста, а downstream numeric comparison только усилил уже неверно выбранное требование.
+4. Текущая миграция должна начинаться с одного контрольного PDF → canonical metadata → новый нормативный JSON → validation → только затем indexing.
+5. Не следует сейчас исправлять downstream applicability/numeric comparison и не следует строить новый Generator через набор специальных `if/elif/else`.
+
+### Итоговая граница ответственности
+
+```
+PDFPageProcessor
+  = PDF text + page geometry + raw block provenance
+
+StructureParser
+  = sections + clauses + appendices + clause provenance
+
+Normative JSON Generator
+  = normative semantics + tables + references + applicability
+    поверх уже существующего text/structure/provenance
+
+Validator
+  = проверка полноты/типа/связности Normative JSON
+
+PageEnricher
+  = индексное enrichment страниц + formulas/embedding_text
+
+DocumentChunkBuilder
+  = retrieval chunks + chunk provenance + canonical version metadata
+
+EmbeddingBuilder
+  = vectors / FAISS
+```
+
+**Вывод:** для первого Generator не нужно забирать работу ни у `PDFPageProcessor`, ни у `StructureParser`, ни у `PageEnricher`, ни у `DocumentChunkBuilder`. Generator должен стать отдельным semantic layer между StructureParser и indexing, используя их результаты, а не копируя их.
