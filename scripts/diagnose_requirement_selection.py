@@ -10,6 +10,7 @@ No production code is modified.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -17,8 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.checking.resilient import _indexed_norms, _multi_context
+from app.checking.resilient import _indexed_norms, _multi_context, _finalise_decision
+from app.checking.audit_decision import decide_audit
+from app.checking.table_check import build_table_check_row, deterministic_numeric_comparison
 from app.knowledge.storage import KnowledgeStorage
+from app.llm.lmstudio_client import LMStudioClient
 from app.rag.audit_retrieval import retrieve_audit_context
 from app.rag.normative_requirement import select_normative_requirements
 from app.rag.normative_router import route_candidate
@@ -126,6 +130,49 @@ def main() -> None:
             f"requirement_nonempty={bool(str(item.get('requirement') or '').strip())}"
         )
 
+    print("\nSTEP 4: decide_audit()")
+    print("Initializing chat client...")
+    client = LMStudioClient()
+    available_models = [
+        str(item.get("id"))
+        for item in client.get_models().get("data", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    requested_model = str(os.getenv("LM_STUDIO_MODEL") or "").strip()
+    model = requested_model if requested_model else client._select_chat_model({"data": [{"id": value} for value in available_models]})
+    if model not in available_models:
+        raise RuntimeError(f"LM Studio model is unavailable: {model}")
+    client.model = model
+    print(f"CHAT MODEL: {model}")
+    decision = decide_audit(client, CANDIDATE, norm_text)
+    print("DECISION FROM decide_audit():")
+    dump(decision)
+
+    print("\nSTEP 5: deterministic_numeric_comparison()")
+    compared = deterministic_numeric_comparison(CANDIDATE, decision, production_requirements)
+    print("DECISION AFTER deterministic_numeric_comparison():")
+    dump(compared)
+    print(f"  type: {compared.get('type')!r}")
+    print(f"  norm: {compared.get('norm')!r}")
+    print(f"  clause: {compared.get('clause')!r}")
+    print(f"  project_value: {compared.get('project_value')!r}")
+    print(f"  normative_value: {compared.get('normative_value')!r}")
+    print(f"  comparison: {compared.get('comparison')!r}")
+
+    print("\nSTEP 6: _finalise_decision()")
+    final_decision = _finalise_decision(compared, CANDIDATE, production_requirements)
+    print("FINAL DECISION:")
+    dump(final_decision)
+    print(f"  type: {final_decision.get('type')!r}")
+    print(f"  norm: {final_decision.get('norm')!r}")
+    print(f"  clause: {final_decision.get('clause')!r}")
+    print(f"  normative_requirement_nonempty: {bool(str(final_decision.get('normative_requirement') or '').strip())}")
+
+    print("\nSTEP 7: build_table_check_row()")
+    table_row = build_table_check_row(CANDIDATE, final_decision, 1, results)
+    print("TABLE CHECK ROW:")
+    dump(table_row.to_dict())
+
     print("\nPRODUCTION NORM TEXT:")
     print(norm_text[:8000] if norm_text else "<EMPTY>")
 
@@ -136,9 +183,15 @@ def main() -> None:
         print("FAILURE_STAGE=select_normative_requirements")
     elif not production_requirements:
         print("FAILURE_STAGE=_multi_context_production_filter")
+    elif not isinstance(decision, dict):
+        print("FAILURE_STAGE=decide_audit")
+    elif not isinstance(compared, dict):
+        print("FAILURE_STAGE=deterministic_numeric_comparison")
+    elif not isinstance(final_decision, dict):
+        print("FAILURE_STAGE=_finalise_decision")
     else:
-        print("FAILURE_STAGE=after_requirement_selection")
-        print("Requirement selection and production _multi_context() filter both returned data.")
+        print("FAILURE_STAGE=after_table_check_row")
+        print("Steps 1-7 returned data without modifying production logic.")
 
 if __name__ == "__main__":
     main()
