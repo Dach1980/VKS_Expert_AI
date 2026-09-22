@@ -148,8 +148,6 @@ def main() -> None:
     print("DECISION FROM decide_audit():")
     dump(decision)
 
-
-
     print("\nSTEP 4A: raw decide_audit() request/response")
     captured = {}
 
@@ -176,7 +174,7 @@ def main() -> None:
     print("\nSTEP 5A: isolated applicability matrix")
     applicability_prompt_template = """Ты проверяешь применимость ОДНОГО нормативного требования к ОДНОМУ факту проекта.
 Верни ТОЛЬКО JSON:
-{"applicable":"yes|no|unclear","reason":"кратко","missing_evidence":["..."]}
+{{"applicable":"yes|no|unclear","reason":"кратко","missing_evidence":["..."]}}
 
 ФАКТ ПРОЕКТА:
 {candidate}
