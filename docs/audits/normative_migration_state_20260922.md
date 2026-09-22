@@ -714,3 +714,109 @@ Generator не должен угадывать нормативную семан
 5. Затем реализовать Generator поверх существующих outputs PDFPageProcessor/StructureParser.
 6. После первого валидного JSON отдельно решить интеграцию Normative JSON с indexing/RAG.
 7. Не менять сейчас downstream applicability/numeric comparison и не восстанавливать routing через `if/elif/else`.
+
+# Validation Normative JSON 2.0 — 2026-09-22
+
+## Fixture
+
+Создан минимальный контрольный fixture:
+
+- training/fixtures/normative_document_2_0_minimal.json
+- commit: 7df6114b62d215c12561c210525328bd0fdc2e9f
+
+Fixture содержит минимальный полный документ, одну секцию, один пункт и одно обязательное числовое требование с subject, relation, values[], condition, scope, applicability и provenance.
+Fixture намеренно не использует runtime-поле applicable.
+
+## Проверка schema
+
+Проверена JSON-структура самой schema:
+
+- schema корректно разбирается как JSON;
+- $schema = JSON Schema Draft 2020-12;
+- найдено 33 внутренних $ref;
+- неразрешённых ссылок на $defs не обнаружено.
+
+Во время negative validation обнаружен реальный дефект первого варианта schema: prefixItems + items:false без ограничения длины не запрещал bbox из трёх координат. Исправление внесено: source_block.bbox.minItems = 4 и maxItems = 4.
+
+Commit исправления schema: ecdac402e2e3fcbddb7ed3edffdaa1f44171cb35.
+
+После исправления проверка повторена.
+
+## Validation results
+
+Проверка выполнена непосредственно относительно текущего содержимого training/schemas/normative_document.schema.json; negative cases получены мутацией одного и того же положительного fixture.
+
+| Case | Ожидание | Результат |
+|---|---|---|
+| Положительный fixture | PASS | **PASS** |
+| Отсутствует requirement_id | FAIL | **FAIL / корректно отклонён** |
+| bbox содержит 3 координаты | FAIL | **FAIL / корректно отклонён** |
+| Неизвестный requirement.type | FAIL | **FAIL / корректно отклонён** |
+| applicable: true в requirement | FAIL | **FAIL / корректно отклонён** |
+| values: [100] вместо массива объектов | FAIL | **FAIL / корректно отклонён** |
+
+Точные диагностические причины:
+
+- $.requirements[0].requirement_id: required
+- $.requirements[0].source.blocks[0].bbox: minItems
+- $.requirements[0].type: enum
+- $.requirements[0].applicable: additionalProperties
+- $.requirements[0].values[0]: type
+
+Таким образом, после исправления bbox все запланированные positive/negative проверки проходят по ожидаемому поведению.
+
+## Что доказала проверка
+
+1. Базовый Normative JSON 2.0 может быть выражен текущим контрактом.
+2. Обязательный requirement_id действительно enforced schema.
+3. bbox теперь строго требует четыре координаты.
+4. requirement.type ограничен закрытым enum.
+5. Runtime/evaluation-поле applicable не может незаметно попасть в normative JSON.
+6. values[] действительно является массивом структурированных объектов, а не массивом сырых чисел.
+7. additionalProperties: false работает как защита от возврата к legacy/runtime полям.
+
+## Gate
+
+**VALIDATION GATE: PASS.**
+
+До этого PASS реализация Validator не начиналась.
+
+Следующий этап — проектирование отдельного Normative JSON Validator, не смешивая его с Generator, StructureParser или RAG.
+
+## Проект Validator
+
+Validator должен иметь две независимые группы проверок.
+
+### 1. Schema validation
+
+Отвечает только за соответствие JSON Schema 2.0: required fields, types, enum, array/object structure, bbox shape, additional properties и базовые constraints.
+
+Schema validation не должна исправлять входной JSON.
+
+### 2. Semantic/integrity validation
+
+После schema PASS Validator должен проверять связи и внутреннюю согласованность документа:
+
+- requirement.clause_id существует среди clauses;
+- table_refs указывают на существующие tables;
+- references[] и typed links не ссылаются на несуществующие внутренние targets;
+- requirement_id, table_id и reference_id уникальны;
+- страницы provenance находятся в диапазоне document.source.pages;
+- bbox имеет четыре координаты и, при доступной geometry страницы, не выходит за её границы;
+- page_start <= page_end;
+- section/clause provenance согласуется с указанными страницами;
+- значения/условия не должны автоматически преобразовываться в другие нормативные значения.
+
+Validator должен возвращать ошибки, а не молча исправлять JSON.
+
+### Не входит в Validator
+
+Validator не должен выбирать применимость требования к проекту, выставлять applicable true/false, сравнивать проектные значения с нормативными, рассчитывать violation/compliance, ранжировать RAG hits, выбирать лучший нормативный документ, заменять Generator или исправлять смысловые ошибки Qwen.
+
+## Следующий практический шаг
+
+После PASS проектировать реализацию Validator как отдельного слоя:
+
+Normative JSON 2.0 → Schema validation → Semantic integrity validation → PASS/FAIL → Indexing
+
+Только после этого переходить к Generator.
