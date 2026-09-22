@@ -820,3 +820,41 @@ Validator не должен выбирать применимость требо
 Normative JSON 2.0 → Schema validation → Semantic integrity validation → PASS/FAIL → Indexing
 
 Только после этого переходить к Generator.
+# Normative JSON Validator contract — 2026-09-23
+
+Зафиксирован первый контракт Validator и базовый набор тестов.
+
+Структура:
+
+- app/knowledge/normative/validator.py — публичный API и orchestration;
+- app/knowledge/normative/schema_validator.py — JSON Schema validation;
+- app/knowledge/normative/integrity_validator.py — semantic/integrity checks;
+- app/knowledge/normative/validation_result.py — ValidationResult, ValidationError, ValidationWarning;
+- app/knowledge/normative/validation_codes.py — стабильные machine-readable коды ошибок;
+- app/knowledge/normative/__init__.py — публичные exports;
+- tests/normative/test_normative_validator.py — первый regression-набор.
+
+Публичный API:
+
+    NormativeJSONValidator(schema_path).validate(document) -> ValidationResult
+
+Порядок выполнения зафиксирован: SchemaValidator запускается первым; IntegrityValidator запускается только после schema PASS. При schema FAIL integrity-проверки не выполняются.
+
+Первый regression-набор содержит 10 случаев:
+
+1. valid minimal fixture -> PASS;
+2. missing requirement_id -> schema ERROR;
+3. invalid bbox -> schema ERROR;
+4. unknown requirement.type -> schema ERROR;
+5. applicable -> schema ERROR через additionalProperties;
+6. invalid values[] -> schema ERROR;
+7. nonexistent clause_id -> integrity ERROR;
+8. duplicate requirement_id -> integrity ERROR;
+9. nonexistent table_ref -> integrity ERROR;
+10. out-of-range provenance page -> integrity ERROR.
+
+На этом этапе тесты зафиксированы в репозитории, но отдельный execution среды CI/pytest ещё не выполнялся через GitHub API. Поэтому данный шаг является фиксацией контракта и regression suite, а не утверждением о выполнении тестов.
+
+Validator не определяет applicability к проекту, не сравнивает проектные и нормативные значения, не рассчитывает violation/compliance, не ранжирует RAG и не выбирает нормативный документ.
+
+Следующий шаг: выполнить pytest в рабочем окружении проекта; при PASS — уточнить и реализовать semantic integrity checks, не расширяя Validator в сторону Generator/RAG/runtime applicability.
