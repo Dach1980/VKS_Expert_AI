@@ -1,0 +1,124 @@
+{
+  "schema_version": "2.0",
+  "document": {
+    "document_id": "SP_30.13330.2020",
+    "number": "СП 30.13330.2020",
+    "title": "Минимальный fixture Normative JSON 2.0",
+    "document_type": "СП",
+    "edition": {
+      "id": "SP_30.13330.2020_2025",
+      "label": "СП 30.13330.2020 с Изм. 5",
+      "base_year": 2020,
+      "amendments": [
+        {
+          "number": 5,
+          "effective_from": "2025-03-01"
+        }
+      ]
+    },
+    "source": {
+      "file": "СП_30.13330.2020_Изм.5.pdf",
+      "original_filename": "СП_30.13330.2020 Изм.5 01.03.2025.pdf",
+      "pages": 1
+    }
+  },
+  "structure": {
+    "sections": [
+      {
+        "number": "18",
+        "title": "Минимальный раздел для проверки схемы",
+        "page_start": 1,
+        "page_end": 1,
+        "source": {
+          "file": "СП_30.13330.2020_Изм.5.pdf",
+          "blocks": [
+            {
+              "page": 1,
+              "bbox": [10, 20, 300, 40]
+            }
+          ]
+        },
+        "clauses": [
+          {
+            "number": "18.1",
+            "level": 2,
+            "text": "Минимальный пункт fixture.",
+            "page_start": 1,
+            "page_end": 1,
+            "source": {
+              "file": "СП_30.13330.2020_Изм.5.pdf",
+              "blocks": [
+                {
+                  "page": 1,
+                  "bbox": [10, 45, 300, 80]
+                }
+              ]
+            },
+            "requirements": ["REQ-18.1-001"],
+            "table_refs": [],
+            "references": []
+          }
+        ]
+      }
+    ],
+    "appendices": []
+  },
+  "requirements": [
+    {
+      "requirement_id": "REQ-18.1-001",
+      "clause_id": "18.1",
+      "text": "Диаметр трубопровода должен быть не менее 100 мм.",
+      "type": "mandatory",
+      "subject": {
+        "object": "трубопровод",
+        "attribute": "диаметр"
+      },
+      "relation": ">=",
+      "values": [
+        {
+          "value": 100,
+          "unit": "мм"
+        }
+      ],
+      "condition": {
+        "text": "Для рассматриваемого участка."
+      },
+      "scope": {
+        "discipline": "ВК",
+        "system": "wastewater",
+        "segment": "internal"
+      },
+      "applicability": {
+        "systems": ["wastewater"],
+        "segments": ["internal"],
+        "objects": ["трубопровод"],
+        "contexts": ["рассматриваемый участок"],
+        "exclusions": []
+      },
+      "exceptions": [],
+      "table_refs": [],
+      "references": [],
+      "source": {
+        "file": "СП_30.13330.2020_Изм.5.pdf",
+        "blocks": [
+          {
+            "page": 1,
+            "bbox": [10, 85, 300, 120]
+          }
+        ]
+      }
+    }
+  ],
+  "tables": [],
+  "references": [],
+  "provenance": {
+    "generator": {
+      "name": "Normative JSON 2.0 fixture",
+      "version": "0.1"
+    },
+    "source_format": "pdf",
+    "extraction": {
+      "pipeline": ["fixture"]
+    }
+  }
+}
