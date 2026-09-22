@@ -21,7 +21,7 @@ from app.checking.resilient import _indexed_norms, _multi_context
 from app.knowledge.storage import KnowledgeStorage
 from app.rag.audit_retrieval import retrieve_audit_context
 from app.rag.normative_requirement import select_normative_requirements
-from app.skills.registry import route_candidate
+from app.rag.normative_router import route_candidate
 from app.rag.normative_router import filter_retrievers
 
 
