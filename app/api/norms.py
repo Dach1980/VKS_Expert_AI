@@ -9,8 +9,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
-from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
+from app.api.schemas import NormDeleteResponse, NormGenerateResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
+from app.knowledge.normative.generator import NormativeJSONGenerator, NormativeGenerationError
+from app.knowledge.pdf_page_processor import PDFPageProcessor
 from app.knowledge.registry_manager import RegistryError
 from app.knowledge.storage import KnowledgeStorage, StorageError
 
@@ -147,6 +149,95 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         result["current_change_date"] = None
     result["versions"] = versions
     return result
+
+
+def _generate_norm(document_id: str, version_id: str) -> None:
+    """Run PDF extraction -> Normative JSON 2.0 -> Validator."""
+    storage = KnowledgeStorage()
+    paths = storage.paths(document_id, version_id)
+    status_path = paths.index_root / "normative_generation.json"
+    paths.index_root.mkdir(parents=True, exist_ok=True)
+    status_path.write_text(
+        __import__("json").dumps(
+            {"status": "running", "stage": "starting"},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    try:
+        storage.ensure_version_dirs(document_id, version_id)
+        PDFPageProcessor(document_id, version_id, storage).run()
+        document, validation = NormativeJSONGenerator(
+            document_id=document_id,
+            version_id=version_id,
+            storage=storage,
+        ).generate()
+        if not validation.valid:
+            print(
+                f"[Project Expert AI][Norms] Normative JSON validation failed: "
+                f"{document_id}/{version_id}: {len(validation.errors)} errors"
+            )
+    except Exception as error:
+        status_path.write_text(
+            __import__("json").dumps(
+                {
+                    "status": "failed",
+                    "stage": "error",
+                    "valid": False,
+                    "error": str(error),
+                    "error_type": type(error).__name__,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(
+            f"[Project Expert AI][Norms] Generation failed: "
+            f"{document_id}/{version_id}: {error}"
+        )
+
+
+@router.post(
+    "/{document_id}/{version_id}/generate",
+    response_model=NormGenerateResponse,
+)
+def generate_norm(document_id: str, version_id: str, background_tasks: BackgroundTasks):
+    storage = KnowledgeStorage()
+    try:
+        storage.get_version(document_id, version_id)
+        paths = storage.paths(document_id, version_id)
+        if not paths.pdf.exists():
+            raise StorageError(f"PDF не найден: {paths.pdf}")
+        generation_file = paths.index_root / "normative_generation.json"
+        if generation_file.exists():
+            try:
+                state = __import__("json").loads(
+                    generation_file.read_text(encoding="utf-8")
+                )
+                if state.get("status") == "running":
+                    return NormGenerateResponse(
+                        success=True,
+                        document_id=document_id,
+                        version_id=version_id,
+                        status="running",
+                        message="Генерация Normative JSON 2.0 уже выполняется",
+                    )
+            except Exception:
+                pass
+        storage.ensure_version_dirs(document_id, version_id)
+    except StorageError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    background_tasks.add_task(_generate_norm, document_id, version_id)
+    return NormGenerateResponse(
+        success=True,
+        document_id=document_id,
+        version_id=version_id,
+        status="running",
+        message="Создание Normative JSON 2.0 запущено",
+    )
 
 
 def _index_norm(document_id: str, version_id: str) -> None:
@@ -286,13 +377,38 @@ def index_norm(document_id: str, version_id: str, background_tasks: BackgroundTa
         paths = storage.paths(document_id, version_id)
         if not paths.pdf.exists():
             raise StorageError(f"PDF не найден: {paths.pdf}")
+        if not paths.structured.exists():
+            raise StorageError(
+                "Normative JSON 2.0 ещё не создан. Сначала выполните «Создать JSON 2.0»."
+            )
+        generation_file = paths.index_root / "normative_generation.json"
+        if not generation_file.exists():
+            raise StorageError(
+                "Не найден результат Validator. Индексация разрешена только после Validator PASS."
+            )
+        try:
+            generation = __import__("json").loads(
+                generation_file.read_text(encoding="utf-8")
+            )
+        except Exception as error:
+            raise StorageError(f"Не удалось прочитать результат Validator: {error}") from error
+        if generation.get("status") != "validated" or generation.get("valid") is not True:
+            raise StorageError(
+                "Normative JSON 2.0 не прошёл Validator. Индексация заблокирована."
+            )
         storage.clear_index_error(document_id, version_id)
         storage.ensure_version_dirs(document_id, version_id)
         storage.start_indexing(document_id, version_id)
     except StorageError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise HTTPException(status_code=409, detail=str(error)) from error
     background_tasks.add_task(_index_norm_after_start, document_id, version_id)
-    return NormIndexResponse(success=True, document_id=document_id, version_id=version_id, status="indexing", message="Индексация выбранной версии запущена")
+    return NormIndexResponse(
+        success=True,
+        document_id=document_id,
+        version_id=version_id,
+        status="indexing",
+        message="Индексация выбранной версии запущена после Validator PASS",
+    )
 
 
 def _index_norm_after_start(document_id: str, version_id: str) -> None:
