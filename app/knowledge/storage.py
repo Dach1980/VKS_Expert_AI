@@ -368,12 +368,25 @@ class KnowledgeStorage:
         meta = self.get_version_metadata(document_id, version_id)
         error_file = paths.index_root / "index_error.json"
         indexing_file = paths.index_root / "indexing.json"
+        generation_file = paths.index_root / "normative_generation.json"
         result = {
             "pages_count": meta.get("pages_count", 0),
             "vector_index": (paths.embeddings / "index.faiss").exists(),
             "vector_metadata": (paths.embeddings / "metadata.json").exists(),
             "indexing": indexing_file.exists(),
+            "normative_json_exists": paths.structured.exists(),
+            "normative_json_valid": False,
+            "normative_generation": None,
         }
+        if generation_file.exists():
+            try:
+                result["normative_generation"] = json.loads(generation_file.read_text(encoding="utf-8"))
+                result["normative_json_valid"] = bool(
+                    result["normative_generation"].get("status") == "validated"
+                    and result["normative_generation"].get("valid") is True
+                )
+            except Exception:
+                result["normative_generation"] = {"status": "failed"}
         if error_file.exists():
             try:
                 result["error"] = json.loads(error_file.read_text(encoding="utf-8")).get("error")
