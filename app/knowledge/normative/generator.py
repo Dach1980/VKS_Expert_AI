@@ -261,6 +261,33 @@ class NormativeJSONGenerator:
                             current_section["page_end"] = page_number
                         elif current_appendix is not None:
                             current_appendix["page_end"] = page_number
+
+                        req_type = self._requirement_type(current_clause["text"])
+                        if req_type and not current_clause["requirements"]:
+                            req_id = f"{self.document_id}:{self.version_id}:req:{current_clause['number']}"
+                            requirement = {
+                                "requirement_id": req_id,
+                                "clause_id": current_clause["number"],
+                                "text": current_clause["text"],
+                                "type": req_type,
+                                "subject": self._requirement_subject(current_clause["number"]),
+                                "source": current_clause["source"],
+                            }
+                            requirements.append(requirement)
+                            current_clause["requirements"].append(req_id)
+
+                        for match in STANDARD_RE.finditer(current_clause["text"]):
+                            target_number = re.sub(r"\s+", " ", match.group(1)).strip()
+                            ref_id = f"{self.document_id}:{self.version_id}:ref:std:{target_number.lower().replace(' ', '_')}"
+                            if ref_id not in seen_refs:
+                                seen_refs.add(ref_id)
+                                references.append({
+                                    "reference_id": ref_id,
+                                    "type": "standard_reference",
+                                    "target": {"document_number": target_number},
+                                    "source": current_clause["source"],
+                                })
+                                current_clause["references"].append(ref_id)
                         continue
 
                     if current_clause is not None:
