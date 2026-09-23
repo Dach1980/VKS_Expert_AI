@@ -46,6 +46,29 @@ function isIndexed(version) {
 function isIndexing(version) {
   return !!(version && version.processing && version.processing.indexing);
 }
+function normativeJSONValid(version) {
+  return !!(version && version.processing && version.processing.normative_json_valid === true);
+}
+function normativeJSONRunning(version) {
+  var state = version && version.processing && version.processing.normative_generation;
+  return !!(state && state.status === 'running');
+}
+function normativeJSONStatus(version) {
+  var state = version && version.processing && version.processing.normative_generation;
+  if (!state) return '';
+  if (state.status === 'validated') return 'JSON 2.0: Validator PASS';
+  if (state.status === 'failed') return 'JSON 2.0: Validator ERROR';
+  if (state.status === 'running') {
+    var labels = {
+      starting: 'подготовка',
+      loading: 'извлечение страниц',
+      structure: 'построение структуры',
+      validation: 'Validator'
+    };
+    return 'JSON 2.0: ' + (labels[state.stage] || state.stage || 'обработка');
+  }
+  return '';
+}
 function findVersion(norm, sourceId, versionId) {
   var versions = norm && Array.isArray(norm.versions) ? norm.versions : [];
   return versions.find(function (v) {
@@ -64,11 +87,22 @@ function formatDisplayDate(value) {
   var match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? match[3] + '.' + match[2] + '.' + match[1] : text;
 }
+function renderGenerationAction(norm, version) {
+  var sid = version.document_id || norm.id;
+  var vid = version.version_id || version.id;
+  if (normativeJSONRunning(version)) return '<span class="status-badge info">' + esc(normativeJSONStatus(version)) + '</span>';
+  if (normativeJSONValid(version)) return '<span class="status-badge success">JSON 2.0: Validator PASS</span>';
+  if (version.processing && version.processing.normative_generation && version.processing.normative_generation.status === 'failed') {
+    return '<button type="button" class="btn btn-secondary btn-sm norm-version-generate" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Повторить JSON 2.0</button>';
+  }
+  return '<button type="button" class="btn btn-secondary btn-sm norm-version-generate" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Создать JSON 2.0</button>';
+}
 function renderIndexAction(norm, version) {
   var sid = version.document_id || norm.id;
   var vid = version.version_id || version.id;
   if (isIndexing(version)) return '<span class="status-badge info">Происходит индексация</span>';
   if (isIndexed(version)) return '<span class="status-badge success">Индексировано</span>';
+  if (!normativeJSONValid(version)) return '<button type="button" class="btn btn-primary btn-sm norm-version-index" disabled title="Сначала создайте Normative JSON 2.0 и дождитесь Validator PASS">Индексировать</button>';
   return '<button type="button" class="btn btn-primary btn-sm norm-version-index" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Индексировать</button>';
 }
 function renderCurrentAction(norm, version) {
@@ -80,7 +114,7 @@ function renderCurrentAction(norm, version) {
 function renderVersionActions(norm, version) {
   var sid = version.document_id || norm.id;
   var vid = version.version_id || version.id;
-  return renderIndexAction(norm, version) + renderCurrentAction(norm, version)
+  return renderGenerationAction(norm, version) + renderIndexAction(norm, version) + renderCurrentAction(norm, version)
     + '<button type="button" class="btn btn-danger btn-sm norm-version-delete" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Удалить</button>';
 }
 function toggleNormVersions(id) {
@@ -144,6 +178,7 @@ function renderNorms() {
   });
   grid.innerHTML = html || '<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нормативные документы ещё не загружены.</div>';
   grid.querySelectorAll('.norm-documents').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); toggleNormVersions(button.dataset.id); }; });
+  grid.querySelectorAll('.norm-version-generate').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); generateNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-index').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); indexNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-activate').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); activateNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-delete').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); deleteNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
@@ -170,6 +205,68 @@ async function loadNorms(expandIds) {
     return getNormsData();
   } catch (error) { toast('Не удалось получить нормативную базу: ' + error.message, 'error'); return []; }
 }
+async function generateNormVersion(cardId, sourceId, versionId) {
+  var norm = getNormByIdLocal(cardId);
+  if (!norm) return toast('Документ не найден', 'error');
+  var version = findVersion(norm, sourceId, versionId);
+  if (!version) return toast('Версия не найдена. Обновите список.', 'error');
+  if (normativeJSONRunning(version)) return;
+  try {
+    var response = await fetch(
+      NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '/' + encodeURIComponent(versionId) + '/generate',
+      { method: 'POST' }
+    );
+    var data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
+    version.processing = version.processing || {};
+    version.processing.normative_generation = {
+      status: 'running',
+      stage: 'starting'
+    };
+    version.processing.normative_json_valid = false;
+    renderNorms();
+    toast('Создание Normative JSON 2.0 запущено: ' + (versionFilename(version) || versionId), 'info');
+    pollNormGeneration(cardId, sourceId, versionId);
+  } catch (error) {
+    toast('Ошибка запуска генерации JSON 2.0: ' + error.message, 'error');
+  }
+}
+function pollNormGeneration(cardId, sourceId, versionId) {
+  var key = 'generation:' + sourceId + ':' + versionId;
+  if (normsPollTimers[key]) clearInterval(normsPollTimers[key]);
+  normsPollTimers[key] = setInterval(async function () {
+    try {
+      var response = await fetch(
+        NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '?version_id=' + encodeURIComponent(versionId)
+      );
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
+      var norm = getNormByIdLocal(cardId);
+      if (!norm) return;
+      var version = findVersion(norm, sourceId, versionId);
+      if (!version) return;
+      version.processing = data.processing || {};
+      var state = version.processing.normative_generation || {};
+      if (state.status === 'validated') {
+        clearInterval(normsPollTimers[key]);
+        delete normsPollTimers[key];
+        toast('Normative JSON 2.0 создан. Validator PASS.', 'success');
+      } else if (state.status === 'failed') {
+        clearInterval(normsPollTimers[key]);
+        delete normsPollTimers[key];
+        var errors = Array.isArray(state.errors) ? state.errors.length : 0;
+        toast('Validator не пройден. Ошибок: ' + errors, 'error');
+      }
+      renderNorms();
+      var panel = document.getElementById('normVersions-' + cardId);
+      if (panel) panel.removeAttribute('hidden');
+    } catch (error) {
+      console.warn('[Norms] generation status', error);
+    }
+  }, 1000);
+}
+
 async function indexNormVersion(cardId, sourceId, versionId) {
   var norm = getNormByIdLocal(cardId); if (!norm) return toast('Документ не найден', 'error');
   var version = findVersion(norm, sourceId, versionId); if (!version) return toast('Версия не найдена. Обновите список.', 'error');
@@ -209,7 +306,14 @@ function pollNormStatus(cardId, sourceId, versionId) {
     } catch (error) { console.warn('[Norms] status', error); }
   }, 1500);
 }
-function indexAllNorms() { getNormsData().forEach(function (norm) { var current = (norm.versions || []).find(isUserCurrent); if (current && !isIndexing(current) && !isIndexed(current)) indexNormVersion(norm.id, norm.id, current.version_id || current.id); }); }
+function indexAllNorms() {
+  getNormsData().forEach(function (norm) {
+    var current = (norm.versions || []).find(isUserCurrent);
+    if (current && !isIndexing(current) && !isIndexed(current) && normativeJSONValid(current)) {
+      indexNormVersion(norm.id, norm.id, current.version_id || current.id);
+    }
+  });
+}
 async function deleteNormVersion(cardId, sourceId, versionId) {
   var norm = getNormByIdLocal(cardId); var version = findVersion(norm, sourceId, versionId); if (!norm || !version) return;
   var filename = versionFilename(version) || versionId; if (!confirm('Удалить загруженный файл «' + filename + '»?')) return;
@@ -233,8 +337,8 @@ async function uploadNormFile(file) {
   if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
   toast('Файл «' + file.name + '» загружен. Версия ожидает выбора действующей редакции.', 'success'); return data;
 }
-window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms;
+window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms; window.generateNormVersion = generateNormVersion;
 window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop;
 window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.deleteNorm = deleteNorm; window.toggleNormVersions = toggleNormVersions;
-console.log('[VKS Expert AI][Norms] norms.js v10 loaded');
+console.log('[VKS Expert AI][Norms] norms.js v11 — Normative JSON 2.0 generator loaded');
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { loadNorms(); }, { once: true }); else loadNorms();
