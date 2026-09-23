@@ -181,7 +181,7 @@ def _generate_norm(document_id: str, version_id: str) -> None:
             )
     except Exception as error:
         status_path.write_text(
-            __import__("json").dumps(
+            json.dumps(
                 {
                     "status": "failed",
                     "stage": "error",
