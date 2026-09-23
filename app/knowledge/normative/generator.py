@@ -358,7 +358,7 @@ class NormativeJSONGenerator:
             references=len(document["references"]),
         )
 
-        schema_path = Path(__file__).resolve().parents[2] / "training" / "schemas" / "normative_document.schema.json"
+        schema_path = Path(__file__).resolve().parents[3] / "training" / "schemas" / "normative_document.schema.json"
         result = NormativeJSONValidator(schema_path).validate(document)
 
         output = self.paths.structured
