@@ -17,6 +17,8 @@ jobs:
         run: pip install pytest==9.1.1 jsonschema==4.26.0
       - name: Python syntax
         run: python -m compileall -q app
+      - name: Frontend syntax
+        run: node --check frontend/assets/js/main-page/norms.js
       - name: Normative Validator regression
         run: python -m pytest tests/normative/test_normative_validator.py -v
       - name: Generator regression
