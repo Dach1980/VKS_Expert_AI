@@ -119,7 +119,7 @@ class NormativeJSONGenerator:
         edition_date = edition_data.get("date") or (parsed_name.effective_date if parsed_name else None)
         amendments = []
         amendment = edition_data.get("amendment")
-        if amendment and amendment.get("number") is not None:
+        if amendment and amendment.get("number") is not None and (amendment.get("effective_from") or edition_date):
             amendments.append({
                 "number": int(amendment["number"]),
                 "effective_from": str(amendment.get("effective_from") or edition_date),
@@ -275,7 +275,7 @@ class NormativeJSONGenerator:
                             req_id = f"{self.document_id}:{self.version_id}:req:{current_clause['number']}"
                             requirement = {
                                 "requirement_id": req_id,
-                                "clause_id": f"clause:{current_clause['number']}",
+                                "clause_id": current_clause["number"],
                                 "text": current_clause["text"],
                                 "type": req_type,
                                 "subject": self._requirement_subject(current_clause["number"]),
