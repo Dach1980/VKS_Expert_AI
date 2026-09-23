@@ -270,6 +270,7 @@ function pollNormGeneration(cardId, sourceId, versionId) {
 async function indexNormVersion(cardId, sourceId, versionId) {
   var norm = getNormByIdLocal(cardId); if (!norm) return toast('Документ не найден', 'error');
   var version = findVersion(norm, sourceId, versionId); if (!version) return toast('Версия не найдена. Обновите список.', 'error');
+  if (!normativeJSONValid(version)) return toast('Индексация заблокирована: Normative JSON 2.0 не прошёл Validator.', 'warning');
   if (isIndexing(version)) return;
   try {
     var response = await fetch(NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '/' + encodeURIComponent(versionId) + '/index', { method: 'POST' });
