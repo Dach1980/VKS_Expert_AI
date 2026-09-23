@@ -127,6 +127,14 @@ class NormativeJSONGenerator:
         label = filename or str(number)
 
         pages_count = len(data.get("pages", [])) or int(version.get("pages_count") or 0)
+        source_result = {
+            "file": str(source.get("file") or ""),
+            "original_filename": str(filename),
+            "pages": max(1, pages_count),
+        }
+        sha256 = source.get("sha256") or version.get("sha256")
+        if sha256:
+            source_result["sha256"] = str(sha256)
         return {
             "document": {
                 "document_id": self.document_id,
@@ -139,12 +147,7 @@ class NormativeJSONGenerator:
                     "base_year": base_year,
                     "amendments": amendments,
                 },
-                "source": {
-                    "file": str(source.get("file") or ""),
-                    "original_filename": str(filename),
-                    "sha256": source.get("sha256") or version.get("sha256"),
-                    "pages": max(1, pages_count),
-                },
+                "source": source_result,
             }
         }
 
