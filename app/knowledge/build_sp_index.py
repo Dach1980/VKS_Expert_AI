@@ -7,7 +7,6 @@ from pathlib import Path
 from app.knowledge.storage import KnowledgeStorage
 from app.knowledge.pdf_page_processor import PDFPageProcessor
 from app.knowledge.page_enricher import PageEnricher
-from app.knowledge.structure_parser import save_structure, build_structure
 from app.knowledge.document_chunk_builder import DocumentChunkBuilder
 from app.knowledge.embedding_builder import EmbeddingBuilder
 
@@ -43,14 +42,28 @@ class SPIndexBuilder:
         print("Page enrichment completed:", len(pages))
 
     def run_structure_parser(self):
-        if not self.paths.parsed.exists():
-            raise FileNotFoundError(f"Parsed JSON not found: {self.paths.parsed}")
-        with self.paths.parsed.open("r", encoding="utf-8-sig") as f:
-            data = json.load(f)
-        sections = build_structure(data)
-        result, output = save_structure(data, sections, self.storage, self.document_id, self.version["id"])
-        print("Structured:", output)
-        return result
+        """Require canonical Normative JSON 2.0 produced by the Generator.
+
+        The legacy SP30-specific StructureParser is deliberately no longer
+        part of the production indexing path.
+        """
+        if not self.paths.structured.exists():
+            raise FileNotFoundError(
+                f"Normative JSON 2.0 not found: {self.paths.structured}. "
+                "Run generation and validation from the Norms UI first."
+            )
+        with self.paths.structured.open("r", encoding="utf-8") as f:
+            document = json.load(f)
+        if document.get("schema_version") != "2.0":
+            raise ValueError("Индексирование разрешено только для Normative JSON 2.0.")
+        generation_file = self.paths.index_root / "normative_generation.json"
+        if not generation_file.exists():
+            raise ValueError("Не найден результат Validator для Normative JSON 2.0.")
+        generation = json.loads(generation_file.read_text(encoding="utf-8"))
+        if generation.get("status") != "validated" or generation.get("valid") is not True:
+            raise ValueError("Normative JSON 2.0 не прошёл Validator.")
+        print("Normative JSON 2.0:", self.paths.structured)
+        return document
 
     def run_chunk_builder(self):
         builder = DocumentChunkBuilder(self.document_id, self.version["id"], self.storage)
