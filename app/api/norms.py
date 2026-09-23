@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 from datetime import date, datetime
@@ -11,7 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
 from app.api.schemas import NormDeleteResponse, NormGenerateResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
-from app.knowledge.normative.generator import NormativeJSONGenerator, NormativeGenerationError
+from app.knowledge.normative.generator import NormativeJSONGenerator
 from app.knowledge.pdf_page_processor import PDFPageProcessor
 from app.knowledge.registry_manager import RegistryError
 from app.knowledge.storage import KnowledgeStorage, StorageError
@@ -158,7 +159,7 @@ def _generate_norm(document_id: str, version_id: str) -> None:
     status_path = paths.index_root / "normative_generation.json"
     paths.index_root.mkdir(parents=True, exist_ok=True)
     status_path.write_text(
-        __import__("json").dumps(
+        json.dumps(
             {"status": "running", "stage": "starting"},
             ensure_ascii=False,
             indent=2,
@@ -213,7 +214,7 @@ def generate_norm(document_id: str, version_id: str, background_tasks: Backgroun
         generation_file = paths.index_root / "normative_generation.json"
         if generation_file.exists():
             try:
-                state = __import__("json").loads(
+                state = json.loads(
                     generation_file.read_text(encoding="utf-8")
                 )
                 if state.get("status") == "running":
