@@ -81,3 +81,57 @@ def test_generator_builds_valid_normative_json_2_0(tmp_path):
     assert document["requirements"][0]["clause_id"] == "1.1"
     assert document["requirements"][0]["type"] == "mandatory"
     assert structured_path.exists()
+
+
+def test_generator_deduplicates_repeated_clause_occurrences(tmp_path):
+    knowledge = tmp_path / "knowledge"
+    registry_path = knowledge / "registry" / "documents.json"
+    parsed_path = knowledge / "parsed" / "SP_30_test.json"
+    registry_path.parent.mkdir(parents=True)
+    parsed_path.parent.mkdir(parents=True)
+    registry_path.write_text(
+        json.dumps({
+            "documents": [{
+                "id": "SP_30",
+                "number": "СП 30.13330.2020",
+                "title": "Test",
+                "document_type": "СП",
+                "versions": [{
+                    "id": "SP_30_test",
+                    "status": "uploaded",
+                    "source": {
+                        "file": "knowledge/regulations/SP_30/SP_30_test.pdf",
+                        "original_filename": "СП_30.13330.2020.pdf",
+                        "pages": 2,
+                    },
+                    "edition": {"date": "2020-06-01"},
+                }],
+            }]
+        }, ensure_ascii=False), encoding="utf-8"
+    )
+    parsed_path.write_text(
+        json.dumps({
+            "schema_version": "1.0",
+            "document": {"number": "СП 30.13330.2020", "title": "Test", "pages": 2},
+            "pages": [
+                {
+                    "page": 1,
+                    "geometry": {"width": 1000, "height": 1400},
+                    "blocks": [{"bbox": [10, 10, 900, 100], "text": "4 Раздел\\n4.1 Требование должно выполняться."}],
+                },
+                {
+                    "page": 2,
+                    "geometry": {"width": 1000, "height": 1400},
+                    "blocks": [{"bbox": [10, 10, 900, 100], "text": "4.1 Требование должно выполняться."}],
+                },
+            ],
+        }, ensure_ascii=False), encoding="utf-8"
+    )
+
+    storage = KnowledgeStorage(project_root=tmp_path)
+    document, result = NormativeJSONGenerator("SP_30", "SP_30_test", storage).generate()
+
+    assert result.valid is True
+    assert len(document["requirements"]) == 1
+    assert document["requirements"][0]["requirement_id"].endswith(":req:4.1")
+    assert len(document["structure"]["sections"][0]["clauses"]) == 1
