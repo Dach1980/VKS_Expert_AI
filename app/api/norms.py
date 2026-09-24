@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 from datetime import date, datetime
@@ -9,8 +10,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
-from app.api.schemas import NormDeleteResponse, NormIndexResponse, NormUploadResponse
+from app.api.schemas import NormDeleteResponse, NormGenerateResponse, NormIndexResponse, NormUploadResponse
 from app.knowledge.build_sp_index import SPIndexBuilder
+from app.knowledge.normative.generator import NormativeJSONGenerator
+from app.knowledge.pdf_page_processor import PDFPageProcessor
 from app.knowledge.registry_manager import RegistryError
 from app.knowledge.storage import KnowledgeStorage, StorageError
 
@@ -147,6 +150,102 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         result["current_change_date"] = None
     result["versions"] = versions
     return result
+
+
+def _generate_norm(document_id: str, version_id: str) -> None:
+    """Run PDF extraction -> Normative JSON 2.0 -> Validator."""
+    storage = KnowledgeStorage()
+    paths = storage.paths(document_id, version_id)
+    status_path = paths.index_root / "normative_generation.json"
+    paths.index_root.mkdir(parents=True, exist_ok=True)
+    status_path.write_text(
+        json.dumps(
+            {"status": "running", "stage": "starting"},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    try:
+        storage.ensure_version_dirs(document_id, version_id)
+        PDFPageProcessor(document_id, version_id, storage).run()
+        _, validation = NormativeJSONGenerator(
+            document_id=document_id,
+            version_id=version_id,
+            storage=storage,
+        ).generate()
+        status_path.write_text(
+            json.dumps(
+                {
+                    "status": "validated" if validation.valid else "invalid",
+                    "stage": "validation",
+                    "valid": validation.valid,
+                    "errors": [error.to_dict() for error in validation.errors],
+                    "warnings": [warning.to_dict() for warning in validation.warnings],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as error:
+        status_path.write_text(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "stage": "error",
+                    "valid": False,
+                    "error": str(error),
+                    "error_type": type(error).__name__,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(
+            f"[Project Expert AI][Norms] Generation failed: "
+            f"{document_id}/{version_id}: {error}"
+        )
+
+
+@router.post(
+    "/{document_id}/{version_id}/generate",
+    response_model=NormGenerateResponse,
+)
+def generate_norm(document_id: str, version_id: str, background_tasks: BackgroundTasks):
+    storage = KnowledgeStorage()
+    try:
+        storage.get_version(document_id, version_id)
+        paths = storage.paths(document_id, version_id)
+        if not paths.pdf.exists():
+            raise StorageError(f"PDF не найден: {paths.pdf}")
+        generation_file = paths.index_root / "normative_generation.json"
+        if generation_file.exists():
+            try:
+                state = json.loads(generation_file.read_text(encoding="utf-8"))
+                if state.get("status") == "running":
+                    return NormGenerateResponse(
+                        success=True,
+                        document_id=document_id,
+                        version_id=version_id,
+                        status="running",
+                        message="Генерация Normative JSON 2.0 уже выполняется",
+                    )
+            except Exception:
+                pass
+        storage.ensure_version_dirs(document_id, version_id)
+    except StorageError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    background_tasks.add_task(_generate_norm, document_id, version_id)
+    return NormGenerateResponse(
+        success=True,
+        document_id=document_id,
+        version_id=version_id,
+        status="running",
+        message="Создание Normative JSON 2.0 запущено",
+    )
 
 
 def _index_norm(document_id: str, version_id: str) -> None:
