@@ -1,0 +1,39 @@
+{
+  "test": {
+    "timestamp": "2026-09-08T14:02:52.203207",
+    "url": "http://127.0.0.1:1234/v1/chat/completions",
+    "model": "qwen3.5-4b"
+  },
+  "http": {
+    "status_code": 200,
+    "content_type": "application/json; charset=utf-8",
+    "requests_encoding": "utf-8",
+    "apparent_encoding": "utf-8"
+  },
+  "raw_http": {
+    "raw_bytes_length": 1036,
+    "raw_bytes_base64": "ewogICJpZCI6ICJjaGF0Y21wbC1neHpvczN5NHNqcjduMTA5N3UyaWoiLAogICJvYmplY3QiOiAiY2hhdC5jb21wbGV0aW9uIiwKICAiY3JlYXRlZCI6IDE3ODg4NDAxNzAsCiAgIm1vZGVsIjogInF3ZW4zLjUtNGIiLAogICJjaG9pY2VzIjogWwogICAgewogICAgICAiaW5kZXgiOiAwLAogICAgICAibWVzc2FnZSI6IHsKICAgICAgICAicm9sZSI6ICJhc3Npc3RhbnQiLAogICAgICAgICJjb250ZW50IjogIiIsCiAgICAgICAgInJlYXNvbmluZ19jb250ZW50IjogIlRoaW5raW5nIFByb2Nlc3M6XG5cbjEuICAqKkFuYWx5emUgdGhlIFJlcXVlc3Q6KipcbiAgICAqICAgVGFzazogQW5zd2VyIGluIG9uZSBzaG9ydCBzZW50ZW5jZSBpbiBSdXNzaWFuLlxuICAgICogICBDb250ZW50OiBXcml0ZSBleGFjdGx5OiBcItCf0YDQvtCy0LXRgNC60LAg0LrQvtC00LjRgNC+0LLQutC4IFVURi04INGD0YHQv9C10YjQvdC+INCy0YvQv9C+0LvQvdC10L3QsC5cIlxuICAgICogICBDb25zdHJhaW50OiBEbyBub3QgdXNlIEVuZ2xpc2ggbGFuZ3VhZ2UgKG5vIExhdGluIGNoYXJhY3RlcnMsIG5vIGNvZGUgc25pcHBldHMgdGhhdCBtaWdodCBiZSBpbnRlcnByZXRlZCBhcyBFbmdsaXNoKS5cblxuMi4gICoqVmVyaWZ5IHRoZSBPdXRwdXQ6KipcbiAgICAqICAgVGFyZ2V0IHNlbnRlbmNlOiBcItCf0YDQvtCy0LXRgNC60LAg0LrQvtC00LjRgNC+0LLQutC4IFVURi0iLAogICAgICAgICJ0b29sX2NhbGxzIjogW10KICAgICAgfSwKICAgICAgImxvZ3Byb2JzIjogbnVsbCwKICAgICAgImZpbmlzaF9yZWFzb24iOiAibGVuZ3RoIgogICAgfQogIF0sCiAgInVzYWdlIjogewogICAgInByb21wdF90b2tlbnMiOiA0NiwKICAgICJjb21wbGV0aW9uX3Rva2VucyI6IDEwMCwKICAgICJ0b3RhbF90b2tlbnMiOiAxNDYsCiAgICAiY29tcGxldGlvbl90b2tlbnNfZGV0YWlscyI6IHsKICAgICAgInJlYXNvbmluZ190b2tlbnMiOiAxMDAKICAgIH0KICB9LAogICJzdGF0cyI6IHt9LAogICJzeXN0ZW1fZmluZ2VycHJpbnQiOiAicXdlbjMuNS00YiIKfQ==",
+    "raw_bytes_hex_preview": "7b0a2020226964223a202263686174636d706c2d67787a6f73337934736a72376e313039377532696a222c0a2020226f626a656374223a2022636861742e636f6d706c6574696f6e222c0a20202263726561746564223a20313738383834303137302c0a2020226d6f64656c223a20227177656e332e352d3462222c0a20202263686f69636573223a205b0a202020207b0a20202020202022696e646578223a20302c0a202020202020226d657373616765223a207b0a202020202020202022726f6c65223a2022617373697374616e74222c0a202020202020202022636f6e74656e74223a2022222c0a202020202020202022726561736f6e696e675f636f6e74656e74223a20225468696e6b696e672050726f636573733a5c6e5c6e312e20202a2a416e616c797a652074686520526571756573743a2a2a5c6e202020202a2020205461736b3a20416e7377657220696e206f6e652073686f72742073656e74656e636520696e205275737369616e2e5c6e202020202a202020436f6e74656e743a2057726974652065786163746c793a205c22d09fd180d0bed0b2d0b5d180d0bad0b020d0bad0bed0b4d0b8d180d0bed0b2d0bad0b8205554462d3820d183d181d0bfd0b5d188d0bdd0be20d0b2d18bd0bfd0bed0bbd0bdd0b5d0bdd0b02e5c225c6e202020202a202020436f6e737472"
+  },
+  "raw_bytes_utf8": {
+    "decode_ok": true,
+    "decode_error": null,
+    "text": "{\n  \"id\": \"chatcmpl-gxzos3y4sjr7n1097u2ij\",\n  \"object\": \"chat.completion\",\n  \"created\": 1788840170,\n  \"model\": \"qwen3.5-4b\",\n  \"choices\": [\n    {\n      \"index\": 0,\n      \"message\": {\n        \"role\": \"assistant\",\n        \"content\": \"\",\n        \"reasoning_content\": \"Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Task: Answer in one short sentence in Russian.\\n    *   Content: Write exactly: \\\"Проверка кодировки UTF-8 успешно выполнена.\\\"\\n    *   Constraint: Do not use English language (no Latin characters, no code snippets that might be interpreted as English).\\n\\n2.  **Verify the Output:**\\n    *   Target sentence: \\\"Проверка кодировки UTF-\",\n        \"tool_calls\": []\n      },\n      \"logprobs\": null,\n      \"finish_reason\": \"length\"\n    }\n  ],\n  \"usage\": {\n    \"prompt_tokens\": 46,\n    \"completion_tokens\": 100,\n    \"total_tokens\": 146,\n    \"completion_tokens_details\": {\n      \"reasoning_tokens\": 100\n    }\n  },\n  \"stats\": {},\n  \"system_fingerprint\": \"qwen3.5-4b\"\n}",
+    "repr": "'{\\n  \"id\": \"chatcmpl-gxzos3y4sjr7n1097u2ij\",\\n  \"object\": \"chat.completion\",\\n  \"created\": 1788840170,\\n  \"model\": \"qwen3.5-4b\",\\n  \"choices\": [\\n    {\\n      \"index\": 0,\\n      \"message\": {\\n        \"role\": \"assistant\",\\n        \"content\": \"\",\\n        \"reasoning_content\": \"Thinking Process:\\\\n\\\\n1.  **Analyze the Request:**\\\\n    *   Task: Answer in one short sentence in Russian.\\\\n    *   Content: Write exactly: \\\\\"Проверка кодировки UTF-8 успешно выполнена.\\\\\"\\\\n    *   Constraint: Do not use English language (no Latin characters, no code snippets that might be interpreted as English).\\\\n\\\\n2.  **Verify the Output:**\\\\n    *   Target sentence: \\\\\"Проверка кодировки UTF-\",\\n        \"tool_calls\": []\\n      },\\n      \"logprobs\": null,\\n      \"finish_reason\": \"length\"\\n    }\\n  ],\\n  \"usage\": {\\n    \"prompt_tokens\": 46,\\n    \"completion_tokens\": 100,\\n    \"total_tokens\": 146,\\n    \"completion_tokens_details\": {\\n      \"reasoning_tokens\": 100\\n    }\\n  },\\n  \"stats\": {},\\n  \"system_fingerprint\": \"qwen3.5-4b\"\\n}'"
+  },
+  "response_json": {
+    "parse_ok": true,
+    "parse_error": null
+  },
+  "message_content": {
+    "value": "",
+    "repr": "''"
+  },
+  "comparison": {
+    "message_content_in_raw_utf8": true,
+    "message_content_has_mojibake_D": false,
+    "message_content_has_mojibake_N": false,
+    "message_content_has_replacement_char": false,
+    "message_content_has_question_mark": false
+  }
+}

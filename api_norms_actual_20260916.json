@@ -1,0 +1,47 @@
+﻿{
+    "documents":  [
+                      {
+                          "document_id":  "SP_30.13330",
+                          "number":  "Ð¡Ð 30.13330.2020",
+                          "title":  "ÐÐ½ÑÑÑÐµÐ½Ð½Ð¸Ð¹ Ð²Ð¾Ð´Ð¾Ð¿ÑÐ¾Ð²Ð¾Ð´ Ð¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹",
+                          "version_id":  "SP_30.13330_2020_base",
+                          "effective_from":  "2021-07-01",
+                          "current_change_number":  null,
+                          "current_change_date":  "2021-07-01",
+                          "processing":  {
+                                             "pages_count":  98,
+                                             "vector_index":  false,
+                                             "vector_metadata":  false,
+                                             "indexing":  false
+                                         },
+                          "versions":  [
+                                           {
+                                               "id":  "SP_30.13330_2020_base",
+                                               "type":  "base",
+                                               "file":  "knowledge/regulations/SP_30.13330/Ð¡Ð_30.13330_Ð±Ð°Ð·Ð¾Ð²Ð°Ñ_Ð²ÐµÑÑÐ¸Ñ.pdf",
+                                               "status":  "current",
+                                               "current_selected_by_user":  true,
+                                               "effective_from":  "2021-07-01",
+                                               "effective_to":  null,
+                                               "parsed_file":  "knowledge/parsed/SP_30.13330.2020.json",
+                                               "structured_file":  "knowledge/structured/SP_30.13330.2020.json",
+                                               "document_id":  "SP_30.13330",
+                                               "version_id":  "SP_30.13330_2020_base",
+                                               "filename":  "Ð¡Ð_30.13330_Ð±Ð°Ð·Ð¾Ð²Ð°Ñ_Ð²ÐµÑÑÐ¸Ñ.pdf",
+                                               "original_filename":  "Ð¡Ð_30.13330_Ð±Ð°Ð·Ð¾Ð²Ð°Ñ_Ð²ÐµÑÑÐ¸Ñ.pdf",
+                                               "processing":  {
+                                                                  "pages_count":  98,
+                                                                  "vector_index":  false,
+                                                                  "vector_metadata":  false,
+                                                                  "indexing":  false
+                                                              },
+                                               "number":  "Ð¡Ð 30.13330.2020",
+                                               "title":  "ÐÐ½ÑÑÑÐµÐ½Ð½Ð¸Ð¹ Ð²Ð¾Ð´Ð¾Ð¿ÑÐ¾Ð²Ð¾Ð´ Ð¸ ÐºÐ°Ð½Ð°Ð»Ð¸Ð·Ð°ÑÐ¸Ñ Ð·Ð´Ð°Ð½Ð¸Ð¹",
+                                               "change_number":  null,
+                                               "change_date":  null,
+                                               "is_current":  true
+                                           }
+                                       ]
+                      }
+                  ]
+}

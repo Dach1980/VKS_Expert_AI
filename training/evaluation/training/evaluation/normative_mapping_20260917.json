@@ -1,0 +1,23 @@
+{
+  "root": "D:\\Projects\\VKS_Expert_AI\\training\\evaluation",
+  "documents": [
+    {
+      "document": "СП_30.13330.2020",
+      "pdf": [],
+      "structured": [],
+      "versions": []
+    },
+    {
+      "document": "СП_31.13330.2021",
+      "pdf": [],
+      "structured": [],
+      "versions": []
+    },
+    {
+      "document": "СП_32.13330.2018",
+      "pdf": [],
+      "structured": [],
+      "versions": []
+    }
+  ]
+}

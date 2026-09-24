@@ -1,0 +1,25 @@
+{
+  "document": {
+    "number": "СП 32.13330.2018",
+    "title": "Внутренний водопровод и канализация зданий",
+    "source_file": "D:\\Projects\\VKS_Expert_AI\\knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_199423.pdf",
+    "pages": 199
+  },
+  "document_id": "СП_32.13330.2018",
+  "version": "СП_32.13330.2018_20260902_103742_199423",
+  "page": 191,
+  "geometry": {
+    "width": 842.0399780273438,
+    "height": 595.3200073242188
+  },
+  "source": {
+    "pdf": "D:\\Projects\\VKS_Expert_AI\\knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_199423.pdf",
+    "pipeline": [
+      "PyMuPDF",
+      "PDFPageProcessor"
+    ]
+  },
+  "created": "2026-09-02T10:38:22.929630",
+  "blocks": [],
+  "formulas": []
+}

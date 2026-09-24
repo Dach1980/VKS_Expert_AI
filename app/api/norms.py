@@ -179,6 +179,15 @@ def _generate_norm(document_id: str, version_id: str) -> None:
                 f"[Project Expert AI][Norms] Normative JSON validation failed: "
                 f"{document_id}/{version_id}: {len(validation.errors)} errors"
             )
+
+            for error in validation.errors:
+                print(
+                    f"[Project Expert AI][Norms][ValidationError] "
+                    f"code={error.code} "
+                    f"path={error.path} "
+                    f"validator={error.validator} "
+                    f"message={error.message}"
+                )
     except Exception as error:
         status_path.write_text(
             json.dumps(

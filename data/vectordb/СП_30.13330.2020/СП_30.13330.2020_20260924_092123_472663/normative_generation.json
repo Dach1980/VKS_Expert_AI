@@ -1,0 +1,188 @@
+{
+  "status": "failed",
+  "stage": "complete",
+  "updated_at": "2026-09-24T14:38:58",
+  "valid": false,
+  "errors": [
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[7].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:4.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[13].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:5.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[15].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:5.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[45].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:9.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[47].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:9.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[57].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:11.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[59].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:11.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[74].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:13.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[108].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:15.3.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[110].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:15.3.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[121].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:15.4.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[123].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:15.4.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[138].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:17.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[148].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:18.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[150].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:18.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[158].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:18.3",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[173].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:19.9",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[181].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:1.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[183].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:1.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[193].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:4.3",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[194].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:4.4",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[196].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:4.8",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[197].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:5.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[198].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:5.4",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[200].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[201].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.3",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[202].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.4",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[203].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.5",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[207].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.1",
+      "validator": "integrity"
+    },
+    {
+      "code": "DUPLICATE_REQUIREMENT_ID",
+      "path": "$.requirements[210].requirement_id",
+      "message": "Duplicate requirement_id: СП_30.13330.2020:СП_30.13330.2020_20260924_092123_472663:req:6.1",
+      "validator": "integrity"
+    }
+  ]
+}

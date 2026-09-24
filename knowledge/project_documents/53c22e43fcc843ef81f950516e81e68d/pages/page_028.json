@@ -1,0 +1,116 @@
+{
+  "document": {
+    "number": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись",
+    "title": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись",
+    "source_file": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\source.pdf",
+    "pages": 30
+  },
+  "document_id": "53c22e43fcc843ef81f950516e81e68d",
+  "version": "53c22e43fcc843ef81f950516e81e68d",
+  "page": 28,
+  "geometry": {
+    "width": 612.0,
+    "height": 841.9199829101562
+  },
+  "source": {
+    "pdf": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\source.pdf",
+    "pipeline": [
+      "PyMuPDF",
+      "PDFPageProcessor"
+    ]
+  },
+  "created": "2026-09-02T10:40:25.293423",
+  "blocks": [
+    {
+      "index": 0,
+      "bbox": [
+        228.722,
+        50.386,
+        435.265,
+        64.484
+      ],
+      "text": "TEXHI,TTIE CKI4E TPEE OB AItITfl,"
+    },
+    {
+      "index": 1,
+      "bbox": [
+        120.24,
+        69.639,
+        540.794,
+        111.568
+      ],
+      "text": "Ha rrpoeKTupoBaHr{e\nor ynpaBJrqrouefi KoMnaHHH AO (KPAB>\nArq rrplrcoeArrHeurlq K IIeHTpaJrIr3oBaHHbrM cerflM nogocna6xceH[q H BoAoorBeAeHuq"
+    },
+    {
+      "index": 2,
+      "bbox": [
+        91.68,
+        124.994,
+        568.632,
+        137.665
+      ],
+      "text": "Ns TY-103/B\nor 01 .qerca6pt2O2O r."
+    },
+    {
+      "index": 3,
+      "bbox": [
+        91.68,
+        150.451,
+        568.564,
+        237.569
+      ],
+      "text": "Vnpaunroulafl KoMnaH[q: Arcquonepuoe o6ulecrno <Kopnopaqu.rr pa3Burut [atrcuero Bocrora>>\n(4anee - AO (KPAB)).\n3aqsnreflr:\n3assHrerr)\nOcnonauue: 3arrBKa or OOO <<Anro4opnpoeKr>> sx. Ns 14280 or28.07.2020 r.\n1. \nIlanIvrenosaHlre il Mecro HaxoxAeH[fl 3HepronpuHrrMaroq[x ycrpoficrn 3aqsurerq:"
+    },
+    {
+      "index": 4,
+      "bbox": [
+        91.92,
+        269.236,
+        569.69,
+        498.387
+      ],
+      "text": "nouep )tuacmxq: 27 : I 7 :0329204 : 3 I 83\n2. \nPasperuaeuufi or6op o6reua nurreeofi BoAbr rr3 cncreMbr noAocna6r(eHnq:\n- cyrovHrrft o6reu no4onorpe6reHlar 8,58 vr3.\n- pacxoA BoAbr Ha Hapyrmoe no)Kaporyrrrenue: 30 n/c\n- pacxoA BoAbr Ha BH)TpeHHee noxaporyrnenue: 8,4 n/c\n3. \nPaspeuraenaslft o6rerrr BoAoorBeAeH[q B KaHaJrn3arllroHHbrecerrr:\n- cyrouHrrfi o6reu BoAoorBeAenuq 8,58 rvr3.\n4. \nIapanruponauHufi cno6ognufi Harlop B qacbr MaKc[MaJrbHoro BoAorrorpe6Jren[q B ToqKe\nroAKrroqeHrs orpeAeJulercq cofJlacHo npoerruofi AoKyN{eHTarym l-BC/2016 u cocranlaer 10 Na.\n5. Boaocna6xenue o6rerra:\n5.1. Toqrur noAKJIIoqeHr,rr o6rercra K rleHTpanr,r3oeauHofi cncreMe nogocua6xeurax TOP\n<Xa6aponco) rrnoqaAHa <<Parrarnoe): crpotu1vecs. cervr o6re,qzueHHoro xos.sficrBeHHo-rrvrbeBoro !r\nnporr4Borro)KapHoro BoAorrpoBoAa Ar.raMerpou A3l5 MM, KoJroAerI 6-a6 (X-446191,8; Y-3185089,70)\n(upunoxenr,re 1), couacHo rlpoeKTuofi ,qoryueHTar\\vlt, pa3Aen - Haplz<nue cerLt no4ocHa6xertus, l-\nBC/2016-HB; npoeKrupyeunfi KonoAeq 6-a6/I (X-446194,31; Y-3185090,09) B paMKix o6rerra:\n<flpou:no4crBeHHo-aAMHHucrparr,rBHoe \n3AaHrde rrnoqaAKr{ <<Paruuroe>>."
+    },
+    {
+      "index": 5,
+      "bbox": [
+        91.921,
+        502.672,
+        569.302,
+        615.662
+      ],
+      "text": "5 .2. Y c ttor,ur npuco eAr4He Hr4.s o 6r ercra K cucreMe soAo cua6x eHvrs.'.\n- flpoerctupoBaHlre I4 crpor,rrenbcrBo nnoqaAoqHbrx 14 BHe[noqaAoqHrrx cncreM no4ocna6xeuux\nBbIrIoJIHIarb c coorBercrBrlu c 4efictnyrorquMrd HopMarrdBHLrMlr AoKyMeHTarrara: CHuII 2.04.02-84*\n(CIII 31.13330.2012), CHUII 2.04.01-85* (C|I 30.13330.2012), CHUII 2.07.01-89* (Cil\n42.13330.2012), CHUII II-89-80* (CII I 8.13330.201 1).\n5.3. fny6uny 3aroxeHu-fl rpy6rr B 3aAaHHofi ro.rKe noAKrroqeHr,r.f, orrpeAenr,rrE npoercroM u\ncorJracoBarb c AO <KPIB>.\n5.4. Eclpt o6rexr LIMeer oco6rre ycnoBlrr rro o6ecne.reHzro no)KaporyrneHrur neo6xoAuuo"
+    },
+    {
+      "index": 6,
+      "bbox": [
+        91.92,
+        618.766,
+        569.509,
+        674.398
+      ],
+      "text": "AononHl4TenbHo 3anpocl4Tb ycnoBvrr Ha npornBonoxapHoe no4ocua6xenlte o6rerra.\n5.5. 3oua soAocHa6xelav:e.- BHyrpunnoqaAoqHbre cerpr TOP <Xa6apoecK)), rrJrorrlaAra <<ParrErHoe>>.\n5.6. llpz nsl6ope Marepnana rpy6 Ha4re)KI4T yqr,rrbrBarb r,rx conporuBnreMocrb na nosgeficrBrre KaK\nBHyrpeHHero, raK I4 Ha coBMecrHoe 4eftcreue sHe[rnefi [pr,rBeAeHHofi uarpyrrra, aruoc(fepHoro"
+    },
+    {
+      "index": 7,
+      "bbox": [
+        91.92,
+        675.576,
+        568.904,
+        747.14
+      ],
+      "text": "AaBrrelaur^, a rarcr(e na ycrofivuBocrb rpyuofi Qoprvru [onepeqHoro ceveuz.r rpy6.\n5.7. Opranvaarlvts. yrera norpe6reHux BoAhr:\nYsel yrera uo'rpe6renu-s BoAhI ycraHoBr{Tb B BoAorrpoBoAnofi KaMepe vrv ilaBnlrboue. ,{uauerp y3na\n)Aera onpeAenl4Tb ruIpaBnLrqecKI,IM pacrreroM. llouerqeHue y3na ) {era AonxHo 6rrrr ugolrEpoBaHo\nor ApyrI,Ix noueuleHprfi, o6opy4onaHo ocBeIrIeHHeM, c reMleparypofi nHyrpeHHero Bo3Ayxa He Hr,rx(e"
+    },
+    {
+      "index": 8,
+      "bbox": [
+        91.921,
+        750.819,
+        110.929,
+        759.882
+      ],
+      "text": "50C."
+    }
+  ],
+  "formulas": []
+}

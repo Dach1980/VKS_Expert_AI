@@ -1,0 +1,119 @@
+{
+  "root": "D:\\Projects\\VKS_Expert_AI",
+  "documents": [
+    {
+      "document": "СП_30.13330.2020",
+      "pdf": [
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131113_910004.pdf",
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131113_939105.pdf",
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131113_974227.pdf",
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131114_011355.pdf",
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131114_071565.pdf",
+        "knowledge\\regulations\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131114_112045.pdf"
+      ],
+      "structured": [
+        "knowledge\\structured\\СП_30.13330.2020_20260901_131113_910004.json",
+        "knowledge\\structured\\СП_30.13330.2020_20260901_131113_939105.json",
+        "knowledge\\structured\\СП_30.13330.2020_20260901_131114_011355.json",
+        "knowledge\\structured\\СП_30.13330.2020_20260901_131114_071565.json"
+      ],
+      "versions": [
+        {
+          "version_id": "СП_30.13330.2020_20260901_131113_910004",
+          "path": "data\\vectordb\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131113_910004",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 5975085,
+          "metadata_size": 2625017,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        },
+        {
+          "version_id": "СП_30.13330.2020_20260901_131113_939105",
+          "path": "data\\vectordb\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131113_939105",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 5981229,
+          "metadata_size": 2638720,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        },
+        {
+          "version_id": "СП_30.13330.2020_20260901_131114_011355",
+          "path": "data\\vectordb\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131114_011355",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 5809197,
+          "metadata_size": 2597572,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        },
+        {
+          "version_id": "СП_30.13330.2020_20260901_131114_071565",
+          "path": "data\\vectordb\\СП_30.13330.2020\\СП_30.13330.2020_20260901_131114_071565",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 5796909,
+          "metadata_size": 2597892,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        }
+      ]
+    },
+    {
+      "document": "СП_31.13330.2021",
+      "pdf": [
+        "knowledge\\regulations\\СП_31.13330.2021\\СП_31.13330.2021_20260902_084832_351248.pdf",
+        "knowledge\\regulations\\СП_31.13330.2021\\СП_31.13330.2021_20260902_084832_463150.pdf",
+        "knowledge\\regulations\\СП_31.13330.2021\\СП_31.13330.2021_20260902_084832_515331.pdf"
+      ],
+      "structured": [
+        "knowledge\\structured\\СП_31.13330.2021_20260902_084832_463150.json"
+      ],
+      "versions": [
+        {
+          "version_id": "СП_31.13330.2021_20260902_084832_463150",
+          "path": "data\\vectordb\\СП_31.13330.2021\\СП_31.13330.2021_20260902_084832_463150",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 7956525,
+          "metadata_size": 3706145,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        }
+      ]
+    },
+    {
+      "document": "СП_32.13330.2018",
+      "pdf": [
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103741_938519.pdf",
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103741_994713.pdf",
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_058936.pdf",
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_128176.pdf",
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_199423.pdf",
+        "knowledge\\regulations\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_271674.pdf"
+      ],
+      "structured": [
+        "knowledge\\structured\\СП_32.13330.2018_20260902_103742_199423.json"
+      ],
+      "versions": [
+        {
+          "version_id": "СП_32.13330.2018_20260902_103742_199423",
+          "path": "data\\vectordb\\СП_32.13330.2018\\СП_32.13330.2018_20260902_103742_199423",
+          "index_faiss": true,
+          "metadata_json": true,
+          "index_size": 7363629,
+          "metadata_size": 3893021,
+          "document_chunks": true,
+          "pages": true,
+          "enriched": true
+        }
+      ]
+    }
+  ]
+}

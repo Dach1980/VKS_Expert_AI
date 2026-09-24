@@ -1,0 +1,25 @@
+{
+  "document": {
+    "number": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись",
+    "title": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись",
+    "source_file": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\source.pdf",
+    "pages": 30
+  },
+  "document_id": "53c22e43fcc843ef81f950516e81e68d",
+  "version": "53c22e43fcc843ef81f950516e81e68d",
+  "page": 24,
+  "geometry": {
+    "width": 1191.0,
+    "height": 842.0
+  },
+  "source": {
+    "pdf": "D:\\Projects\\VKS_Expert_AI\\knowledge\\project_documents\\53c22e43fcc843ef81f950516e81e68d\\source.pdf",
+    "pipeline": [
+      "PyMuPDF",
+      "PDFPageProcessor"
+    ]
+  },
+  "created": "2026-09-02T10:40:25.277367",
+  "blocks": [],
+  "formulas": []
+}
