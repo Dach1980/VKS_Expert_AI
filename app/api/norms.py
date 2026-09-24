@@ -246,6 +246,8 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
         # Filename parsing and canonical edition/source metadata are owned by
         # KnowledgeStorage.save_uploaded_pdf(). Keep the API layer free of
         # duplicated/private filename classification logic.
+        edition = version.get("edition") or {}
+        version["type"] = "amendment" if edition.get("amendment") else "edition"
         version["pages_count"] = storage._pdf_pages(saved)
         version.setdefault("source", {})["sha256"] = upload_hash
         version.setdefault("source", {})["original_filename"] = filename
