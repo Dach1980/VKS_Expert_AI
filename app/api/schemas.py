@@ -47,6 +47,18 @@ class NormUploadResponse(BaseModel):
     filename: str
 
 
+
+class NormGenerateResponse(BaseModel):
+    success: bool
+    document_id: str
+    version_id: str
+    status: str
+    message: str
+    validation_valid: bool | None = None
+    errors: List[dict] = Field(default_factory=list)
+    warnings: List[dict] = Field(default_factory=list)
+    statistics: dict = Field(default_factory=dict)
+
 class NormIndexResponse(BaseModel):
     success: bool
     document_id: str
