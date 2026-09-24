@@ -194,6 +194,7 @@ class NormativeJSONGenerator:
         current_clause: dict[str, Any] | None = None
         current_appendix: dict[str, Any] | None = None
         seen_refs: set[str] = set()
+        seen_clause_numbers: set[str] = set()
 
         for page in data.get("pages", []):
             page_number = int(page.get("page", 1))
@@ -244,6 +245,15 @@ class NormativeJSONGenerator:
 
                     if clause_match:
                         number, text = clause_match.group(1), self._text(clause_match.group(2))
+
+                        # Clause numbers are semantic identities within one
+                        # normative document. Repeated occurrences are treated
+                        # as extraction duplicates, not new requirements.
+                        if number in seen_clause_numbers:
+                            current_clause = None
+                            continue
+                        seen_clause_numbers.add(number)
+
                         level = number.count(".") + 1
                         current_clause = {
                             "number": number,
