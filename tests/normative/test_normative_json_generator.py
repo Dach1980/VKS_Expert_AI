@@ -104,6 +104,8 @@ def test_generator_deduplicates_repeated_clause_occurrences(tmp_path):
                         "original_filename": "СП_30.13330.2020.pdf",
                         "pages": 2,
                     },
+                    "parsed_file": "knowledge/parsed/SP_30_test.json",
+                    "structured_file": "knowledge/structured/SP_30_test.json",
                     "edition": {"date": "2020-06-01"},
                 }],
             }]
