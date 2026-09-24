@@ -240,27 +240,15 @@ def upload_norm(file: UploadFile = File(...), number: str | None = None, title: 
     try:
         storage.registry.register_version(document_id=resolved_document_id, number=resolved_number, title=resolved_title, version_id=resolved_version_id, version_type="edition", effective_from=resolved_effective_from, file_path=str(relative_pdf).replace("\\", "/"), parsed_file=str(relative_parsed).replace("\\", "/"), structured_file=str(relative_structured).replace("\\", "/"), make_current=False)
         saved = storage.save_uploaded_pdf(resolved_document_id, file, resolved_version_id)
-        filename_meta = storage._classify_uploaded_filename(filename)
         document = storage.registry.get_document(resolved_document_id)
         version = next(v for v in document.get("versions", []) if v.get("id") == resolved_version_id)
 
-        version_type, filename_change = filename_meta
-        if version_type == "base":
-            version["type"] = "base"
-            version.pop("change_number", None)
-            version.pop("change_date", None)
-        elif version_type == "amendment":
-            version["type"] = "amendment"
-            if filename_change:
-                version["change_number"] = filename_change
-        else:
-            version["type"] = "edition"
-            version.pop("change_number", None)
-            version.pop("change_date", None)
-
+        # Filename parsing and canonical edition/source metadata are owned by
+        # KnowledgeStorage.save_uploaded_pdf(). Keep the API layer free of
+        # duplicated/private filename classification logic.
         version["pages_count"] = storage._pdf_pages(saved)
-        version["sha256"] = upload_hash
-        version["original_filename"] = filename
+        version.setdefault("source", {})["sha256"] = upload_hash
+        version.setdefault("source", {})["original_filename"] = filename
         storage.registry.save()
     except (StorageError, OSError, StopIteration, RegistryError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
