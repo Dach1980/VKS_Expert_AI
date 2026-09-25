@@ -62,7 +62,7 @@ def _clause_candidates(text: str) -> list[tuple[str, str]]:
     """
     matches = list(
         re.finditer(
-            r"(?<!\d)(\d+(?:\.\d+)+)(?=\s+)",
+            r"(?<![A-Za-zА-Яа-яЁё0-9№])(\d+(?:\.\d+)+)(?=\s+)",
             str(text or ""),
         )
     )
