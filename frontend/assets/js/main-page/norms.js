@@ -77,10 +77,16 @@ function renderCurrentAction(norm, version) {
   if (isUserCurrent(version)) return '<span class="status-badge success">Действующая редакция</span>';
   return '<button type="button" class="btn btn-secondary btn-sm norm-version-activate" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Сделать действующей</button>';
 }
+function renderVersionStatus(version) {
+  if (isIndexing(version)) return '<span class="status-badge info">Происходит индексация</span>';
+  if (isIndexed(version)) return '<span class="status-badge success">Индексировано</span>';
+  return '<span class="status-badge info">Ожидает индексации</span>';
+}
 function renderVersionActions(norm, version) {
   var sid = version.document_id || norm.id;
   var vid = version.version_id || version.id;
-  return renderIndexAction(norm, version) + renderCurrentAction(norm, version)
+  var indexAction = isIndexed(version) || isIndexing(version) ? '' : renderIndexAction(norm, version);
+  return indexAction + renderCurrentAction(norm, version)
     + '<button type="button" class="btn btn-danger btn-sm norm-version-delete" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Удалить</button>';
 }
 function toggleNormVersions(id) {
@@ -114,6 +120,7 @@ function renderNormVersions(norm) {
       + '<span class="norm-version-file-name" title="' + esc(filename) + '">' + esc(filename) + '</span></div>'
       + '<div class="norm-version-file-date"><span class="norm-version-meta-label">Дата загрузки:</span> ' + esc(formatDisplayDate(uploadDate)) + '</div>'
       + '<div class="norm-version-pages"><span class="norm-version-meta-label">Количество страниц:</span> 📄 ' + esc(pages) + '</div>'
+      + '<div class="norm-version-index-status"><span class="norm-version-meta-label">Статус:</span> ' + renderVersionStatus(version) + '</div>'
       + '</div><div class="norm-version-actions">' + renderVersionActions(norm, version) + '</div></div>';
   });
   return html + '</div>';
