@@ -28,7 +28,14 @@ image = Image.open(
 
 pixel_values = processor(image)
 
-pixel_values = pixel_values.unsqueeze(0)
+# UniMERNet's current model path expects B,C,H,W.
+if pixel_values.dim() == 3:
+    pixel_values = pixel_values.unsqueeze(0)
+
+# The installed processor may return grayscale C=1, while the
+# UniMERNet encoder checkpoint expects RGB C=3.
+if pixel_values.shape[1] == 1:
+    pixel_values = pixel_values.repeat(1, 3, 1, 1)
 
 
 print(
