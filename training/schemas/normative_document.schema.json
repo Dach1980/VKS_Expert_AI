@@ -1,0 +1,858 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "normative_document.schema.json",
+  "title": "Normative Document 2.0",
+  "description": "Structured normative document representation for Project Expert AI.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document",
+    "structure",
+    "requirements",
+    "tables",
+    "references",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "document": {
+      "$ref": "#/$defs/document"
+    },
+    "structure": {
+      "$ref": "#/$defs/structure"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/table"
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    }
+  },
+  "$defs": {
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "number",
+        "title",
+        "document_type",
+        "edition",
+        "source"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edition": {
+          "$ref": "#/$defs/edition"
+        },
+        "source": {
+          "$ref": "#/$defs/document_source"
+        }
+      }
+    },
+    "edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "base_year",
+        "amendments"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_year": {
+          "type": "integer",
+          "minimum": 1900,
+          "maximum": 2200
+        },
+        "amendments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/amendment"
+          }
+        }
+      }
+    },
+    "amendment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "effective_from"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "effective_from": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "document_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "original_filename",
+        "pages"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "original_filename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sections",
+        "appendices"
+      ],
+      "properties": {
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/section"
+          }
+        },
+        "appendices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/appendix"
+          }
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "title",
+        "page_start",
+        "page_end",
+        "source",
+        "clauses"
+      ],
+      "properties": {
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "page_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "page_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        },
+        "clauses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clause"
+          }
+        }
+      }
+    },
+    "clause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "level",
+        "text",
+        "page_start",
+        "page_end",
+        "source",
+        "requirements",
+        "table_refs",
+        "references"
+      ],
+      "properties": {
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "page_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "page_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "table_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "appendix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "title",
+        "page_start",
+        "page_end",
+        "source",
+        "requirements",
+        "tables",
+        "references"
+      ],
+      "properties": {
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "page_start": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "page_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "clause_id",
+        "text",
+        "type",
+        "subject",
+        "source"
+      ],
+      "properties": {
+        "requirement_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clause_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "$ref": "#/$defs/requirement_type"
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "relation": {
+          "$ref": "#/$defs/relation"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/normative_value"
+          }
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "applicability": {
+          "$ref": "#/$defs/applicability"
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/exception"
+          }
+        },
+        "table_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        }
+      }
+    },
+    "requirement_type": {
+      "type": "string",
+      "enum": [
+        "mandatory",
+        "conditional",
+        "recommendation",
+        "definition",
+        "reference",
+        "exception",
+        "note",
+        "table_dependent"
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object"
+      ],
+      "properties": {
+        "object": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribute": {
+          "type": "string"
+        }
+      }
+    },
+    "relation": {
+      "type": "string",
+      "enum": [
+        "=",
+        "!=",
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "in",
+        "not_in"
+      ]
+    },
+    "normative_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string",
+            "boolean"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "condition": {
+          "type": "string"
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition_fact"
+          }
+        }
+      }
+    },
+    "condition_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject",
+        "attribute",
+        "relation",
+        "value"
+      ],
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "attribute": {
+          "type": "string"
+        },
+        "relation": {
+          "$ref": "#/$defs/relation"
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "discipline": {
+          "type": "string"
+        },
+        "system": {
+          "type": "string"
+        },
+        "segment": {
+          "type": "string"
+        }
+      }
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "systems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requirement_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table_id",
+        "number",
+        "title",
+        "columns",
+        "rows",
+        "source"
+      ],
+      "properties": {
+        "table_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/table_column"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/table_row"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        }
+      }
+    },
+    "table_column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "table_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "cells"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/table_cell"
+          }
+        }
+      }
+    },
+    "table_cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "column",
+        "text"
+      ],
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "number",
+            "string",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference_id",
+        "type",
+        "target",
+        "source"
+      ],
+      "properties": {
+        "reference_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "clause_reference",
+            "table_reference",
+            "appendix_reference",
+            "document_reference",
+            "standard_reference"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/reference_target"
+        },
+        "source": {
+          "$ref": "#/$defs/provenance_source"
+        }
+      }
+    },
+    "reference_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "clause": {
+          "type": "string"
+        },
+        "table_id": {
+          "type": "string"
+        },
+        "appendix": {
+          "type": "string"
+        },
+        "document_number": {
+          "type": "string"
+        }
+      },
+      "minProperties": 1
+    },
+    "provenance_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "blocks"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_block"
+          }
+        }
+      }
+    },
+    "source_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page",
+        "bbox"
+      ],
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bbox": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "source_format",
+        "extraction"
+      ],
+      "properties": {
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          }
+        },
+        "source_format": {
+          "type": "string",
+          "enum": [
+            "pdf"
+          ]
+        },
+        "extraction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pipeline"
+          ],
+          "properties": {
+            "pipeline": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

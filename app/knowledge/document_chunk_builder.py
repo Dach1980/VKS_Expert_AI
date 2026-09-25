@@ -17,6 +17,8 @@ class DocumentChunkBuilder:
         self.document = document["number"]
         self.version = version["id"]
         self.normative_metadata = self._build_normative_metadata(document, version)
+        self.normative_document = self._load_normative_document()
+        self.page_normative_map = self._build_page_normative_map()
 
     def _build_normative_metadata(self, document, version):
         version_meta = self.storage.get_version_metadata(self.document_id, self.version)
@@ -34,6 +36,52 @@ class DocumentChunkBuilder:
             "source": version_meta.get("source", {}),
         }
 
+    def _load_normative_document(self):
+        if not self.paths.structured.exists():
+            raise RuntimeError(
+                "Normative JSON 2.0 не найден. Индексация разрешена только после Validator PASS."
+            )
+        with self.paths.structured.open("r", encoding="utf-8") as f:
+            document = json.load(f)
+        if document.get("schema_version") != "2.0":
+            raise RuntimeError("Ожидался Normative JSON 2.0.")
+        return document
+
+    def _build_page_normative_map(self):
+        mapping = {}
+        requirements = {
+            item.get("requirement_id"): item
+            for item in self.normative_document.get("requirements", [])
+            if item.get("requirement_id")
+        }
+        references = {
+            item.get("reference_id"): item
+            for item in self.normative_document.get("references", [])
+            if item.get("reference_id")
+        }
+        for section in self.normative_document.get("structure", {}).get("sections", []):
+            for clause in section.get("clauses", []):
+                clause_number = clause.get("number")
+                for page in range(int(clause.get("page_start", 1)), int(clause.get("page_end", 1)) + 1):
+                    entry = mapping.setdefault(page, {"clauses": [], "requirements": [], "references": []})
+                    if clause_number and clause_number not in entry["clauses"]:
+                        entry["clauses"].append(clause_number)
+                    for req_id in clause.get("requirements", []):
+                        if req_id in requirements and req_id not in entry["requirements"]:
+                            entry["requirements"].append(req_id)
+                    for ref_id in clause.get("references", []):
+                        if ref_id in references and ref_id not in entry["references"]:
+                            entry["references"].append(ref_id)
+        return mapping
+
+    def _normative_page_metadata(self, page):
+        entry = self.page_normative_map.get(int(page), {})
+        return {
+            "clause_ids": list(entry.get("clauses", [])),
+            "requirement_ids": list(entry.get("requirements", [])),
+            "reference_ids": list(entry.get("references", [])),
+        }
+
     def load_page(self, file):
         with open(file, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -41,6 +89,7 @@ class DocumentChunkBuilder:
     def _metadata(self, **extra):
         value = {
             "normative": self.normative_metadata,
+            "normative_json": self._normative_page_metadata(extra.pop("page", 0)) if extra.get("page") else {},
             "created": datetime.now().isoformat(),
         }
         value.update(extra)
@@ -64,7 +113,7 @@ class DocumentChunkBuilder:
                 f"Редакция: {self.normative_metadata['version']['edition'].get('date', '—')}. "
                 f"Страница: {page}. Тип: нормативный текст. Текст: {text}"
             ),
-            "metadata": self._metadata(),
+            "metadata": self._metadata(page=page),
         }
 
     def find_nearest_text(self, formula, blocks):
@@ -117,6 +166,7 @@ class DocumentChunkBuilder:
             },
             "embedding_text": embedding_text,
             "metadata": self._metadata(
+                page=page,
                 formula=True,
                 discipline="ВК",
                 system="internal_water_supply",
