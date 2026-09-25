@@ -21,7 +21,7 @@ from collections import Counter
 from pathlib import Path
 
 from app.checking.first_pass import _json_array, _strict_candidates, _vision_request
-from app.checking.page_pipeline import normalize_bbox, render_pdf_pages
+from app.checking.page_pipeline import PageEvidence, normalize_bbox, render_pdf_pages
 from app.checking.resilient import (
     CHECK_DPI,
     _bbox_has_real_evidence,
@@ -44,6 +44,22 @@ SOURCE_PDF = (
     / "source.pdf"
 )
 OUTPUT_PATH = Path("data") / "skill_rag_matrix_20260925_result.json"
+
+def _load_existing_rendered_pages(render_dir: Path) -> list[PageEvidence]:
+    """Reuse first-pass page images when the original PDF is intentionally untracked."""
+    images = sorted(render_dir.glob("page_*.png"))
+    if not images:
+        return []
+    try:
+        from PIL import Image
+    except ImportError:
+        return []
+    pages: list[PageEvidence] = []
+    for index, image_path in enumerate(images, start=1):
+        with Image.open(image_path) as image:
+            width, height = image.size
+        pages.append(PageEvidence(index, str(image_path), width, height))
+    return pages
 
 
 def _build_matrix(skill: dict[str, object]) -> dict[str, dict[str, object]]:
@@ -92,9 +108,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not SOURCE_PDF.exists():
-        raise SystemExit(f"Source PDF not found: {SOURCE_PDF}")
-
     skill = get_skill(SKILL_ID)
     storage = KnowledgeStorage()
     indexed_norms = _indexed_norms(storage)
@@ -102,9 +115,20 @@ def main() -> None:
         raise SystemExit("No indexed normative documents are available")
 
     render_dir = Path("data") / "skill_rag_matrix_pages"
-    pages = render_pdf_pages(SOURCE_PDF, render_dir, dpi=CHECK_DPI)
+    if SOURCE_PDF.exists():
+        pages = render_pdf_pages(SOURCE_PDF, render_dir, dpi=CHECK_DPI)
+        source_mode = "source_pdf"
+    else:
+        existing_dir = SOURCE_PDF.parent / "checking" / "first_pass"
+        pages = _load_existing_rendered_pages(existing_dir)
+        source_mode = "existing_first_pass_render"
     pages_available = len(pages)
-    if args.max_pages > 0:
+    if not pages:
+        raise SystemExit(
+            "Source PDF not found and no existing first-pass page images were found. "
+            f"Expected PDF: {SOURCE_PDF}; expected rendered pages: "
+            f"{SOURCE_PDF.parent / "checking" / "first_pass" / "page_*.png"}"
+        )    if args.max_pages > 0:
         pages = pages[:args.max_pages]
     if not pages:
         raise SystemExit("No PDF pages available for the experiment")
@@ -134,6 +158,7 @@ def main() -> None:
                     for d, v, _ in indexed_norms
                 ],
                 "decision_stage": "not_run",
+                "source_mode": source_mode,
             },
             ensure_ascii=False,
             indent=2,
@@ -258,6 +283,7 @@ def main() -> None:
         "skill_id": SKILL_ID,
         "pages_checked": len(pages),
         "pages_available": pages_available,
+        "source_mode": source_mode,
         "indexed_norms": [
             {"number": d.get("number"), "version": v.get("id")}
             for d, v, _ in indexed_norms
