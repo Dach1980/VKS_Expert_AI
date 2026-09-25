@@ -46,6 +46,11 @@ function isIndexed(version) {
 function isIndexing(version) {
   return !!(version && version.processing && version.processing.indexing);
 }
+function generationState(version) {
+  return String((version && version.processing && version.processing.normative_generation_status) || '').toLowerCase();
+}
+function isGenerating(version) { return generationState(version) === 'running'; }
+function isGenerationValidated(version) { return generationState(version) === 'validated' && version.processing && version.processing.normative_generation_valid === true; }
 function findVersion(norm, sourceId, versionId) {
   var versions = norm && Array.isArray(norm.versions) ? norm.versions : [];
   return versions.find(function (v) {
@@ -64,10 +69,18 @@ function formatDisplayDate(value) {
   var match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? match[3] + '.' + match[2] + '.' + match[1] : text;
 }
+function renderGenerationAction(norm, version) {
+  var sid = version.document_id || norm.id;
+  var vid = version.version_id || version.id;
+  if (isGenerating(version)) return '<span class="status-badge info">Создание JSON 2.0…</span>';
+  if (isGenerationValidated(version)) return '<span class="status-badge success">JSON 2.0 проверен</span>';
+  return '<button type="button" class="btn btn-secondary btn-sm norm-version-generate" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Создать JSON 2.0</button>';
+}
 function renderIndexAction(norm, version) {
   var sid = version.document_id || norm.id;
   var vid = version.version_id || version.id;
   if (isIndexing(version)) return '<span class="status-badge info">Происходит индексация</span>';
+  if (!isGenerationValidated(version)) return '<span class="status-badge info">Сначала создать JSON 2.0</span>';
   if (isIndexed(version)) return '<span class="status-badge success">Индексировано</span>';
   return '<button type="button" class="btn btn-primary btn-sm norm-version-index" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Индексировать</button>';
 }
@@ -80,7 +93,7 @@ function renderCurrentAction(norm, version) {
 function renderVersionActions(norm, version) {
   var sid = version.document_id || norm.id;
   var vid = version.version_id || version.id;
-  return renderIndexAction(norm, version) + renderCurrentAction(norm, version)
+  return renderGenerationAction(norm, version) + renderIndexAction(norm, version) + renderCurrentAction(norm, version)
     + '<button type="button" class="btn btn-danger btn-sm norm-version-delete" data-card="' + esc(norm.id) + '" data-source="' + esc(sid) + '" data-version="' + esc(vid) + '">Удалить</button>';
 }
 function toggleNormVersions(id) {
@@ -144,6 +157,7 @@ function renderNorms() {
   });
   grid.innerHTML = html || '<div style="text-align:center;padding:48px;color:var(--text-secondary);">Нормативные документы ещё не загружены.</div>';
   grid.querySelectorAll('.norm-documents').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); toggleNormVersions(button.dataset.id); }; });
+  grid.querySelectorAll('.norm-version-generate').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); generateNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-index').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); indexNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-activate').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); activateNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
   grid.querySelectorAll('.norm-version-delete').forEach(function (button) { button.onclick = function (event) { event.preventDefault(); event.stopPropagation(); deleteNormVersion(button.dataset.card, button.dataset.source, button.dataset.version); }; });
@@ -170,6 +184,47 @@ async function loadNorms(expandIds) {
     return getNormsData();
   } catch (error) { toast('Не удалось получить нормативную базу: ' + error.message, 'error'); return []; }
 }
+async function generateNormVersion(cardId, sourceId, versionId) {
+  var norm = getNormByIdLocal(cardId); if (!norm) return toast('Документ не найден', 'error');
+  var version = findVersion(norm, sourceId, versionId); if (!version) return toast('Версия не найдена. Обновите список.', 'error');
+  if (isGenerating(version)) return;
+  try {
+    var response = await fetch(NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '/' + encodeURIComponent(versionId) + '/generate', { method: 'POST' });
+    var data = {}; try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
+    version.processing = version.processing || {};
+    version.processing.normative_generation_status = 'running';
+    version.processing.normative_generation_valid = false;
+    renderNorms();
+    toast('Создание Normative JSON 2.0 запущено: ' + (versionFilename(version) || versionId), 'info');
+    pollNormGeneration(cardId, sourceId, versionId);
+  } catch (error) { toast('Ошибка запуска JSON 2.0: ' + error.message, 'error'); }
+}
+function pollNormGeneration(cardId, sourceId, versionId) {
+  var key = 'generation:' + sourceId + ':' + versionId;
+  if (normsPollTimers[key]) clearInterval(normsPollTimers[key]);
+  normsPollTimers[key] = setInterval(async function () {
+    try {
+      var response = await fetch(NORMS_API_BASE + '/' + encodeURIComponent(sourceId) + '/' + encodeURIComponent(versionId) + '/generation');
+      var data = await response.json(); if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
+      var norm = getNormByIdLocal(cardId); if (!norm) return;
+      var version = findVersion(norm, sourceId, versionId); if (!version) return;
+      version.processing = version.processing || {};
+      version.processing.normative_generation_status = data.status || 'unknown';
+      version.processing.normative_generation_valid = data.valid === true;
+      if (data.status === 'validated' && data.valid === true) {
+        clearInterval(normsPollTimers[key]); delete normsPollTimers[key];
+        toast('Normative JSON 2.0 успешно создан и прошёл проверку', 'success');
+      } else if (data.status === 'invalid' || data.status === 'failed') {
+        clearInterval(normsPollTimers[key]); delete normsPollTimers[key];
+        toast('Создание JSON 2.0 завершилось с ошибкой. Проверьте детали.', 'error');
+      }
+      renderNorms();
+      var panel = document.getElementById('normVersions-' + cardId); if (panel) panel.removeAttribute('hidden');
+    } catch (error) { console.warn('[Norms] generation status', error); }
+  }, 1500);
+}
+
 async function indexNormVersion(cardId, sourceId, versionId) {
   var norm = getNormByIdLocal(cardId); if (!norm) return toast('Документ не найден', 'error');
   var version = findVersion(norm, sourceId, versionId); if (!version) return toast('Версия не найдена. Обновите список.', 'error');
@@ -233,8 +288,8 @@ async function uploadNormFile(file) {
   if (!response.ok) throw new Error(data.detail || ('HTTP ' + response.status));
   toast('Файл «' + file.name + '» загружен. Версия ожидает выбора действующей редакции.', 'success'); return data;
 }
-window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms;
+window.renderNorms = renderNorms; window.loadNorms = loadNorms; window.indexNorm = indexNorm; window.indexAllNorms = indexAllNorms; window.generateNormVersion = generateNormVersion;
 window.handleNormDropzoneClick = handleNormDropzoneClick; window.handleNormDragOver = handleNormDragOver; window.handleNormDragLeave = handleNormDragLeave; window.handleNormDrop = handleNormDrop;
 window.handleNormFiles = handleNormFiles; window.uploadNormFile = uploadNormFile; window.deleteNorm = deleteNorm; window.toggleNormVersions = toggleNormVersions;
-console.log('[VKS Expert AI][Norms] norms.js v10 loaded');
+console.log('[VKS Expert AI][Norms] norms.js v11 loaded');
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { loadNorms(); }, { once: true }); else loadNorms();

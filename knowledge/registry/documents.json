@@ -2,30 +2,6 @@
   "registry_version": "2.0",
   "documents": [
     {
-      "id": "SP_30.13330",
-      "number": "СП 30.13330.2020",
-      "title": "Внутренний водопровод и канализация зданий",
-      "document_type": "СП",
-      "versions": [
-        {
-          "id": "СП_30.13330.2020_20260901_131114_071565",
-          "status": "current",
-          "current_selected_by_user": true,
-          "edition": {},
-          "source": {
-            "file": "knowledge/regulations/СП_30.13330.2020/СП_30.13330.2020_20260901_131114_071565.pdf"
-          },
-          "parsed_file": "knowledge/structured/СП_30.13330.2020_20260901_131114_071565.json",
-          "structured_file": "knowledge/structured/СП_30.13330.2020_20260901_131114_071565.json",
-          "index": {
-            "pages_count": 7,
-            "vector_index": "data/vectordb/СП_30.13330.2020/СП_30.13330.2020_20260901_131114_071565/embeddings/index.faiss",
-            "metadata": "data/vectordb/СП_30.13330.2020/СП_30.13330.2020_20260901_131114_071565/embeddings/metadata.json"
-          }
-        }
-      ]
-    },
-    {
       "id": "SP_31.13330",
       "number": "СП 31.13330.2021",
       "title": "Водоснабжение. Наружные сети и сооружения",
@@ -50,26 +26,32 @@
       ]
     },
     {
-      "id": "SP_32.13330",
-      "number": "СП 32.13330.2018",
-      "title": "Канализация. Наружные сети и сооружения",
+      "id": "СП_30.13330.2020",
+      "number": "СП 30.13330.2020",
+      "title": "Внутренний водопровод и канализация зданий",
       "document_type": "СП",
       "versions": [
         {
-          "id": "СП_32.13330.2018_20260902_103742_199423",
+          "id": "СП_30.13330.2020_20260925_111345_046143",
           "status": "current",
           "current_selected_by_user": true,
-          "edition": {},
-          "source": {
-            "file": "knowledge/regulations/СП_32.13330.2018/СП_32.13330.2018_20260902_103742_199423.pdf"
+          "edition": {
+            "date": "2025-03-01",
+            "amendment": {
+              "number": "5",
+              "effective_from": "2025-03-01"
+            }
           },
-          "parsed_file": "knowledge/structured/СП_32.13330.2018_20260902_103742_199423.json",
-          "structured_file": "knowledge/structured/СП_32.13330.2018_20260902_103742_199423.json",
-          "index": {
-            "pages_count": 9,
-            "vector_index": "data/vectordb/СП_32.13330.2018/СП_32.13330.2018_20260902_103742_199423/embeddings/index.faiss",
-            "metadata": "data/vectordb/СП_32.13330.2018/СП_32.13330.2018_20260902_103742_199423/embeddings/metadata.json"
-          }
+          "source": {
+            "file": "knowledge/regulations/СП_30.13330.2020/СП_30.13330.2020_20260925_111345_046143.pdf",
+            "original_filename": "СП_30.13330.2020 Изм.5 01.03.2025.pdf",
+            "sha256": "78b3a202528bd0e94e0e99922caa580552ee59b895d08569300aeb81e2bcab55"
+          },
+          "parsed_file": "knowledge/parsed/СП_30.13330.2020_20260925_111345_046143.json",
+          "structured_file": "knowledge/structured/СП_30.13330.2020_20260925_111345_046143.json",
+          "index": {},
+          "type": "amendment",
+          "pages_count": 97
         }
       ]
     }

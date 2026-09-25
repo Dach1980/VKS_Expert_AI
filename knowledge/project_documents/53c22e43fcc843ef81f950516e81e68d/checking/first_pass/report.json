@@ -1,7 +1,7 @@
 {
   "template": "reference_normcontrol_report_ios_3.1",
   "document_id": "53c22e43fcc843ef81f950516e81e68d",
-  "document_name": "Раздел ПД №5 Подраздел №3 Часть 1_ИОС3.1_Изм.1_подпись.pdf",
+  "document_name": "Документ.pdf",
   "skill_id": "vk_wastewater",
   "skill_name": "Система водоотведения",
   "checked_at": "2026-09-08T08:50:03",
@@ -1482,5 +1482,6 @@
     "finished_at": "2026-09-08T08:50:03"
   },
   "result_file": "result_20260908_085003.json",
-  "result_id": "result_20260908_085003"
+  "result_id": "result_20260908_085003",
+  "report_pages": 2
 }
