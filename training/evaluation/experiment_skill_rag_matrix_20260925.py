@@ -58,6 +58,7 @@ def _build_matrix(skill: dict[str, object]) -> dict[str, dict[str, object]]:
             "bbox_rejected": 0,
             "rag_calls": 0,
             "rag_hits": 0,
+            "route_passes": 0,
             "requirements": 0,
             "candidate_results": [],
             "drop_reasons": [],
@@ -72,6 +73,8 @@ def _status(item: dict[str, object]) -> str:
         return "NO_CANDIDATE"
     if int(item["bbox_valid"]) == 0:
         return "NO_VALID_BBOX"
+    if int(item.get("route_passes", 0)) == 0:
+        return "ROUTE_FAIL"
     if int(item["rag_hits"]) == 0:
         return "RAG_NO_HIT"
     if int(item["requirements"]) == 0:
@@ -197,6 +200,8 @@ def main() -> None:
 
             route = route_candidate(candidate, SKILL_ID)
             scoped = filter_retrievers(indexed_norms, route)
+            if route.get("scope") and scoped:
+                item["route_passes"] += 1
             retrieved = retrieve_audit_context(
                 indexed_norms,
                 candidate,
