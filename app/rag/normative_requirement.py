@@ -6,7 +6,10 @@ from typing import Any
 
 _CLAUSE_PATTERNS = (
     re.compile(r"(?:пункт|п\.|параграф|раздел)\s*([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE),
-    re.compile(r"(?:^|\s)([0-9]+(?:\.[0-9]+){2,})(?:\s|$)"),
+    # A Russian normative clause such as 18.34 has one or more dot-separated
+    # components after the first number. The previous {2,} required at least
+    # three components and therefore missed ordinary clauses like 18.34.
+    re.compile(r"(?:^|\s)([0-9]+(?:\.[0-9]+)+)(?:\s|$|[,:;])"),
 )
 
 _NUMBER_PATTERNS = (
@@ -41,6 +44,12 @@ def _metadata_text(result: dict[str, Any]) -> str:
         value = metadata.get(key)
         if value not in (None, ""):
             parts.append(str(value))
+    normative_json = metadata.get("normative_json")
+    if isinstance(normative_json, dict):
+        for key in ("clause_ids", "requirement_ids", "reference_ids"):
+            values = normative_json.get(key)
+            if isinstance(values, list):
+                parts.extend(str(value) for value in values if value not in (None, ""))
     return " ".join(parts)
 
 
@@ -53,6 +62,19 @@ def _clause(text: str, result: dict[str, Any] | None = None) -> str:
                 match = re.search(r"\d+(?:\.\d+)+", value)
                 if match:
                     return match.group(0)
+
+            # Normative JSON 2.0 page metadata stores the structural clause
+            # references as clause_ids. Prefer these over parsing arbitrary
+            # numbers from the chunk text.
+            normative_json = metadata.get("normative_json")
+            if isinstance(normative_json, dict):
+                clause_ids = normative_json.get("clause_ids")
+                if isinstance(clause_ids, list):
+                    for value in clause_ids:
+                        match = re.search(r"\d+(?:\.\d+)+", str(value or ""))
+                        if match:
+                            return match.group(0)
+
     for pattern in _CLAUSE_PATTERNS:
         match = pattern.search(text)
         if match:
@@ -133,7 +155,6 @@ def select_normative_requirements(
         has_clause = bool(item["clause"])
         has_requirement_text = bool(item["requirement"].strip())
         has_numeric_rule = item["operator"] in {">=", "<=", "="} or item["normative_value"] is not None
-        explicit = has_clause or has_numeric_rule
         item["requirement_relevance"] = (
             (2.0 if has_clause else 0.0)
             + (0.5 if has_numeric_rule else 0.0)
