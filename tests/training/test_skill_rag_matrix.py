@@ -29,6 +29,9 @@ def test_skill_rag_matrix_status_requires_each_stage():
     assert _status(item) == "NO_VALID_BBOX"
 
     item["bbox_valid"] = 1
+    assert _status(item) == "ROUTE_FAIL"
+
+    item["route_passes"] = 1
     assert _status(item) == "RAG_NO_HIT"
 
     item["rag_hits"] = 1
