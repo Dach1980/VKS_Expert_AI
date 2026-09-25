@@ -30,8 +30,17 @@ image = Image.open(
 
 pixel_values = processor(image)
 
+# UniMERNet's public inference path uses a batch dimension.
+if pixel_values.dim() == 3:
+    pixel_values = pixel_values.unsqueeze(0)
 
-print(pixel_values.shape)
+# The installed processor may return grayscale C=1, while the
+# UniMERNet encoder checkpoint expects RGB C=3.
+if pixel_values.shape[1] == 1:
+    pixel_values = pixel_values.repeat(1, 3, 1, 1)
+
+
+print("INPUT:", pixel_values.shape)
 
 
 with torch.no_grad():
