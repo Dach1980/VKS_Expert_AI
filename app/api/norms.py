@@ -126,6 +126,14 @@ def _enrich_payload(storage: KnowledgeStorage, payload: dict) -> dict:
         item["processing"]["pages_count"] = meta.get("pages_count") or item["processing"].get("pages_count") or 0
         item["is_current"] = item.get("status") == "current"
         item["original_filename"] = item.get("original_filename") or item.get("filename") or Path(item.get("file", "")).name
+        if not item.get("uploaded_at"):
+            file_path = item.get("file") or (item.get("source") or {}).get("file")
+            try:
+                resolved = storage.resolve(file_path) if file_path else None
+                if resolved and resolved.exists():
+                    item["uploaded_at"] = datetime.fromtimestamp(resolved.stat().st_mtime).isoformat(timespec="seconds")
+            except (OSError, TypeError, ValueError):
+                pass
         versions.append(item)
         if item["is_current"]:
             current_meta = meta
