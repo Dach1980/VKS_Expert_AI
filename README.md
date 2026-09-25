@@ -28,3 +28,21 @@
 - Vision
 - Rules Engine
 - MCP
+
+## Запуск локальной версии
+
+Из корня репозитория:
+
+### Backend
+
+```powershell
+python -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000
+```
+
+### Frontend
+
+В отдельном терминале:
+
+```powershell
+python frontend/start-local-server.py
+```
