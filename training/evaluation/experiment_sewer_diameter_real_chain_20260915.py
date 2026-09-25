@@ -102,7 +102,7 @@ def main() -> None:
     result = {
         "experiment": "sewer_diameter_real_chain",
         "date": "2026-09-15",
-        "production_patch_scope": "app/rag/normative_router.py::_is_external only",
+        "production_patch_scope": "app/rag/normative_requirement.py::_clause and requirement segment extraction",
         "document_id": DOCUMENT_ID,
         "candidate": candidate,
         "route": route,
@@ -126,6 +126,12 @@ def main() -> None:
             "expected_internal_norm_selected": any(
                 item.get("norm") == EXPECTED_NORM for item in selected_sources
             ),
+            "expected_clause_selected": any(
+                item.get("norm") == EXPECTED_NORM
+                and item.get("clause") == "18.34"
+                and str(item.get("requirement") or "").startswith("18.34 ")
+                for item in selected_sources
+            ),
         },
     }
     gate = result["qwen_input_gate"]
@@ -135,6 +141,7 @@ def main() -> None:
         and gate["forbidden_norm_excluded"]
         and gate["forbidden_clause_excluded"]
         and gate["expected_internal_norm_selected"]
+        and gate["expected_clause_selected"]
         else "FAIL"
     )
 
