@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from app.knowledge.filename_parser import FilenameParseError, parse_normative_filename
@@ -164,6 +164,7 @@ class DocumentRegistry:
         version = {
             "id": version_id,
             "status": "uploaded",
+            "uploaded_at": datetime.now().isoformat(timespec="seconds"),
             "current_selected_by_user": False,
             "edition": edition,
             "source": {"file": file_path},
