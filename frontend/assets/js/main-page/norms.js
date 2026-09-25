@@ -125,14 +125,35 @@ function renderNorms() {
   getNormsData().forEach(function (norm) {
     var versions = Array.isArray(norm.versions) ? norm.versions : [];
     var current = versions.find(isUserCurrent) || null;
-    var change = current ? versionChangeNumber(current) : (norm.current_change_number != null ? String(norm.current_change_number) : null);
-    var changeText = current
+    var indexedVersion = versions.find(isIndexed) || null;
+    var indexingVersion = versions.find(isIndexing) || null;
+    var displayVersion = current || indexedVersion || indexingVersion || versions[0] || null;
+
+    var change = displayVersion
+      ? versionChangeNumber(displayVersion)
+      : (norm.current_change_number != null ? String(norm.current_change_number) : null);
+
+    var changeText = displayVersion
       ? (change === null ? ' — Без изменений' : ' — Изменение №' + esc(change))
       : ' — Действующая редакция не выбрана';
-    var pages = current ? ((current.processing || {}).pages_count || current.pages_count || 0) : 0;
+
+    var pages = displayVersion
+      ? ((displayVersion.processing || {}).pages_count || displayVersion.pages_count || 0)
+      : 0;
+
     var status = current
-      ? (isIndexing(current) ? '<span class="status-badge info">Происходит индексация</span>' : isIndexed(current) ? '<span class="status-badge success">Индексировано</span>' : '<span class="status-badge info">Ожидает индексации</span>')
-      : '<span class="status-badge info">Действующая редакция не выбрана</span>';
+      ? (isIndexing(current)
+        ? '<span class="status-badge info">Происходит индексация</span>'
+        : isIndexed(current)
+          ? '<span class="status-badge success">Индексировано</span>'
+          : '<span class="status-badge info">Ожидает индексации</span>')
+      : indexedVersion
+        ? '<span class="status-badge success">Индексировано</span>'
+        : indexingVersion
+          ? '<span class="status-badge info">Происходит индексация</span>'
+          : versions.length
+            ? '<span class="status-badge info">Ожидает индексации</span>'
+            : '<span class="status-badge info">Действующая редакция не выбрана</span>';
     html += '<div class="norm-card" data-norm-card="' + esc(norm.id) + '">'
       + '<div class="norm-card-header"><div style="flex:1;min-width:0">'
       + '<div class="norm-card-title">' + esc(norm.number || norm.id) + esc(changeText) + '</div>'
