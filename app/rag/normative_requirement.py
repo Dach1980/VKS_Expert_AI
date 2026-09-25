@@ -14,7 +14,7 @@ _CLAUSE_PATTERNS = (
 
 _NUMBER_PATTERNS = (
     re.compile(
-        r"(?:не\s+менее|не\s+ниже|не\s+более|не\s+выше|равен|равна|равно|>=|<=)\s*"
+        r"(?:не\s+менее|не\s+меньше|не\s+ниже|не\s+более|не\s+выше|равен|равна|равно|>=|<=)\s*"
         r"([0-9]+(?:[.,][0-9]+)?)",
         re.IGNORECASE,
     ),
@@ -97,7 +97,7 @@ def _number(text: str) -> float | None:
 
 def _operator(text: str) -> str:
     lower = text.lower()
-    if any(x in lower for x in ("не менее", "не ниже", ">=")):
+    if any(x in lower for x in ("не менее", "не меньше", "не ниже", ">=")):
         return ">="
     if any(x in lower for x in ("не более", "не выше", "<=")):
         return "<="
