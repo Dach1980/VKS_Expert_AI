@@ -33,6 +33,9 @@ class _FakeRegistry:
         }
         self.document["versions"].append(version)
 
+    def get_all_documents(self):
+        return []
+
     def save(self):
         pass
 
