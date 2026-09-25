@@ -53,7 +53,47 @@ def _metadata_text(result: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def _clause(text: str, result: dict[str, Any] | None = None) -> str:
+def _clause_candidates(text: str) -> list[tuple[str, str]]:
+    """Return clause headings together with the text belonging to each clause.
+
+    Page-level Normative JSON metadata may contain several clauses because one
+    PDF page can span multiple structural clauses. It is therefore a page
+    scope, not the exact clause of an individual text chunk.
+    """
+    matches = list(
+        re.finditer(
+            r"(?<!\d)(\d+(?:\.\d+)+)(?=\s+)",
+            str(text or ""),
+        )
+    )
+    candidates: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        segment = text[start:end].strip()
+        if segment:
+            candidates.append((match.group(1), segment))
+    return candidates
+
+
+def _clause(text: str, result: dict[str, Any] | None = None, parameter: str = "") -> str:
+    candidates = _clause_candidates(text)
+    if candidates:
+        parameter_words = {
+            word.lower()
+            for word in re.findall(r"[A-Za-zА-Яа-яЁё]{4,}", parameter)
+        }
+        if parameter_words:
+            scored = []
+            for clause, segment in candidates:
+                lower = segment.lower()
+                overlap = sum(word in lower for word in parameter_words)
+                scored.append((overlap, clause))
+            best_overlap = max(score for score, _ in scored)
+            if best_overlap > 0:
+                return next(clause for score, clause in scored if score == best_overlap)
+        return candidates[0][0]
+
     if result:
         metadata = result.get("metadata")
         if isinstance(metadata, dict):
@@ -63,9 +103,6 @@ def _clause(text: str, result: dict[str, Any] | None = None) -> str:
                 if match:
                     return match.group(0)
 
-            # Normative JSON 2.0 page metadata stores the structural clause
-            # references as clause_ids. Prefer these over parsing arbitrary
-            # numbers from the chunk text.
             normative_json = metadata.get("normative_json")
             if isinstance(normative_json, dict):
                 clause_ids = normative_json.get("clause_ids")
@@ -80,7 +117,6 @@ def _clause(text: str, result: dict[str, Any] | None = None) -> str:
         if match:
             return match.group(1)
     return ""
-
 
 def _number(text: str) -> float | None:
     """Extract only an engineering value, never a bare clause number."""
@@ -110,22 +146,30 @@ def extract_requirement(result: dict[str, Any], parameter: str = "") -> dict[str
     content = result.get("content", {})
     text = str(content.get("text", "") if isinstance(content, dict) else content).strip()
     metadata_text = _metadata_text(result)
-    clause = _clause(text, result)
+    clause = _clause(text, result, parameter)
+    requirement_text = text
+    candidates = _clause_candidates(text)
+    if candidates and clause:
+        for candidate_clause, segment in candidates:
+            if candidate_clause == clause:
+                requirement_text = segment
+                break
+
     requirement = {
         "norm": str(result.get("norm_number") or ""),
         "version": str(result.get("version") or ""),
         "clause": clause,
-        "requirement": text,
+        "requirement": requirement_text,
         "parameter": parameter,
-        "operator": _operator(text),
-        "normative_value": _number(text),
+        "operator": _operator(requirement_text),
+        "normative_value": _number(requirement_text),
         "normative_unit": "",
         "page": result.get("page"),
         "source": result,
         "metadata": result.get("metadata") if isinstance(result.get("metadata"), dict) else {},
     }
     for pattern, unit in _UNIT_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
+        if re.search(pattern, requirement_text, re.IGNORECASE):
             requirement["normative_unit"] = unit
             break
     if metadata_text:
