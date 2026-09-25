@@ -98,7 +98,9 @@ def main() -> None:
     if not indexed_norms:
         raise SystemExit("No indexed normative documents are available")
 
-    pages = render_pdf_pages(SOURCE_PDF, SOURCE_PDF.parent / "checking" / "skill_rag_matrix", dpi=CHECK_DPI)
+    render_dir = Path("data") / "skill_rag_matrix_pages"
+    pages = render_pdf_pages(SOURCE_PDF, render_dir, dpi=CHECK_DPI)
+    pages_available = len(pages)
     if args.max_pages > 0:
         pages = pages[:args.max_pages]
     if not pages:
@@ -250,11 +252,7 @@ def main() -> None:
         "document_id": DOCUMENT_ID,
         "skill_id": SKILL_ID,
         "pages_checked": len(pages),
-        "pages_available": len(render_pdf_pages(
-            SOURCE_PDF,
-            SOURCE_PDF.parent / "checking" / "skill_rag_matrix",
-            dpi=CHECK_DPI,
-        )),
+        "pages_available": pages_available,
         "indexed_norms": [
             {"number": d.get("number"), "version": v.get("id")}
             for d, v, _ in indexed_norms
