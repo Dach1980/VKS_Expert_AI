@@ -82,7 +82,18 @@ def _multi_context(results: list[dict[str, Any]], candidate: dict[str, Any]) -> 
     parts = []
     for item in requirements:
         meta = f"{item.get('norm')}, версия {item.get('version','—')}, стр. {item.get('page','—')}, п. {item.get('clause')}"
-        rule = f"оператор {item.get('operator') or '—'}, нормативное значение {item.get('normative_value') if item.get('normative_value') is not None else '—'} {item.get('normative_unit') or ''}".strip()
+        normative_value = item.get("normative_value")
+        normative_unit = item.get("normative_unit") or ""
+        operator = item.get("operator") or ""
+        if normative_value is not None:
+            rule = f"оператор {operator or '—'}, нормативное значение {normative_value} {normative_unit}".strip()
+        elif operator:
+            # A relational requirement may compare two project facts rather than
+            # a project value against a concrete numeric constant. Do not invent
+            # a numeric normative value in the Qwen context.
+            rule = f"оператор {operator}; числовое нормативное значение не задано"
+        else:
+            rule = "числовое нормативное значение не задано"
         parts.append(f"{meta}: {rule}\nТекст требования: {item['requirement']}")
     value = "\n\n".join(parts)
     return value[:12000] + ("\n[нормативный контекст сокращён]" if len(value) > 12000 else ""), requirements
@@ -292,3 +303,6 @@ def _filter_skill_candidates(candidates: list[dict[str, Any]], skill: dict[str, 
         if len(accepted) >= MAX_PAGE_CANDIDATES:
             break
     return accepted
+
+
+
