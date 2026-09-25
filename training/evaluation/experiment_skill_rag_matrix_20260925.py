@@ -128,7 +128,8 @@ def main() -> None:
             "Source PDF not found and no existing first-pass page images were found. "
             f"Expected PDF: {SOURCE_PDF}; expected rendered pages: "
             f"{SOURCE_PDF.parent / 'checking' / 'first_pass' / 'page_*.png'}"
-        )    if args.max_pages > 0:
+        )
+    if args.max_pages > 0:
         pages = pages[:args.max_pages]
     if not pages:
         raise SystemExit("No PDF pages available for the experiment")
