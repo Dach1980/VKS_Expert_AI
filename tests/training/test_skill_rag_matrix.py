@@ -12,7 +12,7 @@ def test_skill_rag_matrix_initializes_all_skill_checks():
     matrix = _build_matrix(skill)
 
     assert list(matrix) == ["sewer_diameter", "sewer_slope"]
-    assert matrix["sewer_diameter"]["status"] if "status" in matrix["sewer_diameter"] else True
+    assert matrix["sewer_diameter"]["name"] == "Диаметры"
     assert matrix["sewer_diameter"]["raw_visual_candidates"] == 0
 
 
