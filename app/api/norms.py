@@ -209,6 +209,29 @@ def _generate_norm(document_id: str, version_id: str) -> None:
         )
 
 
+@router.get("/{document_id}/{version_id}/generation")
+def get_norm_generation(document_id: str, version_id: str):
+    storage = KnowledgeStorage()
+    try:
+        storage.get_version(document_id, version_id)
+        paths = storage.paths(document_id, version_id)
+    except StorageError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    generation_file = paths.index_root / "normative_generation.json"
+    if not generation_file.exists():
+        return {
+            "status": "not_started",
+            "stage": "waiting",
+            "valid": False,
+            "errors": [],
+            "warnings": [],
+        }
+    try:
+        return json.loads(generation_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=500, detail=f"Не удалось прочитать состояние генерации: {error}") from error
+
+
 @router.post(
     "/{document_id}/{version_id}/generate",
     response_model=NormGenerateResponse,
